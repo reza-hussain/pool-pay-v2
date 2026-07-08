@@ -1,0 +1,5 @@
+# Freemium subscription tier: unlimited Pools + fee-free Spends + cross-Pool analytics
+
+On top of the per-Spend fee ([0010](./0010-fee-on-spends-only.md)), Pool Pay offers an optional paid subscription that waives Spend fees, removes any cap on concurrent Pools, and unlocks cross-Pool analytics (aggregate spending across all of a user's Pools, category breakdowns, exportable reports). This converts heavy users (people running several trip/apartment Pools regularly) into predictable recurring revenue, while casual/one-off users stay on pay-per-Spend.
+
+We deliberately did **not** paywall basic per-Pool transaction visibility (spend charts/breakdowns scoped to a single Pool) — that's just a rendering of the same ledger data promised to every Member under full transparency ([0008](./0008-full-ledger-transparency.md)). Paywalling a Member's visibility into money that is partly theirs would undermine the trust story that transparency was chosen to build. Only *aggregate, cross-Pool* analytics — a materially bigger feature than the base ledger — sits behind the subscription.

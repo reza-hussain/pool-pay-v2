@@ -1,0 +1,3 @@
+# UPI is the sole payout rail — no generic bank-withdrawal feature
+
+Given India-only v1 scope ([0003](./0003-india-only-upi-scope.md)), we considered whether to also build a generic "withdraw Pool funds to a bank account" transfer alongside UPI scan-and-pay. We chose not to: UPI already reaches essentially any Indian bank account (via VPA or account+IFSC), so a separate withdrawal mechanism would duplicate UPI transfers without adding capability. The Organizer pays merchants directly via UPI QR scan, or reimburses a Member's UPI ID for something they paid for out of pocket — these two flows are the only ways money leaves a Pool in v1.
