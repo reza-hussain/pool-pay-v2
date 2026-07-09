@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import {
   InvalidOtpCodeError,
   InvalidPhoneNumberError,
@@ -83,5 +84,5 @@ export class AuthService {
 }
 
 function defaultGenerateCode(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(randomInt(100000, 1000000));
 }
