@@ -8,9 +8,26 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  phoneNumber String   @unique
+  id             String   @id @default(cuid())
+  phoneNumber    String   @unique
+  createdAt      DateTime @default(now())
+  organizedPools Pool[]
+}
+
+model Pool {
+  id     String @id @default(cuid())
+  name   String
+  // "EQUAL_SPLIT" | "OPEN" — string, not a Prisma enum, since the sqlite connector doesn't support enums.
+  type   String
+  // Required (and positive) for EQUAL_SPLIT, always null for OPEN. In paise (1 INR = 100 paise) to avoid float money bugs.
+  perPersonAmountPaise Int?
+  // "ACTIVE" | "LOCKED" | "CLOSED"
+  state       String   @default("ACTIVE")
+  organizerId String
+  organizer   User     @relation(fields: [organizerId], references: [id])
   createdAt   DateTime @default(now())
+
+  @@index([organizerId])
 }
 
 model OtpRequest {

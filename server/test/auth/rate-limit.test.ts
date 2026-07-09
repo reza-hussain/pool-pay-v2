@@ -5,6 +5,8 @@ import { AuthService } from "../../src/auth/auth-service.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { InMemoryOtpStore } from "../../src/auth/fakes/in-memory-otp-store.js";
 import { FakeOtpSender } from "../../src/auth/fakes/fake-otp-sender.js";
+import { PoolService } from "../../src/pools/pool-service.js";
+import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 
 const PHONE = "+919876543210";
 const JWT_SECRET = "test-secret";
@@ -16,7 +18,8 @@ function makeApp() {
     otpStore: new InMemoryOtpStore(),
     otpSender,
   });
-  const app = createApp({ authService, jwtSecret: JWT_SECRET });
+  const poolService = new PoolService({ poolRepository: new InMemoryPoolRepository() });
+  const app = createApp({ authService, poolService, jwtSecret: JWT_SECRET });
   return { app, otpSender };
 }
 

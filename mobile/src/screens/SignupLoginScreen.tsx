@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -8,25 +8,21 @@ import {
   View,
 } from "react-native";
 import { AuthApiError, requestOtp, verifyOtp } from "../api/authClient";
-import { loadSession, saveSession, type StoredSession } from "../api/session";
+import { saveSession, type StoredSession } from "../api/session";
+import { colors, radii, spacing, type } from "../theme/tokens";
 
 type Step = { name: "phone" } | { name: "otp"; requestId: string; phoneNumber: string };
 
-export function SignupLoginScreen() {
-  const [bootstrapping, setBootstrapping] = useState(true);
+export function SignupLoginScreen({
+  onAuthenticated,
+}: {
+  onAuthenticated: (session: StoredSession) => void;
+}) {
   const [step, setStep] = useState<Step>({ name: "phone" });
   const [phoneNumber, setPhoneNumber] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<StoredSession | null>(null);
-  const [justSignedUp, setJustSignedUp] = useState(false);
-
-  useEffect(() => {
-    loadSession()
-      .then(setSession)
-      .finally(() => setBootstrapping(false));
-  }, []);
 
   async function handleRequestOtp() {
     setError(null);
@@ -47,31 +43,14 @@ export function SignupLoginScreen() {
     setLoading(true);
     try {
       const result = await verifyOtp(step.requestId, code);
-      await saveSession(result);
-      setJustSignedUp(result.isNewUser);
-      setSession({ token: result.token, user: result.user });
+      const session: StoredSession = { token: result.token, user: result.user };
+      await saveSession(session);
+      onAuthenticated(session);
     } catch (err) {
       setError(err instanceof AuthApiError ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
-  }
-
-  if (bootstrapping) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
-
-  if (session) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>{justSignedUp ? "Welcome to Pool Pay" : "Welcome back"}</Text>
-        <Text>{session.user.phoneNumber}</Text>
-      </View>
-    );
   }
 
   return (
@@ -83,13 +62,18 @@ export function SignupLoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="+919876543210"
+            placeholderTextColor={colors.ink400}
             keyboardType="phone-pad"
             autoComplete="tel"
             value={phoneNumber}
             onChangeText={setPhoneNumber}
           />
           <Pressable style={styles.button} onPress={handleRequestOtp} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Send code</Text>}
+            {loading ? (
+              <ActivityIndicator color={colors.cream} />
+            ) : (
+              <Text style={styles.buttonText}>Send code</Text>
+            )}
           </Pressable>
         </>
       ) : (
@@ -98,12 +82,17 @@ export function SignupLoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="123456"
+            placeholderTextColor={colors.ink400}
             keyboardType="number-pad"
             value={code}
             onChangeText={setCode}
           />
           <Pressable style={styles.button} onPress={handleVerifyOtp} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify</Text>}
+            {loading ? (
+              <ActivityIndicator color={colors.cream} />
+            ) : (
+              <Text style={styles.buttonText}>Verify</Text>
+            )}
           </Pressable>
         </>
       )}
@@ -116,42 +105,49 @@ export function SignupLoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: colors.cream,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
-    gap: 12,
+    padding: spacing.s6,
+    gap: spacing.s3,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 12,
+    ...type.hero,
+    color: colors.ink900,
+    marginBottom: spacing.s3,
   },
   subtitle: {
-    marginBottom: 8,
+    ...type.body,
+    color: colors.ink600,
+    marginBottom: spacing.s2,
     textAlign: "center",
   },
   input: {
     width: "100%",
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    backgroundColor: "rgba(23,20,12,0.045)",
+    borderWidth: 1.5,
+    borderColor: "transparent",
+    borderRadius: radii.md,
+    padding: spacing.s3,
+    fontSize: 15,
+    fontFamily: type.bodyBold.fontFamily,
+    color: colors.ink900,
   },
   button: {
     width: "100%",
-    backgroundColor: "#111",
-    borderRadius: 8,
-    padding: 14,
+    height: 48,
+    backgroundColor: colors.pumpkin500,
+    borderRadius: radii.md,
     alignItems: "center",
+    justifyContent: "center",
   },
   buttonText: {
-    color: "#fff",
-    fontWeight: "600",
+    ...type.bodyBold,
+    color: colors.paper,
   },
   error: {
-    color: "#c00",
-    marginTop: 8,
+    ...type.body,
+    color: colors.danger600,
+    marginTop: spacing.s2,
   },
 });

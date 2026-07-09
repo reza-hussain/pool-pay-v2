@@ -5,6 +5,8 @@ import { AuthService } from "./auth/auth-service.js";
 import { PrismaUserRepository } from "./auth/prisma-user-repository.js";
 import { PrismaOtpStore } from "./auth/prisma-otp-store.js";
 import { ConsoleOtpSender } from "./auth/console-otp-sender.js";
+import { PoolService } from "./pools/pool-service.js";
+import { PrismaPoolRepository } from "./pools/prisma-pool-repository.js";
 
 const authService = new AuthService({
   userRepository: new PrismaUserRepository(prisma),
@@ -12,7 +14,11 @@ const authService = new AuthService({
   otpSender: new ConsoleOtpSender(),
 });
 
-const app = createApp({ authService, jwtSecret: env.JWT_SECRET });
+const poolService = new PoolService({
+  poolRepository: new PrismaPoolRepository(prisma),
+});
+
+const app = createApp({ authService, poolService, jwtSecret: env.JWT_SECRET });
 
 const port = Number(env.PORT);
 app.listen(port, () => {

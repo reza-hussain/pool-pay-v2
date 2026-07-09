@@ -1,5 +1,4 @@
 import * as SecureStore from "expo-secure-store";
-import type { VerifyOtpResult } from "./authClient";
 
 const SESSION_KEY = "pool-pay-session";
 
@@ -8,9 +7,8 @@ export interface StoredSession {
   user: { id: string; phoneNumber: string };
 }
 
-export async function saveSession(session: VerifyOtpResult): Promise<void> {
-  const stored: StoredSession = { token: session.token, user: session.user };
-  await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(stored));
+export async function saveSession(session: StoredSession): Promise<void> {
+  await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
 }
 
 export async function loadSession(): Promise<StoredSession | null> {
