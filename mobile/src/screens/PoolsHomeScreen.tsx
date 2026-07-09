@@ -15,6 +15,7 @@ export function PoolsHomeScreen({
   onJoinPool,
   onSelectPool,
   onOpenOrganizerControls,
+  onViewLedger,
 }: {
   session: StoredSession;
   isNewUser: boolean;
@@ -23,6 +24,7 @@ export function PoolsHomeScreen({
   onJoinPool: () => void;
   onSelectPool: (pool: Pool) => void;
   onOpenOrganizerControls: (pool: Pool) => void;
+  onViewLedger: (pool: Pool) => void;
 }) {
   return (
     <View style={styles.container}>
@@ -54,6 +56,7 @@ export function PoolsHomeScreen({
                 isOrganizer={item.organizerId === session.user.id}
                 onPress={() => onSelectPool(item)}
                 onOpenOrganizerControls={() => onOpenOrganizerControls(item)}
+                onViewLedger={() => onViewLedger(item)}
               />
             )}
           />
@@ -74,11 +77,13 @@ function PoolCard({
   isOrganizer,
   onPress,
   onOpenOrganizerControls,
+  onViewLedger,
 }: {
   pool: Pool;
   isOrganizer: boolean;
   onPress: () => void;
   onOpenOrganizerControls: () => void;
+  onViewLedger: () => void;
 }) {
   return (
     <Pressable style={styles.card} onPress={onPress}>
@@ -103,11 +108,22 @@ function PoolCard({
           ) : null}
         </View>
       </View>
-      <Text style={styles.cardType}>
-        {pool.type === "EQUAL_SPLIT"
-          ? `Equal Split · ${paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)} / person`
-          : "Open Pool"}
-      </Text>
+      <View style={styles.cardBottomRow}>
+        <Text style={styles.cardType}>
+          {pool.type === "EQUAL_SPLIT"
+            ? `Equal Split · ${paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)} / person`
+            : "Open Pool"}
+        </Text>
+        <Pressable
+          hitSlop={8}
+          onPress={(event) => {
+            event.stopPropagation();
+            onViewLedger();
+          }}
+        >
+          <Text style={styles.activityLink}>Activity</Text>
+        </Pressable>
+      </View>
     </Pressable>
   );
 }
@@ -166,9 +182,18 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     color: colors.ink900,
   },
+  cardBottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 3,
+  },
   cardType: {
     ...type.caption,
-    marginTop: 3,
+  },
+  activityLink: {
+    ...type.label,
+    color: colors.ink600,
   },
   lockedPill: {
     backgroundColor: colors.ink100,

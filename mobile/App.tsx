@@ -19,6 +19,7 @@ import { JoinPoolScreen } from './src/screens/JoinPoolScreen';
 import { DepositScreen } from './src/screens/DepositScreen';
 import { SpendScreen } from './src/screens/SpendScreen';
 import { ReimburseScreen } from './src/screens/ReimburseScreen';
+import { LedgerScreen } from './src/screens/LedgerScreen';
 import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
 import { loadSession, type StoredSession } from './src/api/session';
 import { lockPool, type Pool } from './src/api/poolsClient';
@@ -35,7 +36,8 @@ type Route =
   | { name: 'joinPool' }
   | { name: 'deposit'; pool: Pool }
   | { name: 'spend'; pool: Pool }
-  | { name: 'reimburse'; pool: Pool };
+  | { name: 'reimburse'; pool: Pool }
+  | { name: 'ledger'; pool: Pool };
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -110,6 +112,7 @@ export default function App() {
           onJoinPool={() => setRoute({ name: 'joinPool' })}
           onSelectPool={(pool) => setRoute({ name: 'deposit', pool })}
           onOpenOrganizerControls={(pool) => setOrganizerControlsPool(pool)}
+          onViewLedger={(pool) => setRoute({ name: 'ledger', pool })}
         />
       ) : route.name === 'createPool' ? (
         <CreatePoolScreen
@@ -142,13 +145,15 @@ export default function App() {
           onDone={() => setRoute({ name: 'home' })}
           onCancel={() => setRoute({ name: 'home' })}
         />
-      ) : (
+      ) : route.name === 'reimburse' ? (
         <ReimburseScreen
           session={session}
           pool={route.pool}
           onDone={() => setRoute({ name: 'home' })}
           onCancel={() => setRoute({ name: 'home' })}
         />
+      ) : (
+        <LedgerScreen session={session} pool={route.pool} onCancel={() => setRoute({ name: 'home' })} />
       )}
       {organizerControlsPool && session ? (
         <OrganizerControlsSheet
