@@ -17,6 +17,7 @@ import { CreatePoolScreen } from './src/screens/CreatePoolScreen';
 import { InviteScreen } from './src/screens/InviteScreen';
 import { JoinPoolScreen } from './src/screens/JoinPoolScreen';
 import { DepositScreen } from './src/screens/DepositScreen';
+import { SpendScreen } from './src/screens/SpendScreen';
 import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
 import { loadSession, type StoredSession } from './src/api/session';
 import { lockPool, type Pool } from './src/api/poolsClient';
@@ -31,7 +32,8 @@ type Route =
   | { name: 'createPool' }
   | { name: 'invite'; pool: Pool }
   | { name: 'joinPool' }
-  | { name: 'deposit'; pool: Pool };
+  | { name: 'deposit'; pool: Pool }
+  | { name: 'spend'; pool: Pool };
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -124,8 +126,15 @@ export default function App() {
           onJoined={() => setRoute({ name: 'home' })}
           onCancel={() => setRoute({ name: 'home' })}
         />
-      ) : (
+      ) : route.name === 'deposit' ? (
         <DepositScreen
+          session={session}
+          pool={route.pool}
+          onDone={() => setRoute({ name: 'home' })}
+          onCancel={() => setRoute({ name: 'home' })}
+        />
+      ) : (
+        <SpendScreen
           session={session}
           pool={route.pool}
           onDone={() => setRoute({ name: 'home' })}
@@ -140,7 +149,10 @@ export default function App() {
             setPools((prev) => prev.map((p) => (p.id === locked.id ? locked : p)));
             setOrganizerControlsPool(null);
           }}
-          onTransferOut={() => setOrganizerControlsPool(null)}
+          onTransferOut={() => {
+            setRoute({ name: 'spend', pool: organizerControlsPool });
+            setOrganizerControlsPool(null);
+          }}
           onReimburse={() => setOrganizerControlsPool(null)}
           onClose={() => setOrganizerControlsPool(null)}
         />
