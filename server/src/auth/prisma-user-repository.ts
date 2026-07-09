@@ -1,0 +1,14 @@
+import type { PrismaClient } from "@prisma/client";
+import type { User, UserRepository } from "./types.js";
+
+export class PrismaUserRepository implements UserRepository {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async findByPhoneNumber(phoneNumber: string): Promise<User | null> {
+    return this.prisma.user.findUnique({ where: { phoneNumber } });
+  }
+
+  async create(phoneNumber: string): Promise<User> {
+    return this.prisma.user.create({ data: { phoneNumber } });
+  }
+}
