@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Poolpay — UI Kit v3</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* ink ramp */
+    --ink-900:#17140C; --ink-600:#4A4536; --ink-400:#948E7A; --ink-200:#D8D4C6; --ink-100:#EFECE1;
+    /* pumpkin ramp */
+    --pk-600:#CB5622; --pk-500:#E8692F; --pk-100:#FAE3D6;
+    /* flax ramp */
+    --fx-500:#EFD874; --fx-300:#F6E7A3; --fx-100:#FBF3D9;
+    /* semantic */
+    --green-600:#2C8F52; --green-100:#E3F3E8;
+    --danger-600:#B23A2E; --danger-100:#F9E3DE;
+    /* surfaces */
+    --cream:#FBF7EC; --paper:#FFFFFF;
+    /* aliases */
+    --ink:var(--ink-900); --ink-soft:var(--ink-600); --muted:var(--ink-400); --muted-soft:#B9B4A2;
+    --pumpkin:var(--pk-500); --pumpkin-dark:var(--pk-600);
+    --flax:var(--fx-300); --flax-deep:var(--fx-500);
+    --green:var(--green-600); --danger:var(--danger-600);
+    --line:rgba(23,20,12,0.10); --line-strong:rgba(23,20,12,0.20);
+    /* spacing */
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s7:32px; --s8:40px;
+    /* radii */
+    --r-sm:10px; --r-md:14px; --r-lg:18px; --r-xl:24px;
+    /* shadows */
+    --shadow-sm:0 1px 2px rgba(23,20,12,.06), 0 1px 1px rgba(23,20,12,.04);
+    --shadow-md:0 6px 16px -4px rgba(23,20,12,.10), 0 2px 4px rgba(23,20,12,.05);
+    --shadow-lg:0 18px 40px -12px rgba(23,20,12,.20);
+    /* device type scale */
+    --t-hero:25px; --t-h1:17px; --t-balance:29px; --t-figure:32px;
+    --t-body:13px; --t-sub:11.5px; --t-label:10.5px; --t-pill:11px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--cream);
+    font-family:'Onest', ui-sans-serif, system-ui, sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    font-variant-numeric:tabular-nums;
+  }
+  .accent{font-family:'Instrument Serif', serif; font-style:italic; font-weight:400;}
+  h1,h2,h3{margin:0;}
+  svg{display:block;}
+  button{font-family:inherit;}
+  :focus-visible{outline:2.5px solid var(--pumpkin); outline-offset:2px; border-radius:4px;}
+
+  /* ============ KIT PAGE CHROME ============ */
+  .kit-header{
+    padding:clamp(56px,7vw,88px) 8vw 52px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, var(--flax) 0%, var(--cream) 92%);
+  }
+  .kit-eyebrow{ text-transform:uppercase; letter-spacing:.16em; font-size:12px; font-weight:700; color:var(--pumpkin-dark); margin-bottom:16px;}
+  .kit-title{ font-size:clamp(46px,7vw,68px); line-height:1.0; font-weight:800; margin:0 0 22px; letter-spacing:-0.03em;}
+  .kit-title .accent{ font-size:1.12em;}
+  .kit-sub{ max-width:600px; font-size:17px; line-height:1.55; color:var(--ink-soft); font-weight:500;}
+  .kit-tags{ display:flex; gap:10px; flex-wrap:wrap; margin-top:30px;}
+  .kit-tag{ background:var(--ink); color:var(--cream); border-radius:999px; padding:8px 15px; font-size:12.5px; font-weight:600;}
+  .kit-tag.alt{ background:transparent; border:1.5px solid var(--line-strong); color:var(--ink);}
+  .toc{ display:flex; flex-wrap:wrap; gap:8px 20px; margin-top:30px; font-size:12.5px; font-weight:700;}
+  .toc a{ color:var(--ink-soft); text-decoration:none; border-bottom:1.5px solid var(--line-strong); padding-bottom:2px;}
+  .toc a:hover{ color:var(--pumpkin-dark); border-color:var(--pumpkin-dark);}
+
+  main{ max-width:1280px; margin:0 auto; padding:0 8vw 80px; }
+  .section{ padding:72px 0 64px; border-bottom:1px solid var(--line); scroll-margin-top:24px;}
+  .section:last-child{ border-bottom:none; }
+  .section-head{ margin-bottom:44px; max-width:680px; }
+  .section-num{ font-size:12px; font-weight:700; color:var(--pumpkin-dark); letter-spacing:.1em; text-transform:uppercase; margin-bottom:12px;}
+  .section-title{ font-size:32px; font-weight:800; letter-spacing:-0.02em; margin:0 0 12px;}
+  .section-desc{ font-size:15.5px; color:var(--ink-soft); line-height:1.6; font-weight:500;}
+  .section-desc b{ color:var(--ink); font-weight:700;}
+  .row{ display:flex; gap:48px; flex-wrap:wrap; align-items:flex-start; }
+  .row + .row{ margin-top:56px; }
+
+  /* demo panels (component library) */
+  .demo-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:20px;}
+  .demo{ background:var(--paper); border:1px solid var(--line); border-radius:var(--r-lg); padding:24px; box-shadow:var(--shadow-sm);}
+  .demo-label{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; color:var(--muted); margin-bottom:18px;}
+  .demo-row{ display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:16px;}
+  .demo-row:last-child{ margin-bottom:0;}
+  .demo-note{ font-size:12px; color:var(--muted); font-weight:600; line-height:1.55; margin-top:16px; padding-top:14px; border-top:1px dashed var(--line-strong);}
+  .dark-strip{ background:var(--ink); border-radius:var(--r-md); padding:12px; display:inline-flex; gap:12px;}
+
+  /* foundations widgets */
+  .ramp-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px;}
+  .ramp{ border-radius:var(--r-md); overflow:hidden; border:1px solid var(--line);}
+  .ramp .r{ height:42px; display:flex; align-items:center; justify-content:space-between; padding:0 14px; font-size:11.5px; font-weight:700;}
+  .tt{ display:grid; grid-template-columns:110px 1fr 170px minmax(140px,0.8fr); gap:0 20px; align-items:baseline; padding:13px 0; border-bottom:1px solid var(--line); font-size:12.5px;}
+  .tt:last-child{border-bottom:none;}
+  .tt .tok{ font-weight:700; color:var(--muted);}
+  .tt .spec{ color:var(--muted); font-weight:600;}
+  .tt .use{ color:var(--ink-soft); font-weight:600;}
+  .sp{ display:flex; align-items:center; gap:14px; margin-bottom:10px; font-size:12px; font-weight:700; color:var(--muted);}
+  .sp .bar{ height:16px; background:var(--pumpkin); border-radius:4px; flex-shrink:0;}
+  .sp .nm{ width:84px; flex-shrink:0;}
+  .rad-row,.sh-row{ display:flex; gap:18px; flex-wrap:wrap;}
+  .rad{ width:76px; height:76px; background:var(--paper); border:1.5px solid var(--line-strong); display:flex; align-items:flex-end; justify-content:center; padding-bottom:8px; font-size:11px; font-weight:700; color:var(--muted);}
+  .sh{ width:150px; height:92px; background:var(--paper); border-radius:var(--r-lg); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--muted);}
+  .icon-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:12px;}
+  .icon-tile{ border:1.5px solid var(--line); border-radius:var(--r-md); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; height:86px; font-size:10.5px; font-weight:700; color:var(--muted); background:var(--paper);}
+  .icon-tile svg{ width:22px; height:22px; stroke:var(--ink); stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+
+  /* anatomy redlines */
+  .anat{ display:inline-flex; flex-direction:column; align-items:center; gap:10px;}
+  .dim{ display:flex; align-items:center; gap:8px; font-size:11px; font-weight:700; color:var(--pumpkin-dark); align-self:stretch;}
+  .dim::before,.dim::after{ content:""; height:1px; background:var(--pumpkin-dark); flex:1; min-width:16px; opacity:.55;}
+  .anat-notes{ font-size:12px; color:var(--muted); font-weight:600; line-height:1.7;}
+  .anat-notes b{ color:var(--ink);}
+
+  /* ============ PHONE FRAME ============ */
+  .phone-wrap{ display:flex; flex-direction:column; align-items:center;}
+  .phone-caption{ margin-top:18px; font-size:12.5px; font-weight:600; color:var(--muted); text-align:center; max-width:300px; line-height:1.45;}
+  .phone{
+    width:340px; height:737px; background:#0a0906; border-radius:56px; padding:11px;
+    box-shadow: var(--shadow-lg), 0 0 0 2px rgba(20,16,8,0.9), 0 0 0 3.5px rgba(255,255,255,0.06);
+    position:relative; flex-shrink:0;
+  }
+  .phone::before{ content:""; position:absolute; right:-2.5px; top:196px; width:3px; height:66px; background:#221e15; border-radius:2px;}
+  .phone::after{ content:""; position:absolute; left:-2.5px; top:150px; width:3px; height:100px; background:#221e15; border-radius:2px;}
+  .island{ position:absolute; top:22px; left:50%; transform:translateX(-50%); width:104px; height:30px; background:#000; border-radius:999px; z-index:20;}
+  .screen{ width:100%; height:100%; background:var(--cream); border-radius:46px; overflow:hidden; position:relative; display:flex; flex-direction:column;}
+  .screen.dark{ background:var(--ink); color:var(--cream);}
+  .screen.flax{ background:var(--flax);}
+  .statusbar{ display:flex; justify-content:space-between; align-items:center; padding:16px 28px 0; height:52px; flex-shrink:0;}
+  .statusbar .time{ font-size:15px; font-weight:700; padding-top:2px;}
+  .statusbar .glyphs{ display:flex; gap:7px; align-items:center; padding-top:2px;}
+  .sb-ink{ fill:var(--ink);}
+  .screen.dark .sb-ink{ fill:var(--cream);}
+  .screen-body{ padding:8px 22px 0; flex:1; display:flex; flex-direction:column; overflow:hidden;}
+  .screen-foot{ padding:16px 22px 26px; flex-shrink:0;}
+  .home-indicator{ position:absolute; bottom:9px; left:50%; transform:translateX(-50%); width:120px; height:5px; border-radius:999px; background:rgba(23,20,12,0.28); z-index:25;}
+  .screen.dark .home-indicator{ background:rgba(255,255,255,0.4);}
+
+  /* tab bar */
+  .tabbar{ display:flex; border-top:1px solid var(--line); background:var(--cream); padding:9px 8px 24px; flex-shrink:0;}
+  .tab{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:10px; font-weight:700; color:var(--muted); position:relative;}
+  .tab svg{ width:22px; height:22px; stroke:currentColor; stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .tab.active{ color:var(--pumpkin-dark);}
+  .tab .badge{ position:absolute; top:-3px; right:calc(50% - 18px); min-width:15px; height:15px; border-radius:99px; background:var(--pumpkin); color:#fff; font-size:9px; font-weight:800; display:flex; align-items:center; justify-content:center; padding:0 4px; border:1.5px solid var(--cream);}
+
+  /* ============ CORE COMPONENTS ============ */
+  .toprow{ display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--s5); gap:12px;}
+  .toprow .tt-mid{ flex:1; min-width:0;}
+  .greet{ font-size:var(--t-body); color:var(--muted); font-weight:600;}
+  .greet b{ color:var(--ink); font-weight:700;}
+  .screen-eyebrow{ font-size:var(--t-sub); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;}
+  .screen-title{ font-size:var(--t-h1); font-weight:800; letter-spacing:-0.01em; line-height:1.2;}
+  .screen-title-sub{ font-size:var(--t-sub); color:var(--muted); font-weight:600; margin-top:2px;}
+  .avatar{ width:36px; height:36px; border-radius:50%; background:var(--flax); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; flex-shrink:0; border:1.5px solid var(--ink); color:var(--ink);}
+  .avatar.lg{ width:64px; height:64px; font-size:22px; border-width:2px;}
+  .icon-btn{ width:36px; height:36px; border-radius:50%; border:1.5px solid var(--line-strong); display:flex; align-items:center; justify-content:center; flex-shrink:0; background:transparent; color:var(--ink);}
+  .icon-btn svg{ width:16px; height:16px; stroke:currentColor; stroke-width:2.2; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .screen.dark .icon-btn{ border-color:rgba(255,255,255,0.25); color:var(--cream);}
+
+  .balance-card{ background:var(--ink); color:var(--cream); border-radius:var(--r-xl); padding:var(--s5); flex-shrink:0;}
+  .balance-card .k{ font-size:var(--t-sub); color:var(--muted-soft); font-weight:600; text-transform:uppercase; letter-spacing:.06em;}
+  .balance-card .amt{ font-size:var(--t-balance); font-weight:800; margin-top:var(--s2); letter-spacing:-0.02em; line-height:1;}
+  .balance-card .amt .of{ font-size:14px; color:var(--muted-soft); font-weight:600;}
+  .progress-track{ height:7px; background:rgba(255,255,255,0.14); border-radius:999px; overflow:hidden; margin:var(--s4) 0 var(--s3);}
+  .progress-fill{ height:100%; background:var(--pumpkin); border-radius:999px;}
+  .balance-card .meta{ display:flex; justify-content:space-between; font-size:var(--t-sub); color:var(--muted-soft); font-weight:600;}
+
+  /* buttons */
+  .btn{
+    border:none; border-radius:var(--r-md); height:48px; padding:0 18px; font-weight:700; font-size:14px;
+    display:inline-flex; align-items:center; justify-content:center; gap:7px; cursor:pointer; line-height:1; white-space:nowrap;
+    transition:transform .08s ease, filter .12s ease, background .12s ease;
+  }
+  .btn svg{ width:16px; height:16px; stroke:currentColor; stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .btn:active,.btn.is-pressed{ transform:scale(.975); filter:brightness(.93);}
+  .btn:disabled{ opacity:.35; pointer-events:none;}
+  .btn-primary{ background:var(--pumpkin); color:#fff;}
+  .btn-dark{ background:var(--ink); color:var(--cream);}
+  .btn-outline{ background:transparent; border:1.5px solid var(--line-strong); color:var(--ink);}
+  .btn-ghost{ background:rgba(255,255,255,0.12); color:var(--cream);}
+  .btn-danger{ background:var(--danger); color:#fff;}
+  .btn-lg{ height:52px; font-size:15px; border-radius:16px; padding:0 22px;}
+  .btn-sm{ height:36px; font-size:13px; border-radius:var(--r-sm); padding:0 14px;}
+  .btn-block{ width:100%;}
+  .btn-pair{ display:flex; gap:10px;}
+  .btn-pair .btn{ flex:1;}
+  .btn-stack .btn + .btn{ margin-top:10px;}
+  .btn-link{ background:none; border:none; font-weight:700; font-size:var(--t-body); color:var(--ink-soft); cursor:pointer; text-align:center; width:100%; padding:var(--s3) 0 0;}
+
+  /* pills / chips */
+  .pill{ border-radius:999px; padding:5px 12px; font-size:var(--t-pill); font-weight:700; display:inline-flex; align-items:center; gap:5px; line-height:1.3;}
+  .pill-dark{ background:var(--ink); color:var(--cream);}
+  .pill-outline{ background:transparent; border:1.5px solid var(--line-strong); color:var(--ink);}
+  .pill-flax{ background:var(--flax-deep); color:var(--ink);}
+  .pill-green{ background:var(--green-100); color:var(--green);}
+  .pill-danger{ background:var(--danger-100); color:var(--danger);}
+  .pill-pumpkin{ background:var(--pumpkin); color:#fff;}
+  .chip-row{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap;}
+  .chip{ border:1.5px solid var(--line-strong); background:transparent; border-radius:999px; padding:7px 14px; font-size:12.5px; font-weight:700; color:var(--ink); cursor:pointer; transition:background .12s;}
+  .chip.sel{ background:var(--ink); color:var(--cream); border-color:var(--ink);}
+
+  /* segment */
+  .segment{ display:flex; background:rgba(23,20,12,0.06); border-radius:var(--r-md); padding:4px; gap:4px; margin-bottom:var(--s5);}
+  .segment .seg{ flex:1; text-align:center; padding:9px 4px; border-radius:10px; font-size:var(--t-body); font-weight:700; color:var(--muted);}
+  .segment .seg.active{ background:var(--ink); color:var(--cream);}
+
+  /* toggle */
+  .toggle{ width:46px; height:28px; border-radius:999px; background:rgba(23,20,12,0.16); position:relative; flex-shrink:0; transition:background .15s; cursor:pointer; border:none; padding:0;}
+  .toggle .knob{ position:absolute; left:3px; top:3px; width:22px; height:22px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(23,20,12,.25); transition:left .15s;}
+  .toggle.on{ background:var(--ink);}
+  .toggle.on .knob{ left:21px;}
+
+  /* fields */
+  .field{ background:rgba(23,20,12,0.045); border:1.5px solid transparent; border-radius:var(--r-md); padding:11px 14px; margin-bottom:var(--s3); transition:border-color .12s, background .12s, box-shadow .12s;}
+  .field .flabel{ font-size:var(--t-label); font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:5px;}
+  .field .fval{ font-size:15px; font-weight:700;}
+  .field .fval.placeholder{ color:var(--muted); font-weight:600;}
+  .field.is-focus{ background:var(--paper); border-color:var(--ink); box-shadow:0 0 0 3px rgba(23,20,12,0.08);}
+  .field.is-error{ background:var(--paper); border-color:var(--danger); box-shadow:0 0 0 3px rgba(178,58,46,0.10);}
+  .helper{ font-size:var(--t-sub); color:var(--muted); font-weight:600; margin:-4px 0 var(--s3) 4px;}
+  .helper.error{ color:var(--danger);}
+  .form-label{ font-size:var(--t-label); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin:var(--s4) 0 var(--s3);}
+
+  .type-card{ border:1.5px solid var(--line-strong); border-radius:var(--r-md); padding:13px; margin-bottom:var(--s3); display:flex; gap:12px; align-items:flex-start; background:transparent;}
+  .type-card.selected{ border-color:var(--ink); border-width:2px; padding:12.5px; background:rgba(23,20,12,0.03);}
+  .type-card .tc-icon{ width:36px; height:36px; border-radius:10px; background:var(--flax); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .type-card .tc-icon svg{ width:18px; height:18px; stroke:var(--ink); stroke-width:2.2; fill:none; stroke-linecap:round;}
+  .type-card .t{ font-weight:700; font-size:14px;}
+  .type-card .d{ font-size:var(--t-sub); color:var(--muted); font-weight:600; margin-top:3px; line-height:1.45;}
+
+  /* lists */
+  .list{ display:flex; flex-direction:column;}
+  .list-item{ display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line);}
+  .list-item:last-child{ border-bottom:none;}
+  .list-item .name{ font-weight:700; font-size:var(--t-body); line-height:1.25;}
+  .list-item .sub{ font-size:var(--t-sub); color:var(--muted); font-weight:600; margin-top:2px;}
+  .list-item .right{ margin-left:auto; text-align:right; display:flex; align-items:center; flex-shrink:0;}
+  .list-item .right .amt{ font-weight:700; font-size:var(--t-body);}
+  .list-head{ display:flex; justify-content:space-between; align-items:center; margin:var(--s5) 0 var(--s1);}
+  .list-head .lbl{ font-size:var(--t-label); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.08em;}
+  .list-head .act{ font-size:var(--t-sub); font-weight:700; color:var(--pumpkin-dark);}
+  .txn-icon{ width:38px; height:38px; border-radius:12px; background:var(--flax); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .txn-icon svg{ width:17px; height:17px; stroke:var(--ink); stroke-width:2.1; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .txn-icon.green{ background:var(--green-100);} .txn-icon.green svg{ stroke:var(--green);}
+  .txn-icon.danger{ background:var(--danger-100);} .txn-icon.danger svg{ stroke:var(--danger);}
+
+  /* pool cards */
+  .pool-card{ background:var(--paper); border:1.5px solid var(--line); border-radius:var(--r-lg); padding:var(--s4); margin-bottom:var(--s3); box-shadow:var(--shadow-sm);}
+  .pool-card .top{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px;}
+  .pool-card .title{ font-weight:700; font-size:14.5px; line-height:1.2;}
+  .pool-card .type{ font-size:var(--t-sub); color:var(--muted); font-weight:600; margin-top:3px;}
+  .pool-card .amt{ font-weight:800; font-size:16px; text-align:right; letter-spacing:-0.01em;}
+  .pool-card .amt-sub{ font-size:var(--t-label); color:var(--muted); font-weight:600; text-align:right; margin-top:2px;}
+  .mini-track{ height:6px; background:rgba(23,20,12,0.08); border-radius:999px; overflow:hidden; margin-top:var(--s3);}
+  .mini-fill{ height:100%; background:var(--pumpkin); border-radius:999px;}
+  .avatar-stack{ display:flex; margin-top:var(--s3);}
+  .avatar-stack .a{ width:24px; height:24px; border-radius:50%; background:var(--flax); border:2px solid var(--paper); margin-left:-8px; font-size:9.5px; font-weight:800; display:flex; align-items:center; justify-content:center; color:var(--ink);}
+  .avatar-stack .a:first-child{ margin-left:0;}
+
+  .fab{ position:absolute; bottom:92px; right:22px; width:52px; height:52px; border-radius:50%; background:var(--pumpkin); color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 12px 22px -8px rgba(232,105,47,0.6); z-index:12;}
+  .fab svg{ width:22px; height:22px; stroke:#fff; stroke-width:2.4; stroke-linecap:round;}
+
+  /* figures / amounts */
+  .figure-block{ text-align:center;}
+  .figure-block .cap{ font-size:var(--t-sub); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;}
+  .figure-block .fig{ font-size:var(--t-figure); font-weight:800; margin-top:var(--s2); letter-spacing:-0.02em; line-height:1;}
+  .fig-entry{ font-size:36px; font-weight:800; letter-spacing:-0.02em; line-height:1;}
+  .caret{ display:inline-block; width:2.5px; height:.85em; background:var(--pumpkin); margin-left:3px; animation:blink 1.1s steps(1) infinite; vertical-align:-2px;}
+  @keyframes blink{50%{opacity:0;}}
+  @media (prefers-reduced-motion:reduce){ .caret{animation:none;} .btn,.toggle,.toggle .knob{transition:none;}}
+
+  /* keypad */
+  .keypad{ display:grid; grid-template-columns:repeat(3,1fr); gap:4px 10px; margin-top:auto; padding-top:var(--s4);}
+  .key{ height:50px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:21px; font-weight:700; transition:background .1s; cursor:pointer;}
+  .key:active{ background:rgba(23,20,12,0.07);}
+  .key svg{ width:22px; height:22px; stroke:var(--ink); stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+
+  /* qr, code, sheet */
+  .qr-box{ width:168px; height:168px; margin:0 auto; background:#fff; border-radius:var(--r-lg); display:flex; align-items:center; justify-content:center; padding:16px;}
+  .qr-svg{ width:100%; height:100%;}
+  .code-display{ display:flex; gap:8px; justify-content:center;}
+  .code-display .d{ width:34px; height:46px; background:var(--paper); border:1.5px solid var(--line-strong); border-radius:var(--r-sm); display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:800;}
+  .sheet{ background:var(--paper); border-radius:var(--r-xl) var(--r-xl) 0 0; padding:16px 18px 30px; box-shadow:var(--shadow-lg); margin:0 -22px;}
+  .sheet .grabber{ width:38px; height:4px; background:var(--line-strong); border-radius:99px; margin:0 auto var(--s4);}
+  .sheet-title{ font-weight:800; font-size:15px;}
+  .sheet-sub{ font-size:var(--t-sub); color:var(--muted); font-weight:600; margin-top:2px;}
+  .sheet-row{ display:flex; align-items:center; gap:13px; padding:13px 2px; border-bottom:1px solid var(--line);}
+  .sheet-row:last-of-type{ border-bottom:none;}
+  .sheet-row .sr-icon{ width:38px; height:38px; border-radius:11px; background:var(--flax); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .sheet-row .sr-icon svg{ width:18px; height:18px; stroke:var(--ink); stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .sheet-row .t{ font-weight:700; font-size:14px;}
+  .sheet-row .d{ font-size:var(--t-sub); color:var(--muted); font-weight:600; margin-top:1px;}
+  .sheet-row.danger .t{ color:var(--danger);}
+  .sheet-row.danger .sr-icon{ background:var(--danger-100);}
+  .sheet-row.danger .sr-icon svg{ stroke:var(--danger);}
+  .sheet-row .chev{ margin-left:auto;}
+  .sheet-row .chev svg{ width:15px; height:15px; stroke:var(--muted); stroke-width:2.2; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+
+  /* toast */
+  .toast{ display:inline-flex; align-items:center; gap:8px; background:var(--ink); color:var(--cream); border-radius:12px; padding:11px 16px; font-size:13px; font-weight:600; box-shadow:0 10px 24px -8px rgba(23,20,12,.45);}
+  .toast svg{ width:15px; height:15px; stroke:var(--flax-deep); stroke-width:2.4; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .toast.float{ position:absolute; bottom:104px; left:50%; transform:translateX(-50%); z-index:30; white-space:nowrap;}
+
+  /* key-value rows */
+  .kv-card{ background:var(--paper); border:1.5px solid var(--line); border-radius:var(--r-lg); padding:2px 16px; box-shadow:var(--shadow-sm);}
+  .kv{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); font-size:var(--t-body);}
+  .kv:last-child{ border-bottom:none;}
+  .kv .k{ color:var(--muted); font-weight:600; flex-shrink:0;}
+  .kv .v{ font-weight:700; text-align:right;}
+
+  /* notifications */
+  .notif{ display:flex; gap:12px; padding:13px 0; border-bottom:1px solid var(--line); align-items:flex-start;}
+  .notif:last-child{ border-bottom:none;}
+  .notif .t{ font-size:var(--t-body); font-weight:700; line-height:1.35;}
+  .notif .d{ font-size:var(--t-sub); color:var(--muted); font-weight:600; margin-top:2px;}
+  .notif .dot{ width:8px; height:8px; border-radius:50%; background:var(--pumpkin); margin:6px 0 0 auto; flex-shrink:0;}
+
+  /* settings */
+  .settings-group{ background:var(--paper); border:1.5px solid var(--line); border-radius:var(--r-lg); padding:2px 14px; margin-bottom:var(--s3); box-shadow:var(--shadow-sm);}
+  .set-row{ display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); font-size:13.5px; font-weight:700;}
+  .set-row:last-child{ border-bottom:none;}
+  .set-row .sicon{ width:32px; height:32px; border-radius:9px; background:rgba(23,20,12,0.05); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .set-row .sicon svg{ width:16px; height:16px; stroke:var(--ink); stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .set-row .val{ margin-left:auto; color:var(--muted); font-weight:600; font-size:12px; display:flex; align-items:center; gap:6px; flex-shrink:0;}
+  .set-row .val svg{ width:14px; height:14px; stroke:var(--muted); stroke-width:2.2; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .set-row.danger{ color:var(--danger);}
+  .set-row.danger .sicon{ background:var(--danger-100);}
+  .set-row.danger .sicon svg{ stroke:var(--danger);}
+
+  .check-ring{ width:76px; height:76px; border-radius:50%; background:var(--green); display:flex; align-items:center; justify-content:center; box-shadow:0 14px 30px -10px rgba(44,143,82,.5);}
+  .check-ring svg{ width:34px; height:34px; stroke:#fff; stroke-width:2.8; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .warn-ring{ width:66px; height:66px; border-radius:18px; background:var(--danger-100); display:flex; align-items:center; justify-content:center;}
+  .warn-ring svg{ width:30px; height:30px; stroke:var(--danger); stroke-width:2.2; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+
+  .mascot{ display:block;}
+  footer{ text-align:center; padding:56px 8vw 48px; color:var(--muted); font-size:13px; font-weight:600;}
+  @media (max-width:820px){ .row{gap:36px;} .tt{grid-template-columns:1fr 1fr;} }
+</style>
+</head>
+<body>
+<!-- ============ HEADER ============ -->
+<header class="kit-header">
+  <div class="kit-eyebrow">Product UI Kit · v3</div>
+  <h1 class="kit-title">Pool<span class="accent">pay</span></h1>
+  <p class="kit-sub">A custodial shared-payments app. Groups deposit real money into a time-boxed
+  Pool and spend it together. Complete design system in the warm, hand-drawn financial language of the
+  FlexPay explorations — tokens, components, and 21 production screens.</p>
+  <div class="kit-tags">
+    <span class="kit-tag">Onest typeface</span>
+    <span class="kit-tag">Pumpkin · Flax · Ink</span>
+    <span class="kit-tag alt">21 screens</span>
+    <span class="kit-tag alt">40+ components</span>
+    <span class="kit-tag alt">UPI-native</span>
+  </div>
+  <nav class="toc">
+    <a href="#foundations">00 Foundations</a>
+    <a href="#components">01 Components</a>
+    <a href="#entry">02 Entry</a>
+    <a href="#create">03 Create</a>
+    <a href="#contribute">04 Contributing</a>
+    <a href="#ongoing">05 Ongoing</a>
+    <a href="#organizer">06 Organizer</a>
+    <a href="#winddown">07 Wind-down</a>
+    <a href="#profile">08 Profile</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============ 00 FOUNDATIONS ============ -->
+<section class="section" id="foundations">
+  <div class="section-head">
+    <div class="section-num">00 — Foundations</div>
+    <h2 class="section-title">Tokens</h2>
+    <p class="section-desc">Every value in the kit resolves to a named token. <b>Ink</b> is the colour
+    of money in custody, <b>pumpkin</b> is reserved for the one action that moves it, <b>flax</b> is
+    ambient warmth. Tints exist for surfaces and status — never for text on cream.</p>
+  </div>
+
+  <div class="demo-grid" style="margin-bottom:20px;">
+    <div class="demo">
+      <div class="demo-label">Ink ramp</div>
+      <div class="ramp">
+        <div class="r" style="background:var(--ink-900); color:var(--cream);"><span>ink-900</span><span>#17140C</span></div>
+        <div class="r" style="background:var(--ink-600); color:var(--cream);"><span>ink-600</span><span>#4A4536</span></div>
+        <div class="r" style="background:var(--ink-400); color:#fff;"><span>ink-400</span><span>#948E7A</span></div>
+        <div class="r" style="background:var(--ink-200);"><span>ink-200</span><span>#D8D4C6</span></div>
+        <div class="r" style="background:var(--ink-100);"><span>ink-100</span><span>#EFECE1</span></div>
+      </div>
+      <div class="demo-note">900 = text &amp; custody surfaces · 600 = body on cream · 400 = captions · 100–200 = hairlines and fills.</div>
+    </div>
+    <div class="demo">
+      <div class="demo-label">Pumpkin &amp; flax</div>
+      <div class="ramp">
+        <div class="r" style="background:var(--pk-600); color:#fff;"><span>pumpkin-600</span><span>#CB5622</span></div>
+        <div class="r" style="background:var(--pk-500); color:#fff;"><span>pumpkin-500</span><span>#E8692F</span></div>
+        <div class="r" style="background:var(--pk-100);"><span>pumpkin-100</span><span>#FAE3D6</span></div>
+        <div class="r" style="background:var(--fx-500);"><span>flax-500</span><span>#EFD874</span></div>
+        <div class="r" style="background:var(--fx-300);"><span>flax-300</span><span>#F6E7A3</span></div>
+      </div>
+      <div class="demo-note">Pumpkin-500 on fills, 600 for text links on cream (contrast). Flax never carries text smaller than 11px.</div>
+    </div>
+    <div class="demo">
+      <div class="demo-label">Semantic</div>
+      <div class="ramp">
+        <div class="r" style="background:var(--green-600); color:#fff;"><span>green-600</span><span>#2C8F52</span></div>
+        <div class="r" style="background:var(--green-100);"><span>green-100</span><span>#E3F3E8</span></div>
+        <div class="r" style="background:var(--danger-600); color:#fff;"><span>danger-600</span><span>#B23A2E</span></div>
+        <div class="r" style="background:var(--danger-100);"><span>danger-100</span><span>#F9E3DE</span></div>
+      </div>
+      <div class="demo-note">Green marks money in: deposits, refunds received. Danger is scoped to the two destructive verbs — never decoration.</div>
+    </div>
+    <div class="demo">
+      <div class="demo-label">Surfaces</div>
+      <div class="ramp">
+        <div class="r" style="background:var(--cream); border-bottom:1px solid var(--line);"><span>cream</span><span>#FBF7EC</span></div>
+        <div class="r" style="background:var(--paper);"><span>paper</span><span>#FFFFFF</span></div>
+        <div class="r" style="background:var(--ink-900); color:var(--cream);"><span>custody</span><span>ink-900</span></div>
+        <div class="r" style="background:var(--fx-300);"><span>moment</span><span>flax-300</span></div>
+      </div>
+      <div class="demo-note">Cream is the app canvas, paper lifts cards, ink holds balances, flax marks celebratory or first-run moments.</div>
+    </div>
+  </div>
+
+  <div class="demo" style="margin-bottom:20px;">
+    <div class="demo-label">Type scale — Onest, on a 340pt device</div>
+    <div class="tt"><span class="tok">figure / 32</span><span style="font-size:32px; font-weight:800; letter-spacing:-0.02em;">₹1,000</span><span class="spec">32 / 36 · 800 · −2%</span><span class="use">Hero amounts</span></div>
+    <div class="tt"><span class="tok">balance / 29</span><span style="font-size:29px; font-weight:800; letter-spacing:-0.02em;">₹18,200</span><span class="spec">29 / 32 · 800 · −2%</span><span class="use">Balance cards</span></div>
+    <div class="tt"><span class="tok">hero / 25</span><span style="font-size:25px; font-weight:800; letter-spacing:-0.02em;">Split it. Pool it.</span><span class="spec">25 / 28 · 800 · −2%</span><span class="use">Marketing moments</span></div>
+    <div class="tt"><span class="tok">title / 17</span><span style="font-size:17px; font-weight:800;">Create a Pool</span><span class="spec">17 / 20 · 800 · −1%</span><span class="use">Screen titles</span></div>
+    <div class="tt"><span class="tok">body / 13</span><span style="font-size:13px; font-weight:600;">Every member deposits the same share.</span><span class="spec">13 / 19 · 600–700</span><span class="use">Rows, copy, buttons¹</span></div>
+    <div class="tt"><span class="tok">caption / 11.5</span><span style="font-size:11.5px; font-weight:600; color:var(--muted);">Updated today · 3 contributors</span><span class="spec">11.5 / 16 · 600</span><span class="use">Metadata</span></div>
+    <div class="tt"><span class="tok">label / 10.5</span><span style="font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);">Recent deposits</span><span class="spec">10.5 / 14 · 700 · +6% caps</span><span class="use">Section labels</span></div>
+    <div class="demo-note">¹ Buttons use 14/700 (15/700 at the large size). Numerals are tabular throughout so amounts align in columns. The Instrument Serif italic appears only in the wordmark — never in UI.</div>
+  </div>
+
+  <div class="demo-grid">
+    <div class="demo">
+      <div class="demo-label">Spacing — 4pt base</div>
+      <div class="sp"><span class="nm">s1 · 4</span><span class="bar" style="width:4px;"></span></div>
+      <div class="sp"><span class="nm">s2 · 8</span><span class="bar" style="width:8px;"></span></div>
+      <div class="sp"><span class="nm">s3 · 12</span><span class="bar" style="width:12px;"></span></div>
+      <div class="sp"><span class="nm">s4 · 16</span><span class="bar" style="width:16px;"></span></div>
+      <div class="sp"><span class="nm">s5 · 20</span><span class="bar" style="width:20px;"></span></div>
+      <div class="sp"><span class="nm">s6 · 24</span><span class="bar" style="width:24px;"></span></div>
+      <div class="sp"><span class="nm">s7 · 32</span><span class="bar" style="width:32px;"></span></div>
+      <div class="sp"><span class="nm">s8 · 40</span><span class="bar" style="width:40px;"></span></div>
+      <div class="demo-note">Screen gutter is fixed at 22. Cards pad s4–s5. Between-card gap is s3.</div>
+    </div>
+    <div class="demo">
+      <div class="demo-label">Radius &amp; elevation</div>
+      <div class="rad-row" style="margin-bottom:24px;">
+        <div class="rad" style="border-radius:var(--r-sm);">10</div>
+        <div class="rad" style="border-radius:var(--r-md);">14</div>
+        <div class="rad" style="border-radius:var(--r-lg);">18</div>
+        <div class="rad" style="border-radius:var(--r-xl);">24</div>
+      </div>
+      <div class="sh-row">
+        <div class="sh" style="box-shadow:var(--shadow-sm);">shadow-sm</div>
+        <div class="sh" style="box-shadow:var(--shadow-md);">shadow-md</div>
+        <div class="sh" style="box-shadow:var(--shadow-lg);">shadow-lg</div>
+      </div>
+      <div class="demo-note">10 = small controls · 14 = buttons, fields · 18 = cards · 24 = balance card &amp; sheets. Elevation is quiet: sm on cards, lg only on sheets and toasts.</div>
+    </div>
+    <div class="demo">
+      <div class="demo-label">Iconography — 24 grid · 2pt stroke · round caps</div>
+      <div class="icon-grid">
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg>home</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>activity</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.3 19.5a2 2 0 003.4 0"/></svg>alerts</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.6-4 5-5 8-5s6.4 1 8 5"/></svg>profile</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>add</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8"/></svg>transfer</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>lock</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 13v5a2 2 0 002 2h10a2 2 0 002-2v-5"/></svg>share</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6"/><rect x="14" y="4" width="6" height="6"/><rect x="4" y="14" width="6" height="6"/><path d="M14 14h3v3M20 17v3h-3"/></svg>qr</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M15 13h3"/></svg>wallet</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>check</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>close</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>chevron</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><path d="M9 5h10a2 2 0 012 2v10a2 2 0 01-2 2H9l-6-7 6-7z"/><path d="M12 10l4 4M16 10l-4 4"/></svg>delete</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>secure</div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.8 9.3a2.3 2.3 0 113.9 1.7c-.8.7-1.6 1.1-1.6 2.2"/><circle cx="12" cy="16.8" r="0.4" fill="var(--ink)"/></svg>help</div>
+      </div>
+      <div class="demo-note">Drawn on the same hand as the mascots — friendly geometry, no sharp corners. Filled variants exist only for the active tab state.</div>
+    </div>
+  </div>
+</section>
+<!-- ============ 01 COMPONENTS ============ -->
+<section class="section" id="components">
+  <div class="section-head">
+    <div class="section-num">01 — Components</div>
+    <h2 class="section-title">The library</h2>
+    <p class="section-desc">Everything a screen is assembled from, with its states. One rule keeps
+    hierarchy legible: <b>a screen gets at most one pumpkin action</b> — the thing that moves money.
+    Everything else is ink, outline, or text.</p>
+  </div>
+
+  <div class="demo-grid">
+    <div class="demo">
+      <div class="demo-label">Buttons — sizes</div>
+      <div class="demo-row">
+        <button class="btn btn-primary btn-lg">Deposit ₹1,000</button>
+        <button class="btn btn-primary">Deposit share</button>
+        <button class="btn btn-primary btn-sm">Remind</button>
+      </div>
+      <div class="demo-label" style="margin-top:22px;">Variants</div>
+      <div class="demo-row">
+        <button class="btn btn-primary">Primary</button>
+        <button class="btn btn-dark">Dark</button>
+        <button class="btn btn-outline">Outline</button>
+        <button class="btn btn-danger">Destructive</button>
+        <span class="dark-strip"><button class="btn btn-ghost">Ghost on ink</button></span>
+      </div>
+      <div class="demo-label" style="margin-top:22px;">States</div>
+      <div class="demo-row">
+        <button class="btn btn-primary">Default</button>
+        <button class="btn btn-primary is-pressed">Pressed</button>
+        <button class="btn btn-primary" disabled>Disabled</button>
+      </div>
+      <div class="demo-note">Heights 52 / 48 / 36. Pressed = scale .975 + 7% darken. Disabled = 35% opacity, never a grey swap. Icons sit left at 16pt.</div>
+    </div>
+
+    <div class="demo">
+      <div class="demo-label">Anatomy — default button</div>
+      <div class="anat" style="margin:6px 0 20px;">
+        <button class="btn btn-primary" style="width:200px;">Deposit share</button>
+        <div class="dim" style="width:200px;">200 hug / fill</div>
+      </div>
+      <div class="anat-notes">
+        <b>Height</b> 48 &nbsp;·&nbsp; <b>Radius</b> 14 &nbsp;·&nbsp; <b>Side padding</b> 18<br>
+        <b>Label</b> body 14 / 700, single line, sentence case<br>
+        <b>Icon</b> 16, gap 7, leading position only<br>
+        <b>Hit area</b> extends to 48 minimum in all directions
+      </div>
+      <div class="demo-label" style="margin-top:22px;">Anatomy — list row</div>
+      <div class="list" style="border:1px dashed var(--line-strong); border-radius:12px; padding:0 12px;">
+        <div class="list-item"><div class="avatar">R</div><div><div class="name">Rhea</div><div class="sub">Paid · 2d ago</div></div><div class="right"><span class="pill pill-green">Paid</span></div></div>
+      </div>
+      <div class="anat-notes" style="margin-top:12px;">
+        <b>Row padding</b> 12 vertical &nbsp;·&nbsp; <b>Leading</b> 36 avatar, gap 12<br>
+        <b>Divider</b> ink-100 hairline, none on last row
+      </div>
+    </div>
+
+    <div class="demo">
+      <div class="demo-label">Inputs — states</div>
+      <div class="field"><div class="flabel">Pool name</div><div class="fval placeholder">e.g. Goa Trip</div></div>
+      <div class="field is-focus"><div class="flabel">Pool name</div><div class="fval">Goa Tri<span class="caret"></span></div></div>
+      <div class="field is-error"><div class="flabel">UPI ID</div><div class="fval">maya@okhdfc</div></div>
+      <div class="helper error">That UPI ID doesn't exist. Check for typos.</div>
+      <div class="field"><div class="flabel">Per-person share</div><div class="fval">₹1,000</div></div>
+      <div class="demo-note">Rest is a soft ink-4% fill; focus lifts to paper with an ink border and 3pt ring; error swaps to danger. Labels stay inside the field — the screen never jumps.</div>
+    </div>
+
+    <div class="demo">
+      <div class="demo-label">Selection</div>
+      <div class="segment" style="max-width:280px;"><div class="seg active">Active</div><div class="seg">Closed</div></div>
+      <div class="demo-row">
+        <button class="chip sel">₹500</button><button class="chip">₹1,000</button><button class="chip">₹2,000</button>
+      </div>
+      <div class="demo-row" style="align-items:center; gap:20px;">
+        <span style="display:inline-flex; align-items:center; gap:10px; font-size:13px; font-weight:700;"><button class="toggle on" aria-label="on"><span class="knob"></span></button> On</span>
+        <span style="display:inline-flex; align-items:center; gap:10px; font-size:13px; font-weight:700; color:var(--muted);"><button class="toggle" aria-label="off"><span class="knob"></span></button> Off</span>
+      </div>
+      <div class="type-card selected" style="margin-top:16px;">
+        <div class="tc-icon"><svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16"/></svg></div>
+        <div><div class="t">Equal Split Pool</div><div class="d">Set one amount. Everyone deposits the same share.</div></div>
+      </div>
+      <div class="demo-note">Selection is always ink — pumpkin would read as "money about to move". Selected cards thicken the border rather than changing colour.</div>
+    </div>
+
+    <div class="demo">
+      <div class="demo-label">Status &amp; feedback</div>
+      <div class="demo-row">
+        <span class="pill pill-green">Paid</span>
+        <span class="pill pill-flax">Pending</span>
+        <span class="pill pill-dark">Organizer</span>
+        <span class="pill pill-outline">Locked</span>
+        <span class="pill pill-pumpkin">Open Pool</span>
+        <span class="pill pill-danger">Failed</span>
+      </div>
+      <div class="demo-row" style="margin-top:18px;">
+        <span class="toast"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Pool Code copied</span>
+      </div>
+      <div class="demo-row">
+        <span class="toast" style="background:var(--danger);"><svg viewBox="0 0 24 24" style="stroke:#fff;"><path d="M6 6l12 12M18 6L6 18"/></svg>Payment didn't go through</span>
+      </div>
+      <div class="demo-note">A status pill states a fact; a toast confirms an action just taken. Toasts float 104pt above the bottom edge and dismiss in 2.4s.</div>
+    </div>
+
+    <div class="demo">
+      <div class="demo-label">Rows — the four species</div>
+      <div class="list">
+        <div class="list-item"><div class="txn-icon green"><svg viewBox="0 0 24 24"><path d="M12 19V6M6 12l6-6 6 6"/></svg></div><div><div class="name">Aditi deposited</div><div class="sub">Flat 3B Rent · 11:04 AM</div></div><div class="right"><div class="amt" style="color:var(--green);">+₹6,000</div></div></div>
+        <div class="list-item"><div class="avatar">S</div><div><div class="name">Sam</div><div class="sub">Not yet deposited</div></div><div class="right"><button class="btn btn-outline btn-sm">Remind</button></div></div>
+        <div class="notif"><div class="txn-icon"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6"/></svg></div><div><div class="t">Goa Trip is fully funded</div><div class="d">All 6 members have paid · 2m</div></div><div class="dot"></div></div>
+        <div class="kv" style="border-bottom:none;"><span class="k">UPI Ref</span><span class="v">415223998877</span></div>
+      </div>
+      <div class="demo-note">Transaction, member, notification, and key-value rows share the same 12pt rhythm and hairline dividers, so mixed lists still scan as one column.</div>
+    </div>
+  </div>
+</section>
+<!-- ============ 02 ENTRY ============ -->
+<section class="section" id="entry">
+  <div class="section-head">
+    <div class="section-num">02 — Entry</div>
+    <h2 class="section-title">Onboarding &amp; Home</h2>
+    <p class="section-desc">Root screens carry the tab bar: <b>Home · Activity · Alerts · Profile</b>.
+    The empty state treats a new account as an invitation, not an apology. Once Pools exist, every card
+    leads with the number that matters — raised vs. target, or the running balance.</p>
+  </div>
+  <div class="row">
+    <!-- Onboarding -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen flax">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body" style="justify-content:center; align-items:center; text-align:center;">
+            <svg class="mascot" width="80" height="80" viewBox="0 0 100 100">
+              <path d="M50 9C73 9 88 28 88 53C88 78 69 91 50 91C31 91 12 78 12 53C12 28 27 9 50 9Z" fill="var(--ink)"/>
+              <circle cx="38" cy="51" r="4.2" fill="var(--flax)"/><circle cx="62" cy="51" r="4.2" fill="var(--flax)"/>
+              <path d="M40 63Q50 72 60 63" stroke="var(--flax)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+            </svg>
+            <div style="font-size:var(--t-hero); font-weight:800; line-height:1.12; letter-spacing:-0.02em; margin-top:var(--s6);">Split it.<br>Pool it.<br>Done.</div>
+            <div style="font-size:var(--t-body); color:var(--ink-soft); font-weight:600; max-width:210px; margin-top:var(--s4); line-height:1.5;">One shared fund your whole group deposits into — no one fronting the bill.</div>
+          </div>
+          <div class="screen-foot">
+            <button class="btn btn-dark btn-block btn-lg">Get started</button>
+            <button class="btn-link">I have a Pool Code</button>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Onboarding — first run</div>
+    </div>
+
+    <!-- Empty home -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body" style="align-items:center; text-align:center; justify-content:center;">
+            <svg class="mascot" width="70" height="70" viewBox="0 0 100 100">
+              <path d="M50 9C73 9 88 28 88 53C88 78 69 91 50 91C31 91 12 78 12 53C12 28 27 9 50 9Z" fill="var(--flax-deep)"/>
+              <circle cx="38" cy="51" r="4.2" fill="var(--ink)"/><circle cx="62" cy="51" r="4.2" fill="var(--ink)"/>
+              <path d="M41 63Q50 68 59 63" stroke="var(--ink)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+            </svg>
+            <div style="font-size:var(--t-h1); font-weight:800; margin-top:var(--s5);">No Pools yet</div>
+            <div style="font-size:var(--t-body); color:var(--muted); font-weight:600; max-width:220px; margin-top:var(--s2); line-height:1.5;">Create one for your next trip, or join a friend's with their code.</div>
+            <button class="btn btn-primary" style="margin-top:var(--s6);">Create a Pool</button>
+            <button class="btn-link" style="width:auto;">Join with a code</button>
+          </div>
+          <div class="tabbar">
+            <div class="tab active"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg>Home</div>
+            <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Activity</div>
+            <div class="tab"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.3 19.5a2 2 0 003.4 0"/></svg>Alerts</div>
+            <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.6-4 5-5 8-5s6.4 1 8 5"/></svg>Profile</div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Home — empty state</div>
+    </div>
+
+    <!-- Home -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body">
+            <div class="toprow">
+              <div class="greet">Hey, <b>Maya</b></div>
+              <div class="avatar">M</div>
+            </div>
+            <div class="segment"><div class="seg active">Active</div><div class="seg">Closed</div></div>
+            <div class="pool-card">
+              <div class="top">
+                <div><div class="title">Goa Trip</div><div class="type">Equal Split · Organizer</div></div>
+                <div><div class="amt">₹4,500</div><div class="amt-sub">of ₹6,000</div></div>
+              </div>
+              <div class="mini-track"><div class="mini-fill" style="width:75%;"></div></div>
+              <div class="avatar-stack"><div class="a">R</div><div class="a">P</div><div class="a">S</div><div class="a">+3</div></div>
+            </div>
+            <div class="pool-card">
+              <div class="top">
+                <div><div class="title">Flat 3B Rent</div><div class="type">Open Pool · Member</div></div>
+                <div><div class="amt">₹18,200</div><div class="amt-sub">balance</div></div>
+              </div>
+              <div class="avatar-stack"><div class="a">A</div><div class="a">M</div><div class="a">D</div></div>
+            </div>
+            <div class="pool-card">
+              <div class="top">
+                <div><div class="title">Diwali Party</div><div class="type">Equal Split · Locked</div></div>
+                <div><div class="amt">₹9,000</div><div class="amt-sub">of ₹9,000</div></div>
+              </div>
+              <div class="mini-track"><div class="mini-fill" style="width:100%;"></div></div>
+            </div>
+          </div>
+          <div class="fab"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+          <div class="tabbar">
+            <div class="tab active"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg>Home</div>
+            <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Activity</div>
+            <div class="tab"><span class="badge">3</span><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.3 19.5a2 2 0 003.4 0"/></svg>Alerts</div>
+            <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.6-4 5-5 8-5s6.4 1 8 5"/></svg>Profile</div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Home — Pools by role, unread badge on Alerts</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 CREATE ============ -->
+<section class="section" id="create">
+  <div class="section-head">
+    <div class="section-num">03 — Create a Pool</div>
+    <h2 class="section-title">Two steps, one irreversible choice</h2>
+    <p class="section-desc">The only decision that can't change later: <b>Equal Split</b> locks a
+    per-person amount into every deposit QR; <b>Open</b> leaves it to each Member. Pushed screens drop
+    the tab bar and gain a back chevron — standard stack navigation.</p>
+  </div>
+  <div class="row">
+    <!-- Step 1 -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body">
+            <div class="toprow">
+              <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+              <div class="tt-mid" style="text-align:center;"><div class="screen-eyebrow">Step 1 of 2</div></div>
+              <div style="width:36px;"></div>
+            </div>
+            <h3 class="screen-title" style="margin-bottom:var(--s5);">Name your Pool</h3>
+            <div class="field is-focus">
+              <div class="flabel">Pool name</div>
+              <div class="fval">Goa Trip<span class="caret"></span></div>
+            </div>
+            <div class="form-label">Pool type</div>
+            <div class="type-card selected">
+              <div class="tc-icon"><svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16"/></svg></div>
+              <div><div class="t">Equal Split Pool</div><div class="d">Set one amount. Everyone deposits the same share.</div></div>
+            </div>
+            <div class="type-card">
+              <div class="tc-icon"><svg viewBox="0 0 24 24"><path d="M3 12q4.5-6 9 0t9 0"/></svg></div>
+              <div><div class="t">Open Pool</div><div class="d">No fixed amount — contribute whatever, whenever.</div></div>
+            </div>
+          </div>
+          <div class="screen-foot"><button class="btn btn-dark btn-block">Continue</button></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Create 1 — name focused, type selected</div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body">
+            <div class="toprow">
+              <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+              <div class="tt-mid" style="text-align:center;"><div class="screen-eyebrow">Step 2 of 2</div></div>
+              <div style="width:36px;"></div>
+            </div>
+            <h3 class="screen-title" style="margin-bottom:var(--s2);">Set the share</h3>
+            <p style="font-size:var(--t-body); color:var(--muted); font-weight:600; margin:0;">Every Member deposits exactly this to join in.</p>
+            <div class="figure-block" style="margin:var(--s7) 0;">
+              <div class="cap">Per-person share</div>
+              <div class="fig">₹1,000</div>
+            </div>
+            <div class="field">
+              <div class="flabel">Target members</div>
+              <div class="fval">6 people · ₹6,000 goal</div>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <div class="flabel">Deposits close</div>
+              <div class="fval placeholder">No date — I'll lock it manually</div>
+            </div>
+          </div>
+          <div class="screen-foot"><button class="btn btn-primary btn-block">Create Pool</button></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Create 2 — Equal Split amount &amp; goal</div>
+    </div>
+  </div>
+</section>
+<!-- ============ 04 CONTRIBUTING ============ -->
+<section class="section" id="contribute">
+  <div class="section-head">
+    <div class="section-num">04 — Contributing</div>
+    <h2 class="section-title">Detail, deposit, success</h2>
+    <p class="section-desc">Money in has three shapes. An <b>Equal Split</b> deposit is a QR with the
+    amount already locked in. An <b>Open Pool</b> contribution goes through the keypad with quick-amount
+    chips. Both flows land on the same success screen with the UPI reference — proof, not confetti.</p>
+  </div>
+  <div class="row">
+    <!-- Pool detail equal split -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body">
+            <div class="toprow">
+              <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+              <div class="tt-mid"><div class="screen-title">Goa Trip</div><div class="screen-title-sub">Equal Split · You're the Organizer</div></div>
+              <button class="icon-btn"><svg viewBox="0 0 24 24" style="stroke:none;"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg></button>
+            </div>
+            <div class="balance-card">
+              <div class="k">Raised</div>
+              <div class="amt">₹4,500 <span class="of">of ₹6,000</span></div>
+              <div class="progress-track"><div class="progress-fill" style="width:75%;"></div></div>
+              <div class="meta"><span>4 of 6 paid</span><span>₹1,000 / person</span></div>
+            </div>
+            <div class="btn-pair" style="margin-top:var(--s4);">
+              <button class="btn btn-primary">Deposit share</button>
+              <button class="btn btn-outline">Invite</button>
+            </div>
+            <div class="list-head"><span class="lbl">Members</span><span class="act">See all</span></div>
+            <div class="list">
+              <div class="list-item"><div class="avatar">R</div><div><div class="name">Rhea</div><div class="sub">Paid · 2d ago</div></div><div class="right"><span class="pill pill-green">Paid</span></div></div>
+              <div class="list-item"><div class="avatar">P</div><div><div class="name">Priya</div><div class="sub">Paid · 2d ago</div></div><div class="right"><span class="pill pill-green">Paid</span></div></div>
+              <div class="list-item"><div class="avatar">S</div><div><div class="name">Sam</div><div class="sub">Not yet deposited</div></div><div class="right"><button class="btn btn-outline btn-sm">Remind</button></div></div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Pool detail — Organizer can nudge with Remind</div>
+    </div>
+
+    <!-- Deposit QR -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen dark">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body" style="align-items:center; text-align:center;">
+            <div style="font-size:var(--t-sub); font-weight:700; color:var(--muted-soft); text-transform:uppercase; letter-spacing:.06em; margin-top:var(--s3);">Depositing into</div>
+            <div style="font-size:var(--t-h1); font-weight:800; margin-top:var(--s1);">Goa Trip</div>
+            <div class="qr-box" style="margin-top:var(--s6);">
+              <svg class="qr-svg" viewBox="0 0 100 100">
+                <rect width="100" height="100" fill="#fff"/>
+                <g fill="var(--ink)">
+                  <rect x="8" y="8" width="24" height="24"/><rect x="14" y="14" width="12" height="12" fill="#fff"/>
+                  <rect x="68" y="8" width="24" height="24"/><rect x="74" y="14" width="12" height="12" fill="#fff"/>
+                  <rect x="8" y="68" width="24" height="24"/><rect x="14" y="74" width="12" height="12" fill="#fff"/>
+                  <rect x="40" y="8" width="6" height="6"/><rect x="50" y="8" width="6" height="6"/><rect x="40" y="20" width="6" height="6"/>
+                  <rect x="40" y="40" width="6" height="6"/><rect x="50" y="40" width="6" height="6"/><rect x="60" y="40" width="6" height="6"/>
+                  <rect x="40" y="50" width="6" height="6"/><rect x="70" y="50" width="6" height="6"/><rect x="80" y="50" width="6" height="6"/>
+                  <rect x="40" y="60" width="6" height="6"/><rect x="50" y="70" width="6" height="6"/><rect x="60" y="80" width="6" height="6"/>
+                  <rect x="40" y="80" width="6" height="6"/><rect x="70" y="70" width="6" height="6"/><rect x="80" y="80" width="6" height="6"/>
+                </g>
+              </svg>
+            </div>
+            <div style="font-size:var(--t-sub); color:var(--muted-soft); font-weight:600; margin-top:var(--s4);">or pay to UPI ID <b style="color:var(--cream);">goatrip.pool@ybl</b></div>
+            <div class="figure-block" style="margin-top:var(--s5);">
+              <div class="cap" style="color:var(--muted-soft);">Amount locked for this Pool</div>
+              <div class="fig">₹1,000</div>
+            </div>
+          </div>
+          <div class="screen-foot"><button class="btn btn-primary btn-block">Open UPI app</button></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Deposit — QR carries the locked amount</div>
+    </div>
+
+    <!-- Amount entry keypad -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body">
+            <div class="toprow">
+              <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+              <div class="tt-mid" style="text-align:center;"><div class="screen-title" style="font-size:15px;">Contribute</div><div class="screen-title-sub">Flat 3B Rent</div></div>
+              <div style="width:36px;"></div>
+            </div>
+            <div class="figure-block" style="margin:var(--s5) 0 var(--s5);">
+              <div class="cap">Amount</div>
+              <div class="fig-entry" style="margin-top:var(--s2);">₹2,500<span class="caret"></span></div>
+              <div style="font-size:var(--t-sub); color:var(--muted); font-weight:600; margin-top:var(--s2);">From HDFC ••4821</div>
+            </div>
+            <div class="chip-row">
+              <button class="chip">₹500</button><button class="chip">₹1,000</button><button class="chip sel">₹2,500</button><button class="chip">₹5,000</button>
+            </div>
+            <div class="keypad">
+              <div class="key">1</div><div class="key">2</div><div class="key">3</div>
+              <div class="key">4</div><div class="key">5</div><div class="key">6</div>
+              <div class="key">7</div><div class="key">8</div><div class="key">9</div>
+              <div class="key">·</div><div class="key">0</div>
+              <div class="key"><svg viewBox="0 0 24 24"><path d="M9 5h10a2 2 0 012 2v10a2 2 0 01-2 2H9l-6-7 6-7z"/><path d="M12 10l4 4M16 10l-4 4"/></svg></div>
+            </div>
+          </div>
+          <div class="screen-foot"><button class="btn btn-primary btn-block">Contribute ₹2,500</button></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Contribute — keypad with quick amounts</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Success -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen flax">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body" style="align-items:center; text-align:center; justify-content:center;">
+            <div class="check-ring"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></div>
+            <div style="font-size:var(--t-hero); font-weight:800; letter-spacing:-0.02em; margin-top:var(--s6);">₹1,000 deposited</div>
+            <div style="font-size:var(--t-body); color:var(--ink-soft); font-weight:600; margin-top:var(--s2);">to Goa Trip · 4 of 6 paid</div>
+            <div style="font-size:var(--t-sub); color:var(--ink-soft); font-weight:600; margin-top:var(--s5); background:rgba(255,255,255,.55); border-radius:999px; padding:7px 14px;">UPI Ref · 415223998877</div>
+          </div>
+          <div class="screen-foot">
+            <button class="btn btn-dark btn-block">Done</button>
+            <button class="btn-link">View receipt</button>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Success — amount, progress, UPI reference</div>
+    </div>
+
+    <!-- Transaction detail -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body">
+            <div class="toprow">
+              <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+              <div class="tt-mid" style="text-align:center;"><div class="screen-title" style="font-size:15px;">Deposit</div></div>
+              <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 13v5a2 2 0 002 2h10a2 2 0 002-2v-5"/></svg></button>
+            </div>
+            <div class="figure-block" style="margin:var(--s4) 0 var(--s5);">
+              <div class="fig">₹1,000</div>
+              <div style="margin-top:var(--s3);"><span class="pill pill-green">Paid</span></div>
+            </div>
+            <div class="kv-card">
+              <div class="kv"><span class="k">To</span><span class="v">Goa Trip pool</span></div>
+              <div class="kv"><span class="k">From</span><span class="v">Maya · HDFC ••4821</span></div>
+              <div class="kv"><span class="k">Date</span><span class="v">Tue, 7 Jul · 11:04 AM</span></div>
+              <div class="kv"><span class="k">UPI Ref</span><span class="v">415223998877</span></div>
+              <div class="kv"><span class="k">Fee</span><span class="v" style="color:var(--green);">Free</span></div>
+            </div>
+            <p style="font-size:var(--t-sub); color:var(--muted); font-weight:600; line-height:1.5; margin:var(--s4) 4px 0;">Deposits are held in custody until the Organizer transfers out or closes the Pool.</p>
+          </div>
+          <div class="screen-foot"><button class="btn btn-outline btn-block">Get help with this deposit</button></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Transaction detail — receipt-grade record</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 ONGOING ============ -->
+<section class="section" id="ongoing">
+  <div class="section-head">
+    <div class="section-num">05 — Ongoing use</div>
+    <h2 class="section-title">Open Pool &amp; Members</h2>
+    <p class="section-desc">An <b>Open Pool</b> has no target and no progress bar — the balance card
+    just states the running total. The Members list is the Organizer's collection tool: unpaid rows get
+    an inline <b>Remind</b>, sent at most once a day per member.</p>
+  </div>
+  <div class="row">
+    <!-- Open pool detail -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body">
+            <div class="toprow">
+              <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+              <div class="tt-mid"><div class="screen-title">Flat 3B Rent</div><div class="screen-title-sub">Open Pool · Member</div></div>
+              <button class="icon-btn"><svg viewBox="0 0 24 24" style="stroke:none;"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg></button>
+            </div>
+            <div class="balance-card">
+              <div class="k">Pool balance</div>
+              <div class="amt">₹18,200</div>
+              <div class="meta" style="margin-top:var(--s3);"><span>3 contributors</span><span>Updated today</span></div>
+            </div>
+            <div class="btn-pair" style="margin-top:var(--s4);">
+              <button class="btn btn-primary">Contribute</button>
+              <button class="btn btn-outline">Activity</button>
+            </div>
+            <div class="list-head"><span class="lbl">Recent deposits</span><span class="act">See all</span></div>
+            <div class="list">
+              <div class="list-item"><div class="avatar">A</div><div><div class="name">Aditi</div><div class="sub">Today · 11:04 AM</div></div><div class="right"><div class="amt" style="color:var(--green);">+₹6,000</div></div></div>
+              <div class="list-item"><div class="avatar">M</div><div><div class="name">You</div><div class="sub">Yesterday</div></div><div class="right"><div class="amt" style="color:var(--green);">+₹5,200</div></div></div>
+              <div class="list-item"><div class="avatar">D</div><div><div class="name">Dev</div><div class="sub">3 days ago</div></div><div class="right"><div class="amt" style="color:var(--green);">+₹7,000</div></div></div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Open Pool — running balance, no target</div>
+    </div>
+
+    <!-- Members -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body">
+            <div class="toprow">
+              <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+              <div class="tt-mid"><div class="screen-title">Members</div><div class="screen-title-sub">Goa Trip · ₹1,000 each</div></div>
+              <span class="pill pill-dark">6</span>
+            </div>
+            <div class="list">
+              <div class="list-item"><div class="avatar">R</div><div><div class="name">Rhea</div><div class="sub">Created the Pool</div></div><div class="right"><span class="pill pill-dark">Organizer</span></div></div>
+              <div class="list-item"><div class="avatar">P</div><div><div class="name">Priya</div><div class="sub">Deposited 2d ago</div></div><div class="right"><span class="pill pill-green">Paid</span></div></div>
+              <div class="list-item"><div class="avatar">M</div><div><div class="name">Maya (you)</div><div class="sub">Deposited 2d ago</div></div><div class="right"><span class="pill pill-green">Paid</span></div></div>
+              <div class="list-item"><div class="avatar">K</div><div><div class="name">Kabir</div><div class="sub">Deposited 1d ago</div></div><div class="right"><span class="pill pill-green">Paid</span></div></div>
+              <div class="list-item"><div class="avatar">S</div><div><div class="name">Sam</div><div class="sub">Reminded today</div></div><div class="right"><button class="btn btn-outline btn-sm" disabled>Reminded</button></div></div>
+              <div class="list-item"><div class="avatar">J</div><div><div class="name">Jo</div><div class="sub">Not yet deposited</div></div><div class="right"><button class="btn btn-outline btn-sm">Remind</button></div></div>
+            </div>
+          </div>
+          <div class="screen-foot"><button class="btn btn-dark btn-block"><svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 13v5a2 2 0 002 2h10a2 2 0 002-2v-5"/></svg>Invite more people</button></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Members — inline Remind, rate-limited</div>
+    </div>
+  </div>
+</section>
+<!-- ============ 06 ORGANIZER ============ -->
+<section class="section" id="organizer">
+  <div class="section-head">
+    <div class="section-num">06 — Organizer tools</div>
+    <h2 class="section-title">Invite, controls, and the hard stop</h2>
+    <p class="section-desc">Joining is low-friction because joining alone can't move money. The three
+    Organizer verbs live in one sheet; the destructive one gets its own confirmation screen that states
+    exactly what happens — <b>who gets how much back</b> — before allowing it.</p>
+  </div>
+  <div class="row">
+    <!-- Invite with toast -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen flax">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body" style="align-items:center; text-align:center;">
+            <div style="font-size:var(--t-sub); font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.06em; margin-top:var(--s4);">Invite members to</div>
+            <div style="font-size:var(--t-h1); font-weight:800; margin-top:var(--s1);">Goa Trip</div>
+            <div style="background:var(--paper); border-radius:var(--r-xl); padding:var(--s5); width:100%; margin-top:var(--s6); box-shadow:var(--shadow-sm);">
+              <div style="font-size:var(--t-label); font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:var(--s3);">Pool Code</div>
+              <div class="code-display"><div class="d">4</div><div class="d">7</div><div class="d">2</div><div class="d">9</div><div class="d">0</div><div class="d">1</div></div>
+              <div style="font-size:var(--t-sub); color:var(--muted); font-weight:600; margin-top:var(--s3);">Tap to copy · expires when the Pool locks</div>
+            </div>
+          </div>
+          <span class="toast float"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Pool Code copied</span>
+          <div class="screen-foot">
+            <button class="btn btn-dark btn-block"><svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 13v5a2 2 0 002 2h10a2 2 0 002-2v-5"/></svg>Share invite link</button>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Invite — code copied, toast confirms</div>
+    </div>
+
+    <!-- Organizer sheet -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen" style="background:#8f8560;">
+          <div class="statusbar" data-sb style="opacity:.4;"></div>
+          <div class="screen-body" style="justify-content:flex-end; padding-bottom:0;">
+            <div class="sheet">
+              <div class="grabber"></div>
+              <div class="sheet-title">Goa Trip</div>
+              <div class="sheet-sub" style="margin-bottom:var(--s2);">Organizer controls</div>
+              <div class="sheet-row">
+                <div class="sr-icon"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg></div>
+                <div><div class="t">Lock Pool</div><div class="d">Stop new deposits — balance stays as is</div></div>
+                <span class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+              </div>
+              <div class="sheet-row">
+                <div class="sr-icon"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8"/></svg></div>
+                <div><div class="t">Transfer out</div><div class="d">Move funds out to pay for the trip</div></div>
+                <span class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+              </div>
+              <div class="sheet-row danger">
+                <div class="sr-icon"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+                <div><div class="t">Close Pool &amp; refund</div><div class="d">Ends the Pool, refunds leftover pro-rata</div></div>
+                <span class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+              </div>
+              <button class="btn btn-outline btn-block" style="margin-top:var(--s4);">Cancel</button>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Organizer sheet — over a dimmed detail view</div>
+    </div>
+
+    <!-- Destructive confirm -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body">
+            <div class="toprow">
+              <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+              <div style="width:36px;"></div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; text-align:center; margin-top:var(--s2);">
+              <div class="warn-ring"><svg viewBox="0 0 24 24"><path d="M12 5L3 19h18L12 5z"/><path d="M12 11v3.5"/><circle cx="12" cy="17" r="0.4" fill="var(--danger)"/></svg></div>
+              <div class="screen-title" style="margin-top:var(--s5);">Close Diwali Party?</div>
+              <p style="font-size:var(--t-body); color:var(--muted); font-weight:600; line-height:1.55; max-width:250px; margin:var(--s2) 0 0;">This ends the Pool for everyone and can't be undone. The remaining balance is refunded in proportion to deposits.</p>
+            </div>
+            <div class="kv-card" style="margin-top:var(--s6);">
+              <div class="kv"><span class="k">Refund total</span><span class="v">₹9,000</span></div>
+              <div class="kv"><span class="k">Members refunded</span><span class="v">3</span></div>
+              <div class="kv"><span class="k">Each receives</span><span class="v" style="color:var(--green);">+₹3,000</span></div>
+              <div class="kv"><span class="k">Arrives</span><span class="v">Within 24 hours</span></div>
+            </div>
+          </div>
+          <div class="screen-foot btn-stack">
+            <button class="btn btn-danger btn-block">Close &amp; refund ₹9,000</button>
+            <button class="btn btn-outline btn-block">Keep the Pool</button>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Confirm close — the exact consequence, stated</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 WIND-DOWN ============ -->
+<section class="section" id="winddown">
+  <div class="section-head">
+    <div class="section-num">07 — Wind-down</div>
+    <h2 class="section-title">Closed, Activity &amp; Alerts</h2>
+    <p class="section-desc">After closing, the Pool becomes a receipt: who got what back. Activity is a
+    plain dated ledger — every Deposit and Refund, nothing summarized away. Alerts carry the social
+    layer: deposits, goals reached, reminders.</p>
+  </div>
+  <div class="row">
+    <!-- Closed -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body" style="align-items:center; text-align:center;">
+            <svg class="mascot" width="64" height="64" viewBox="0 0 100 100" style="margin-top:var(--s5);">
+              <path d="M50 9C73 9 88 28 88 53C88 78 69 91 50 91C31 91 12 78 12 53C12 28 27 9 50 9Z" fill="var(--pumpkin)"/>
+              <circle cx="38" cy="51" r="4.2" fill="var(--ink)"/><circle cx="62" cy="51" r="4.2" fill="var(--ink)"/>
+              <path d="M40 62Q50 67 60 62" stroke="var(--ink)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+            </svg>
+            <div style="font-size:var(--t-h1); font-weight:800; margin-top:var(--s4);">Pool closed</div>
+            <div style="font-size:var(--t-sub); color:var(--muted); font-weight:600; margin-top:var(--s1);">Diwali Party · ₹9,000 refunded pro-rata</div>
+            <div class="list" style="width:100%; text-align:left; margin-top:var(--s5);">
+              <div class="list-item"><div class="avatar">R</div><div><div class="name">Rhea</div><div class="sub">Deposited ₹3,000</div></div><div class="right"><div class="amt" style="color:var(--green);">+₹3,000</div></div></div>
+              <div class="list-item"><div class="avatar">M</div><div><div class="name">Maya (you)</div><div class="sub">Deposited ₹3,000</div></div><div class="right"><div class="amt" style="color:var(--green);">+₹3,000</div></div></div>
+              <div class="list-item"><div class="avatar">K</div><div><div class="name">Kabir</div><div class="sub">Deposited ₹3,000</div></div><div class="right"><div class="amt" style="color:var(--green);">+₹3,000</div></div></div>
+            </div>
+          </div>
+          <div class="screen-foot"><button class="btn btn-dark btn-block">Done</button></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Closed — refund receipt per member</div>
+    </div>
+
+    <!-- Activity -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body">
+            <div class="screen-title" style="margin-bottom:var(--s4);">Activity</div>
+            <div class="segment"><div class="seg active">All</div><div class="seg">Deposits</div><div class="seg">Refunds</div></div>
+            <div class="list-head" style="margin-top:0;"><span class="lbl">Today</span></div>
+            <div class="list">
+              <div class="list-item"><div class="txn-icon green"><svg viewBox="0 0 24 24"><path d="M12 19V6M6 12l6-6 6 6"/></svg></div><div><div class="name">Aditi deposited</div><div class="sub">Flat 3B Rent · 11:04 AM</div></div><div class="right"><div class="amt" style="color:var(--green);">+₹6,000</div></div></div>
+            </div>
+            <div class="list-head"><span class="lbl">This week</span></div>
+            <div class="list">
+              <div class="list-item"><div class="txn-icon green"><svg viewBox="0 0 24 24"><path d="M12 19V6M6 12l6-6 6 6"/></svg></div><div><div class="name">Kabir deposited</div><div class="sub">Goa Trip · Tue</div></div><div class="right"><div class="amt" style="color:var(--green);">+₹1,000</div></div></div>
+              <div class="list-item"><div class="txn-icon"><svg viewBox="0 0 24 24"><path d="M12 5v13M6 12l6 6 6-6"/></svg></div><div><div class="name">Refund received</div><div class="sub">Diwali Party · Mon</div></div><div class="right"><div class="amt" style="color:var(--green);">+₹3,000</div></div></div>
+              <div class="list-item"><div class="txn-icon green"><svg viewBox="0 0 24 24"><path d="M12 19V6M6 12l6-6 6 6"/></svg></div><div><div class="name">Priya deposited</div><div class="sub">Goa Trip · Mon</div></div><div class="right"><div class="amt" style="color:var(--green);">+₹1,000</div></div></div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg>Home</div>
+            <div class="tab active"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Activity</div>
+            <div class="tab"><span class="badge">3</span><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.3 19.5a2 2 0 003.4 0"/></svg>Alerts</div>
+            <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.6-4 5-5 8-5s6.4 1 8 5"/></svg>Profile</div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Activity — root tab, dated ledger</div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body">
+            <div class="toprow" style="margin-bottom:var(--s3);">
+              <div class="screen-title">Alerts</div>
+              <span style="font-size:var(--t-sub); font-weight:700; color:var(--pumpkin-dark);">Mark all read</span>
+            </div>
+            <div class="list-head" style="margin-top:var(--s2);"><span class="lbl">New</span></div>
+            <div class="list">
+              <div class="notif"><div class="txn-icon green"><svg viewBox="0 0 24 24"><path d="M12 19V6M6 12l6-6 6 6"/></svg></div><div><div class="t">Sam deposited ₹1,000</div><div class="d">Goa Trip · 2m ago</div></div><div class="dot"></div></div>
+              <div class="notif"><div class="txn-icon"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></div><div><div class="t">Goa Trip is fully funded</div><div class="d">All 6 members have paid · 2m ago</div></div><div class="dot"></div></div>
+              <div class="notif"><div class="txn-icon"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.3 19.5a2 2 0 003.4 0"/></svg></div><div><div class="t">Rhea sent you a reminder</div><div class="d">Weekend BBQ · 1h ago</div></div><div class="dot"></div></div>
+            </div>
+            <div class="list-head"><span class="lbl">Earlier</span></div>
+            <div class="list">
+              <div class="notif"><div class="txn-icon"><svg viewBox="0 0 24 24"><path d="M12 5v13M6 12l6 6 6-6"/></svg></div><div><div class="t">Refund of ₹3,000 processed</div><div class="d">Diwali Party · Mon</div></div></div>
+              <div class="notif"><div class="txn-icon"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg></div><div><div class="t">Diwali Party was locked</div><div class="d">By Rhea · Mon</div></div></div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg>Home</div>
+            <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Activity</div>
+            <div class="tab active"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.3 19.5a2 2 0 003.4 0"/></svg>Alerts</div>
+            <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.6-4 5-5 8-5s6.4 1 8 5"/></svg>Profile</div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Alerts — unread dots, grouped by recency</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 PROFILE ============ -->
+<section class="section" id="profile">
+  <div class="section-head">
+    <div class="section-num">08 — Profile</div>
+    <h2 class="section-title">Account &amp; settings</h2>
+    <p class="section-desc">Grouped by intent: money things first, preferences second, help last. The
+    linked UPI ID is visible at all times — it's where refunds land, so it should never be a surprise.</p>
+  </div>
+  <div class="row">
+    <div class="phone-wrap">
+      <div class="phone"><div class="island"></div>
+        <div class="screen">
+          <div class="statusbar" data-sb></div>
+          <div class="screen-body">
+            <div style="display:flex; align-items:center; gap:14px; margin-bottom:var(--s5);">
+              <div class="avatar lg">M</div>
+              <div>
+                <div class="screen-title">Maya Iyer</div>
+                <div class="screen-title-sub">maya@okhdfc · joined Mar 2026</div>
+              </div>
+            </div>
+            <div class="settings-group">
+              <div class="set-row"><div class="sicon"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M15 13h3"/></svg></div>Linked UPI ID<span class="val">maya@okhdfc <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+              <div class="set-row"><div class="sicon"><svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 13v5a2 2 0 002 2h10a2 2 0 002-2v-5"/></svg></div>Refund account<span class="val">HDFC ••4821 <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+            </div>
+            <div class="settings-group">
+              <div class="set-row"><div class="sicon"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.3 19.5a2 2 0 003.4 0"/></svg></div>Notifications<button class="toggle on" style="margin-left:auto;" aria-label="notifications on"><span class="knob"></span></button></div>
+              <div class="set-row"><div class="sicon"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div>App lock<span class="val">Face ID <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+            </div>
+            <div class="settings-group">
+              <div class="set-row"><div class="sicon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.8 9.3a2.3 2.3 0 113.9 1.7c-.8.7-1.6 1.1-1.6 2.2"/></svg></div>Help centre<span class="val"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+              <div class="set-row danger"><div class="sicon"><svg viewBox="0 0 24 24"><path d="M15 12H5M9 8l-4 4 4 4"/><path d="M12 4h6a1 1 0 011 1v14a1 1 0 01-1 1h-6"/></svg></div>Log out</div>
+            </div>
+            <div style="text-align:center; font-size:var(--t-label); color:var(--muted); font-weight:600; margin-top:var(--s2);">Poolpay v2.1.0</div>
+          </div>
+          <div class="tabbar">
+            <div class="tab"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg>Home</div>
+            <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Activity</div>
+            <div class="tab"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.3 19.5a2 2 0 003.4 0"/></svg>Alerts</div>
+            <div class="tab active"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.6-4 5-5 8-5s6.4 1 8 5"/></svg>Profile</div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+      <div class="phone-caption">Profile — money, preferences, help</div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>Poolpay UI Kit v3 — designed in the FlexPay visual language · 21 screens · 40+ components</footer>
+
+<script>
+  const sbLight = `
+    <span class="time">9:41</span>
+    <span class="glyphs">
+      <svg width="18" height="12" viewBox="0 0 18 12"><rect class="sb-ink" x="0" y="8" width="3" height="4" rx="1"/><rect class="sb-ink" x="5" y="5" width="3" height="7" rx="1"/><rect class="sb-ink" x="10" y="2.5" width="3" height="9.5" rx="1"/><rect class="sb-ink" x="15" y="0" width="3" height="12" rx="1"/></svg>
+      <svg width="17" height="12" viewBox="0 0 17 12"><path class="sb-ink" d="M8.5 2C11.8 2 14.7 3.3 16.7 5.3L15.3 6.7C13.6 5 11.2 4 8.5 4C5.8 4 3.4 5 1.7 6.7L0.3 5.3C2.3 3.3 5.2 2 8.5 2Z"/><path class="sb-ink" d="M8.5 6C10.2 6 11.7 6.7 12.8 7.8L11.4 9.2C10.6 8.5 9.6 8 8.5 8C7.4 8 6.4 8.5 5.6 9.2L4.2 7.8C5.3 6.7 6.8 6 8.5 6Z"/><circle class="sb-ink" cx="8.5" cy="11" r="1.4"/></svg>
+      <svg width="27" height="13" viewBox="0 0 27 13"><rect x="0.6" y="0.6" width="22" height="11.8" rx="3.4" fill="none" style="stroke:currentColor; opacity:.35" stroke-width="1.1"/><rect class="sb-ink" x="2.2" y="2.2" width="16.5" height="8.6" rx="2"/><rect class="sb-ink" x="24" y="4.2" width="1.7" height="4.6" rx="0.8" style="opacity:.5"/></svg>
+    </span>`;
+  document.querySelectorAll('[data-sb]').forEach(el=>{
+    el.innerHTML = sbLight;
+    const scr = el.closest('.screen');
+    if(scr && scr.classList.contains('dark')) el.style.color = 'var(--cream)';
+  });
+</script>
+
+</body>
+</html>
