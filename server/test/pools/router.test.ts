@@ -6,8 +6,7 @@ import { AuthService } from "../../src/auth/auth-service.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { InMemoryOtpStore } from "../../src/auth/fakes/in-memory-otp-store.js";
 import { FakeOtpSender } from "../../src/auth/fakes/fake-otp-sender.js";
-import { PoolService } from "../../src/pools/pool-service.js";
-import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
+import { makeTestPoolService } from "../support/make-pool-service.js";
 
 const JWT_SECRET = "test-secret";
 const ORGANIZER_ID = "user_organizer";
@@ -18,9 +17,8 @@ function makeApp() {
     otpStore: new InMemoryOtpStore(),
     otpSender: new FakeOtpSender(),
   });
-  const poolRepository = new InMemoryPoolRepository();
-  const poolService = new PoolService({ poolRepository });
-  const app = createApp({ authService, poolService, jwtSecret: JWT_SECRET });
+  const { poolService, membershipService, poolRepository } = makeTestPoolService();
+  const app = createApp({ authService, poolService, membershipService, jwtSecret: JWT_SECRET });
   return { app, poolRepository };
 }
 

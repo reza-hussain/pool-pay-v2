@@ -8,10 +8,11 @@ datasource db {
 }
 
 model User {
-  id             String   @id @default(cuid())
-  phoneNumber    String   @unique
-  createdAt      DateTime @default(now())
+  id             String       @id @default(cuid())
+  phoneNumber    String       @unique
+  createdAt      DateTime     @default(now())
   organizedPools Pool[]
+  memberships    Membership[]
 }
 
 model Pool {
@@ -26,8 +27,25 @@ model Pool {
   organizerId String
   organizer   User     @relation(fields: [organizerId], references: [id])
   createdAt   DateTime @default(now())
+  // Six-digit code for manual Pool joining. An Invite Link is just this Pool's
+  // id embedded in a deep link — no separate stored field needed for that.
+  joinCode    String       @unique
+  memberships Membership[]
 
   @@index([organizerId])
+}
+
+model Membership {
+  id     String @id @default(cuid())
+  poolId String
+  pool   Pool   @relation(fields: [poolId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  // "ORGANIZER" | "MEMBER"
+  role      String
+  joinedAt  DateTime @default(now())
+
+  @@unique([poolId, userId])
 }
 
 model OtpRequest {

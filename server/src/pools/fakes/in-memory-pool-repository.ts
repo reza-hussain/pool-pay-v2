@@ -14,8 +14,17 @@ export class InMemoryPoolRepository implements PoolRepository {
       state: "ACTIVE",
       organizerId,
       createdAt: new Date(),
+      joinCode: data.joinCode,
     };
     this.pools.push(pool);
     return pool;
+  }
+
+  async findById(id: string): Promise<Pool | null> {
+    return this.pools.find((p) => p.id === id) ?? null;
+  }
+
+  async findByJoinCode(joinCode: string): Promise<Pool | null> {
+    return this.pools.find((p) => p.joinCode === joinCode) ?? null;
   }
 }

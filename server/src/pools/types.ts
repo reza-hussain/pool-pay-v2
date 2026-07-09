@@ -10,6 +10,9 @@ export interface Pool {
   state: PoolState;
   organizerId: string;
   createdAt: Date;
+  // Six-digit code for manual Pool joining. An Invite Link is just this Pool's
+  // id embedded in a deep link — no separate field needed for that.
+  joinCode: string;
 }
 
 export interface CreatePoolInput {
@@ -24,10 +27,13 @@ export interface CreatePoolData {
   name: string;
   type: PoolType;
   perPersonAmountPaise: number | null;
+  joinCode: string;
 }
 
 export interface PoolRepository {
   create(organizerId: string, data: CreatePoolData): Promise<Pool>;
+  findById(id: string): Promise<Pool | null>;
+  findByJoinCode(joinCode: string): Promise<Pool | null>;
 }
 
 export class InvalidPoolNameError extends Error {

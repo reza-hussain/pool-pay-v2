@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import type { PoolService } from "./pool-service.js";
+import type { MembershipService } from "../memberships/membership-service.js";
 import { requireAuth, type AuthenticatedRequest } from "../auth/require-auth.js";
 import {
   InvalidPerPersonAmountError,
@@ -8,6 +9,7 @@ import {
   MissingPerPersonAmountError,
   UnexpectedPerPersonAmountError,
 } from "./types.js";
+import { InvalidJoinCodeError, PoolClosedError, PoolNotFoundError } from "../memberships/types.js";
 
 const createPoolSchema = z.object({
   name: z.string(),
@@ -15,7 +17,15 @@ const createPoolSchema = z.object({
   perPersonAmountPaise: z.number().optional(),
 });
 
-export function createPoolsRouter(poolService: PoolService, jwtSecret: string): Router {
+const joinByCodeSchema = z.object({
+  code: z.string(),
+});
+
+export function createPoolsRouter(
+  poolService: PoolService,
+  membershipService: MembershipService,
+  jwtSecret: string,
+): Router {
   const router = Router();
 
   router.post("/", requireAuth(jwtSecret), async (req: AuthenticatedRequest, res, next) => {
@@ -40,6 +50,61 @@ export function createPoolsRouter(poolService: PoolService, jwtSecret: string): 
       }
       next(error);
     }
+  });
+
+  router.post(
+    "/join-by-code",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      const parsed = joinByCodeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "code is required" });
+        return;
+      }
+
+      try {
+        const membership = await membershipService.joinByCode(
+          req.userId as string,
+          parsed.data.code,
+        );
+        res.status(200).json({ membership });
+      } catch (error) {
+        if (error instanceof InvalidJoinCodeError || error instanceof PoolClosedError) {
+          res.status(400).json({ error: error.message });
+          return;
+        }
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    "/:poolId/join",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      try {
+        const membership = await membershipService.joinByPoolId(
+          req.userId as string,
+          req.params.poolId,
+        );
+        res.status(200).json({ membership });
+      } catch (error) {
+        if (error instanceof PoolNotFoundError) {
+          res.status(404).json({ error: error.message });
+          return;
+        }
+        if (error instanceof PoolClosedError) {
+          res.status(400).json({ error: error.message });
+          return;
+        }
+        next(error);
+      }
+    },
+  );
+
+  router.get("/:poolId/members", requireAuth(jwtSecret), async (req, res) => {
+    const members = await membershipService.listMembers(req.params.poolId);
+    res.status(200).json({ members });
   });
 
   return router;

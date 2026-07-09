@@ -40,12 +40,14 @@ describe("PrismaPoolRepository", () => {
       name: "Goa Trip",
       type: "EQUAL_SPLIT",
       perPersonAmountPaise: 100000,
+      joinCode: "111111",
     });
 
     expect(pool.organizerId).toBe(organizerId);
     expect(pool.type).toBe("EQUAL_SPLIT");
     expect(pool.perPersonAmountPaise).toBe(100000);
     expect(pool.state).toBe("ACTIVE");
+    expect(pool.joinCode).toBe("111111");
 
     const row = await prisma.pool.findUnique({ where: { id: pool.id } });
     expect(row?.name).toBe("Goa Trip");
@@ -58,9 +60,40 @@ describe("PrismaPoolRepository", () => {
       name: "Flat 3B Rent",
       type: "OPEN",
       perPersonAmountPaise: null,
+      joinCode: "222222",
     });
 
     expect(pool.type).toBe("OPEN");
     expect(pool.perPersonAmountPaise).toBeNull();
+  });
+
+  it("finds a Pool by id", async () => {
+    const repo = new PrismaPoolRepository(prisma);
+    const created = await repo.create(organizerId, {
+      name: "Goa Trip",
+      type: "OPEN",
+      perPersonAmountPaise: null,
+      joinCode: "333333",
+    });
+
+    const found = await repo.findById(created.id);
+    expect(found?.id).toBe(created.id);
+
+    await expect(repo.findById("does-not-exist")).resolves.toBeNull();
+  });
+
+  it("finds a Pool by join code", async () => {
+    const repo = new PrismaPoolRepository(prisma);
+    const created = await repo.create(organizerId, {
+      name: "Goa Trip",
+      type: "OPEN",
+      perPersonAmountPaise: null,
+      joinCode: "444444",
+    });
+
+    const found = await repo.findByJoinCode("444444");
+    expect(found?.id).toBe(created.id);
+
+    await expect(repo.findByJoinCode("000000")).resolves.toBeNull();
   });
 });

@@ -12,11 +12,13 @@ export function PoolsHomeScreen({
   isNewUser,
   pools,
   onCreatePool,
+  onJoinPool,
 }: {
   session: StoredSession;
   isNewUser: boolean;
   pools: Pool[];
   onCreatePool: () => void;
+  onJoinPool: () => void;
 }) {
   return (
     <View style={styles.container}>
@@ -27,10 +29,13 @@ export function PoolsHomeScreen({
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No Pools yet</Text>
           <Text style={styles.emptySubtitle}>
-            Create one for your next trip, or an ongoing expense.
+            Create one for your next trip, or join a friend's with their code.
           </Text>
           <Pressable style={styles.button} onPress={onCreatePool}>
             <Text style={styles.buttonText}>Create a Pool</Text>
+          </Pressable>
+          <Pressable onPress={onJoinPool}>
+            <Text style={styles.link}>Join with a code</Text>
           </Pressable>
         </View>
       ) : (
@@ -43,6 +48,9 @@ export function PoolsHomeScreen({
           />
           <Pressable style={[styles.button, styles.fab]} onPress={onCreatePool}>
             <Text style={styles.buttonText}>Create a Pool</Text>
+          </Pressable>
+          <Pressable onPress={onJoinPool}>
+            <Text style={styles.link}>Join with a code</Text>
           </Pressable>
         </>
       )}
@@ -124,6 +132,12 @@ const styles = StyleSheet.create({
     color: colors.paper,
   },
   fab: {
+    marginTop: spacing.s3,
+  },
+  link: {
+    ...type.bodyBold,
+    color: colors.ink600,
+    textAlign: "center",
     marginTop: spacing.s3,
   },
 });

@@ -5,15 +5,10 @@ import { AuthService } from "../../src/auth/auth-service.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { InMemoryOtpStore } from "../../src/auth/fakes/in-memory-otp-store.js";
 import { FakeOtpSender } from "../../src/auth/fakes/fake-otp-sender.js";
-import { PoolService } from "../../src/pools/pool-service.js";
-import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
+import { makeTestPoolService } from "../support/make-pool-service.js";
 
 const PHONE = "+919876543210";
 const JWT_SECRET = "test-secret";
-
-function makePoolService() {
-  return new PoolService({ poolRepository: new InMemoryPoolRepository() });
-}
 
 function makeApp() {
   const otpSender = new FakeOtpSender();
@@ -22,7 +17,8 @@ function makeApp() {
     otpStore: new InMemoryOtpStore(),
     otpSender,
   });
-  const app = createApp({ authService, poolService: makePoolService(), jwtSecret: JWT_SECRET });
+  const { poolService, membershipService } = makeTestPoolService();
+  const app = createApp({ authService, poolService, membershipService, jwtSecret: JWT_SECRET });
   return { app, otpSender };
 }
 
@@ -38,7 +34,8 @@ describe("error handling", () => {
       otpStore: new InMemoryOtpStore(),
       otpSender,
     });
-    const app = createApp({ authService, poolService: makePoolService(), jwtSecret: JWT_SECRET });
+    const { poolService, membershipService } = makeTestPoolService();
+    const app = createApp({ authService, poolService, membershipService, jwtSecret: JWT_SECRET });
 
     const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
     const res = await request(app)

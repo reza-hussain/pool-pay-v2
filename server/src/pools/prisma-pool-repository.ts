@@ -10,9 +10,33 @@ export class PrismaPoolRepository implements PoolRepository {
         name: data.name,
         type: data.type,
         perPersonAmountPaise: data.perPersonAmountPaise,
+        joinCode: data.joinCode,
         organizerId,
       },
     });
-    return { ...row, type: row.type as PoolType, state: row.state as Pool["state"] };
+    return toPool(row);
   }
+
+  async findById(id: string): Promise<Pool | null> {
+    const row = await this.prisma.pool.findUnique({ where: { id } });
+    return row ? toPool(row) : null;
+  }
+
+  async findByJoinCode(joinCode: string): Promise<Pool | null> {
+    const row = await this.prisma.pool.findUnique({ where: { joinCode } });
+    return row ? toPool(row) : null;
+  }
+}
+
+function toPool(row: {
+  id: string;
+  name: string;
+  type: string;
+  perPersonAmountPaise: number | null;
+  state: string;
+  organizerId: string;
+  createdAt: Date;
+  joinCode: string;
+}): Pool {
+  return { ...row, type: row.type as PoolType, state: row.state as Pool["state"] };
 }

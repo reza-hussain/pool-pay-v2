@@ -10,6 +10,7 @@ export interface Pool {
   state: "ACTIVE" | "LOCKED" | "CLOSED";
   organizerId: string;
   createdAt: string;
+  joinCode: string;
 }
 
 export interface CreatePoolInput {
