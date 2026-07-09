@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { PoolsApiError, createPool, type Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
+import { Screen } from "../components/Screen";
 import { rupeesToPaise } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
@@ -65,6 +66,7 @@ export function CreatePoolScreen({
 
   if (step === "share") {
     return (
+      <Screen backgroundColor={colors.cream}>
       <View style={styles.container}>
         <View style={styles.topRow}>
           <Pressable onPress={() => setStep("details")}>
@@ -103,10 +105,12 @@ export function CreatePoolScreen({
           )}
         </Pressable>
       </View>
+      </Screen>
     );
   }
 
   return (
+    <Screen backgroundColor={colors.cream}>
     <View style={styles.container}>
       <View style={styles.topRow}>
         <Pressable onPress={onCancel}>
@@ -154,6 +158,7 @@ export function CreatePoolScreen({
         )}
       </Pressable>
     </View>
+    </Screen>
   );
 }
 

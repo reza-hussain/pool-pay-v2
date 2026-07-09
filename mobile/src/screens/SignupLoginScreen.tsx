@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { AuthApiError, requestOtp, verifyOtp } from "../api/authClient";
 import { saveSession, type StoredSession } from "../api/session";
+import { Screen } from "../components/Screen";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
 type Step = { name: "phone" } | { name: "otp"; requestId: string; phoneNumber: string };
@@ -54,6 +55,7 @@ export function SignupLoginScreen({
   }
 
   return (
+    <Screen backgroundColor={colors.cream}>
     <View style={styles.container}>
       <Text style={styles.title}>Pool Pay</Text>
 
@@ -99,6 +101,7 @@ export function SignupLoginScreen({
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
+    </Screen>
   );
 }
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { MembersApiError, joinByCode, type Membership } from "../api/membersClient";
 import type { StoredSession } from "../api/session";
+import { Screen } from "../components/Screen";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
 export function JoinPoolScreen({
@@ -31,6 +32,7 @@ export function JoinPoolScreen({
   }
 
   return (
+    <Screen backgroundColor={colors.cream}>
     <View style={styles.container}>
       <View style={styles.topRow}>
         <Pressable onPress={onCancel}>
@@ -65,6 +67,7 @@ export function JoinPoolScreen({
         )}
       </Pressable>
     </View>
+    </Screen>
   );
 }
 

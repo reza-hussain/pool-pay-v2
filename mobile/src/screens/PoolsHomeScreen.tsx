@@ -1,6 +1,7 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
+import { Screen } from "../components/Screen";
 import { paiseToRupeeLabel } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
@@ -27,6 +28,7 @@ export function PoolsHomeScreen({
   onViewLedger: (pool: Pool) => void;
 }) {
   return (
+    <Screen backgroundColor={colors.cream}>
     <View style={styles.container}>
       <Text style={styles.greeting}>
         {isNewUser ? "Welcome to Pool Pay" : `Hey, ${session.user.phoneNumber}`}
@@ -69,6 +71,7 @@ export function PoolsHomeScreen({
         </>
       )}
     </View>
+    </Screen>
   );
 }
 

@@ -9,6 +9,7 @@ import {
   type DepositIntent,
   type RecordDepositResult,
 } from "../api/depositsClient";
+import { Screen } from "../components/Screen";
 import { paiseToRupeeLabel, rupeesToPaise } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
@@ -52,6 +53,7 @@ export function DepositScreen({
 
   if (result) {
     return (
+      <Screen backgroundColor={colors.flax300}>
       <View style={styles.successContainer}>
         <View style={styles.checkRing}>
           <Text style={styles.checkGlyph}>✓</Text>
@@ -66,11 +68,13 @@ export function DepositScreen({
           <Text style={styles.doneButtonText}>Done</Text>
         </Pressable>
       </View>
+      </Screen>
     );
   }
 
   if (pool.type === "EQUAL_SPLIT") {
     return (
+      <Screen backgroundColor={colors.ink900}>
       <View style={styles.darkContainer}>
         <Pressable onPress={onCancel} style={styles.darkBack}>
           <Text style={styles.darkBackGlyph}>{"‹"}</Text>
@@ -100,10 +104,12 @@ export function DepositScreen({
           )}
         </Pressable>
       </View>
+      </Screen>
     );
   }
 
   return (
+    <Screen backgroundColor={colors.cream}>
     <View style={styles.container}>
       <View style={styles.topRow}>
         <Pressable onPress={onCancel}>
@@ -160,6 +166,7 @@ export function DepositScreen({
         )}
       </Pressable>
     </View>
+    </Screen>
   );
 }
 
@@ -251,7 +258,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink900,
     alignItems: "center",
     padding: spacing.s6,
-    paddingTop: spacing.s8,
   },
   darkBack: {
     alignSelf: "flex-start",

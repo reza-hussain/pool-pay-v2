@@ -1,6 +1,7 @@
 import * as Clipboard from "expo-clipboard";
 import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
+import { Screen } from "../components/Screen";
 import { buildInviteLink } from "../lib/inviteLink";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
@@ -16,6 +17,7 @@ export function InviteScreen({ pool, onDone }: { pool: Pool; onDone: () => void 
   }
 
   return (
+    <Screen backgroundColor={colors.flax300}>
     <View style={styles.container}>
       <Text style={styles.eyebrow}>Invite members to</Text>
       <Text style={styles.title}>{pool.name}</Text>
@@ -41,6 +43,7 @@ export function InviteScreen({ pool, onDone }: { pool: Pool; onDone: () => void 
         <Text style={styles.doneLink}>Done</Text>
       </Pressable>
     </View>
+    </Screen>
   );
 }
 
