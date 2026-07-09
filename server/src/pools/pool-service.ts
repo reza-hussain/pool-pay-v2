@@ -1,9 +1,11 @@
 import { randomInt } from "node:crypto";
 import type { MembershipRepository } from "../memberships/types.js";
+import { PoolNotFoundError } from "../memberships/types.js";
 import {
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
   MissingPerPersonAmountError,
+  NotPoolOrganizerError,
   UnexpectedPerPersonAmountError,
   type CreatePoolInput,
   type Pool,
@@ -66,6 +68,18 @@ export class PoolService {
     await this.membershipRepository.create(pool.id, organizerId, "ORGANIZER");
 
     return pool;
+  }
+
+  async lockPool(poolId: string, userId: string): Promise<Pool> {
+    const pool = await this.poolRepository.findById(poolId);
+    if (!pool) {
+      throw new PoolNotFoundError();
+    }
+    if (pool.organizerId !== userId) {
+      throw new NotPoolOrganizerError();
+    }
+
+    return this.poolRepository.updateState(poolId, "LOCKED");
   }
 }
 

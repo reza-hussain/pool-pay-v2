@@ -96,4 +96,20 @@ describe("PrismaPoolRepository", () => {
 
     await expect(repo.findByJoinCode("000000")).resolves.toBeNull();
   });
+
+  it("updates a Pool's state", async () => {
+    const repo = new PrismaPoolRepository(prisma);
+    const created = await repo.create(organizerId, {
+      name: "Goa Trip",
+      type: "OPEN",
+      perPersonAmountPaise: null,
+      joinCode: "555555",
+    });
+
+    const updated = await repo.updateState(created.id, "LOCKED");
+    expect(updated.state).toBe("LOCKED");
+
+    const found = await repo.findById(created.id);
+    expect(found?.state).toBe("LOCKED");
+  });
 });

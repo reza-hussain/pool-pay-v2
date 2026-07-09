@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import type { CreatePoolData, Pool, PoolRepository, PoolType } from "./types.js";
+import type { CreatePoolData, Pool, PoolRepository, PoolState, PoolType } from "./types.js";
 
 export class PrismaPoolRepository implements PoolRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -25,6 +25,11 @@ export class PrismaPoolRepository implements PoolRepository {
   async findByJoinCode(joinCode: string): Promise<Pool | null> {
     const row = await this.prisma.pool.findUnique({ where: { joinCode } });
     return row ? toPool(row) : null;
+  }
+
+  async updateState(id: string, state: PoolState): Promise<Pool> {
+    const row = await this.prisma.pool.update({ where: { id }, data: { state } });
+    return toPool(row);
   }
 }
 

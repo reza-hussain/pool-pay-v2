@@ -34,6 +34,7 @@ export interface PoolRepository {
   create(organizerId: string, data: CreatePoolData): Promise<Pool>;
   findById(id: string): Promise<Pool | null>;
   findByJoinCode(joinCode: string): Promise<Pool | null>;
+  updateState(id: string, state: PoolState): Promise<Pool>;
 }
 
 export class InvalidPoolNameError extends Error {
@@ -61,5 +62,12 @@ export class InvalidPerPersonAmountError extends Error {
   constructor() {
     super("Per-person amount must be a positive whole number of paise");
     this.name = "InvalidPerPersonAmountError";
+  }
+}
+
+export class NotPoolOrganizerError extends Error {
+  constructor() {
+    super("Only the Organizer can perform this action");
+    this.name = "NotPoolOrganizerError";
   }
 }

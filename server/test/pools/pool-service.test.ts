@@ -6,8 +6,10 @@ import {
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
   MissingPerPersonAmountError,
+  NotPoolOrganizerError,
   UnexpectedPerPersonAmountError,
 } from "../../src/pools/types.js";
+import { PoolNotFoundError } from "../../src/memberships/types.js";
 
 const ORGANIZER_ID = "user_1";
 
@@ -123,5 +125,43 @@ describe("PoolService.createPool", () => {
         perPersonAmountPaise: 5000,
       }),
     ).rejects.toThrow(UnexpectedPerPersonAmountError);
+  });
+});
+
+describe("PoolService.lockPool", () => {
+  it("sets an ACTIVE Pool to LOCKED when called by the Organizer", async () => {
+    const { poolService } = makePoolService();
+    const pool = await poolService.createPool(ORGANIZER_ID, { name: "Goa Trip", type: "OPEN" });
+
+    const locked = await poolService.lockPool(pool.id, ORGANIZER_ID);
+
+    expect(locked.state).toBe("LOCKED");
+  });
+
+  it("leaves balance and Membership untouched — Locked is not Closed", async () => {
+    const { poolService, membershipRepository } = makePoolService();
+    const pool = await poolService.createPool(ORGANIZER_ID, { name: "Goa Trip", type: "OPEN" });
+
+    await poolService.lockPool(pool.id, ORGANIZER_ID);
+
+    const membership = await membershipRepository.find(pool.id, ORGANIZER_ID);
+    expect(membership).not.toBeNull();
+  });
+
+  it("rejects a non-Organizer with NotPoolOrganizerError", async () => {
+    const { poolService } = makePoolService();
+    const pool = await poolService.createPool(ORGANIZER_ID, { name: "Goa Trip", type: "OPEN" });
+
+    await expect(poolService.lockPool(pool.id, "user_someone_else")).rejects.toThrow(
+      NotPoolOrganizerError,
+    );
+  });
+
+  it("rejects an unknown Pool with PoolNotFoundError", async () => {
+    const { poolService } = makePoolService();
+
+    await expect(poolService.lockPool("pool_missing", ORGANIZER_ID)).rejects.toThrow(
+      PoolNotFoundError,
+    );
   });
 });

@@ -1,4 +1,4 @@
-import type { CreatePoolData, Pool, PoolRepository } from "../types.js";
+import type { CreatePoolData, Pool, PoolRepository, PoolState } from "../types.js";
 
 let nextId = 1;
 
@@ -26,5 +26,14 @@ export class InMemoryPoolRepository implements PoolRepository {
 
   async findByJoinCode(joinCode: string): Promise<Pool | null> {
     return this.pools.find((p) => p.joinCode === joinCode) ?? null;
+  }
+
+  async updateState(id: string, state: PoolState): Promise<Pool> {
+    const pool = this.pools.find((p) => p.id === id);
+    if (!pool) {
+      throw new Error(`Pool ${id} not found`);
+    }
+    pool.state = state;
+    return pool;
   }
 }

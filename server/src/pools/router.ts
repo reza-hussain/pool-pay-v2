@@ -7,6 +7,7 @@ import {
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
   MissingPerPersonAmountError,
+  NotPoolOrganizerError,
   UnexpectedPerPersonAmountError,
 } from "./types.js";
 import { InvalidJoinCodeError, PoolClosedError, PoolNotFoundError } from "../memberships/types.js";
@@ -95,6 +96,27 @@ export function createPoolsRouter(
         }
         if (error instanceof PoolClosedError) {
           res.status(400).json({ error: error.message });
+          return;
+        }
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    "/:poolId/lock",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      try {
+        const pool = await poolService.lockPool(req.params.poolId, req.userId as string);
+        res.status(200).json({ pool });
+      } catch (error) {
+        if (error instanceof PoolNotFoundError) {
+          res.status(404).json({ error: error.message });
+          return;
+        }
+        if (error instanceof NotPoolOrganizerError) {
+          res.status(403).json({ error: error.message });
           return;
         }
         next(error);

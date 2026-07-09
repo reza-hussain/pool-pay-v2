@@ -32,3 +32,16 @@ export async function createPool(token: string, input: CreatePoolInput): Promise
   }
   return data.pool as Pool;
 }
+
+export async function lockPool(token: string, poolId: string): Promise<Pool> {
+  const res = await fetch(`${API_URL}/pools/${poolId}/lock`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new PoolsApiError(data.error ?? `Request failed with status ${res.status}`);
+  }
+  return data.pool as Pool;
+}

@@ -90,3 +90,55 @@ describe("POST /pools", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("POST /pools/:poolId/lock", () => {
+  async function createPool(app: import("express").Express) {
+    const res = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ name: "Goa Trip", type: "OPEN" });
+    return res.body.pool;
+  }
+
+  it("locks the Pool for the Organizer", async () => {
+    const { app } = makeApp();
+    const pool = await createPool(app);
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/lock`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.pool.state).toBe("LOCKED");
+  });
+
+  it("returns 403 for a non-Organizer", async () => {
+    const { app } = makeApp();
+    const pool = await createPool(app);
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/lock`)
+      .set("Authorization", bearerFor("user_someone_else"));
+
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 404 for an unknown Pool", async () => {
+    const { app } = makeApp();
+
+    const res = await request(app)
+      .post("/pools/pool_missing/lock")
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 401 without a bearer token", async () => {
+    const { app } = makeApp();
+    const pool = await createPool(app);
+
+    const res = await request(app).post(`/pools/${pool.id}/lock`);
+
+    expect(res.status).toBe(401);
+  });
+});

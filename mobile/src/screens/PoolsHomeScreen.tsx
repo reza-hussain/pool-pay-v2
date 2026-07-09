@@ -14,6 +14,7 @@ export function PoolsHomeScreen({
   onCreatePool,
   onJoinPool,
   onSelectPool,
+  onOpenOrganizerControls,
 }: {
   session: StoredSession;
   isNewUser: boolean;
@@ -21,6 +22,7 @@ export function PoolsHomeScreen({
   onCreatePool: () => void;
   onJoinPool: () => void;
   onSelectPool: (pool: Pool) => void;
+  onOpenOrganizerControls: (pool: Pool) => void;
 }) {
   return (
     <View style={styles.container}>
@@ -47,7 +49,12 @@ export function PoolsHomeScreen({
             keyExtractor={(pool) => pool.id}
             contentContainerStyle={styles.list}
             renderItem={({ item }) => (
-              <PoolCard pool={item} onPress={() => onSelectPool(item)} />
+              <PoolCard
+                pool={item}
+                isOrganizer={item.organizerId === session.user.id}
+                onPress={() => onSelectPool(item)}
+                onOpenOrganizerControls={() => onOpenOrganizerControls(item)}
+              />
             )}
           />
           <Pressable style={[styles.button, styles.fab]} onPress={onCreatePool}>
@@ -62,10 +69,40 @@ export function PoolsHomeScreen({
   );
 }
 
-function PoolCard({ pool, onPress }: { pool: Pool; onPress: () => void }) {
+function PoolCard({
+  pool,
+  isOrganizer,
+  onPress,
+  onOpenOrganizerControls,
+}: {
+  pool: Pool;
+  isOrganizer: boolean;
+  onPress: () => void;
+  onOpenOrganizerControls: () => void;
+}) {
   return (
     <Pressable style={styles.card} onPress={onPress}>
-      <Text style={styles.cardTitle}>{pool.name}</Text>
+      <View style={styles.cardTopRow}>
+        <Text style={styles.cardTitle}>{pool.name}</Text>
+        <View style={styles.cardTopRowRight}>
+          {pool.state === "LOCKED" ? (
+            <View style={styles.lockedPill}>
+              <Text style={styles.lockedPillText}>Locked</Text>
+            </View>
+          ) : null}
+          {isOrganizer ? (
+            <Pressable
+              hitSlop={8}
+              onPress={(event) => {
+                event.stopPropagation();
+                onOpenOrganizerControls();
+              }}
+            >
+              <Text style={styles.moreGlyph}>{"⋯"}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
       <Text style={styles.cardType}>
         {pool.type === "EQUAL_SPLIT"
           ? `Equal Split · ${paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)} / person`
@@ -114,6 +151,16 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     padding: spacing.s4,
   },
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  cardTopRowRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.s2,
+  },
   cardTitle: {
     ...type.bodyBold,
     fontSize: 14.5,
@@ -122,6 +169,22 @@ const styles = StyleSheet.create({
   cardType: {
     ...type.caption,
     marginTop: 3,
+  },
+  lockedPill: {
+    backgroundColor: colors.ink100,
+    borderRadius: 999,
+    paddingVertical: 3,
+    paddingHorizontal: spacing.s2,
+  },
+  lockedPillText: {
+    ...type.label,
+    color: colors.ink600,
+  },
+  moreGlyph: {
+    fontSize: 20,
+    fontFamily: type.title.fontFamily,
+    color: colors.ink400,
+    paddingHorizontal: spacing.s1,
   },
   button: {
     height: 48,

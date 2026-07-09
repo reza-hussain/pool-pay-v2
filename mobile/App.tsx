@@ -17,8 +17,9 @@ import { CreatePoolScreen } from './src/screens/CreatePoolScreen';
 import { InviteScreen } from './src/screens/InviteScreen';
 import { JoinPoolScreen } from './src/screens/JoinPoolScreen';
 import { DepositScreen } from './src/screens/DepositScreen';
+import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
 import { loadSession, type StoredSession } from './src/api/session';
-import type { Pool } from './src/api/poolsClient';
+import { lockPool, type Pool } from './src/api/poolsClient';
 import { joinByPoolId } from './src/api/membersClient';
 import { parseJoinPoolId } from './src/lib/inviteLink';
 import { colors } from './src/theme/tokens';
@@ -46,6 +47,7 @@ export default function App() {
   const [isNewUser, setIsNewUser] = useState(false);
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const [pools, setPools] = useState<Pool[]>([]);
+  const [organizerControlsPool, setOrganizerControlsPool] = useState<Pool | null>(null);
 
   useEffect(() => {
     loadSession()
@@ -103,6 +105,7 @@ export default function App() {
           onCreatePool={() => setRoute({ name: 'createPool' })}
           onJoinPool={() => setRoute({ name: 'joinPool' })}
           onSelectPool={(pool) => setRoute({ name: 'deposit', pool })}
+          onOpenOrganizerControls={(pool) => setOrganizerControlsPool(pool)}
         />
       ) : route.name === 'createPool' ? (
         <CreatePoolScreen
@@ -129,6 +132,19 @@ export default function App() {
           onCancel={() => setRoute({ name: 'home' })}
         />
       )}
+      {organizerControlsPool && session ? (
+        <OrganizerControlsSheet
+          pool={organizerControlsPool}
+          onLock={async () => {
+            const locked = await lockPool(session.token, organizerControlsPool.id);
+            setPools((prev) => prev.map((p) => (p.id === locked.id ? locked : p)));
+            setOrganizerControlsPool(null);
+          }}
+          onTransferOut={() => setOrganizerControlsPool(null)}
+          onReimburse={() => setOrganizerControlsPool(null)}
+          onClose={() => setOrganizerControlsPool(null)}
+        />
+      ) : null}
       <StatusBar style="dark" />
     </View>
   );
