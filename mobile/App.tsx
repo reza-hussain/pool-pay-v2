@@ -31,6 +31,8 @@ export default function App() {
   });
   const [bootstrapping, setBootstrapping] = useState(true);
   const [session, setSession] = useState<StoredSession | null>(null);
+  // A rehydrated session (app relaunch) is never a fresh signup.
+  const [isNewUser, setIsNewUser] = useState(false);
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const [pools, setPools] = useState<Pool[]>([]);
 
@@ -53,9 +55,19 @@ export default function App() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }} onLayout={onLayout}>
       {!session ? (
-        <SignupLoginScreen onAuthenticated={setSession} />
+        <SignupLoginScreen
+          onAuthenticated={(newSession, newUser) => {
+            setSession(newSession);
+            setIsNewUser(newUser);
+          }}
+        />
       ) : route.name === 'home' ? (
-        <PoolsHomeScreen pools={pools} onCreatePool={() => setRoute({ name: 'createPool' })} />
+        <PoolsHomeScreen
+          session={session}
+          isNewUser={isNewUser}
+          pools={pools}
+          onCreatePool={() => setRoute({ name: 'createPool' })}
+        />
       ) : (
         <CreatePoolScreen
           session={session}

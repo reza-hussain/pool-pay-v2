@@ -24,6 +24,14 @@ export const colors = {
 
   cream: "#FBF7EC",
   paper: "#FFFFFF",
+
+  // Alpha tokens from the kit's :root (--line, --line-strong) and component rules
+  // (.field background, .type-card.selected background) — named here so they're
+  // reused, not re-typed as magic rgba() literals per screen.
+  line: "rgba(23,20,12,0.10)",
+  lineStrong: "rgba(23,20,12,0.20)",
+  fieldFill: "rgba(23,20,12,0.045)",
+  selectedFill: "rgba(23,20,12,0.03)",
 } as const;
 
 export const spacing = {

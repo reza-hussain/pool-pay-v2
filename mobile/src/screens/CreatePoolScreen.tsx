@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { PoolsApiError, createPool, type Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
+import { rupeesToPaise } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
 type PoolType = "EQUAL_SPLIT" | "OPEN";
@@ -48,7 +49,7 @@ export function CreatePoolScreen({
     setLoading(true);
     try {
       const perPersonAmountPaise =
-        poolType === "EQUAL_SPLIT" ? Math.round(Number(shareRupees) * 100) : undefined;
+        poolType === "EQUAL_SPLIT" ? rupeesToPaise(shareRupees) : undefined;
       const pool = await createPool(session.token, {
         name: name.trim(),
         type: poolType,
@@ -208,7 +209,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.s5,
   },
   field: {
-    backgroundColor: "rgba(23,20,12,0.045)",
+    backgroundColor: colors.fieldFill,
     borderRadius: radii.md,
     padding: spacing.s3,
     marginBottom: spacing.s3,
@@ -230,7 +231,7 @@ const styles = StyleSheet.create({
   },
   typeCard: {
     borderWidth: 1.5,
-    borderColor: "rgba(23,20,12,0.2)",
+    borderColor: colors.lineStrong,
     borderRadius: radii.md,
     padding: spacing.s3,
     marginBottom: spacing.s3,
@@ -238,7 +239,7 @@ const styles = StyleSheet.create({
   typeCardSelected: {
     borderColor: colors.ink900,
     borderWidth: 2,
-    backgroundColor: "rgba(23,20,12,0.03)",
+    backgroundColor: colors.selectedFill,
   },
   typeCardTitle: {
     ...type.bodyBold,

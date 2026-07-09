@@ -16,7 +16,7 @@ type Step = { name: "phone" } | { name: "otp"; requestId: string; phoneNumber: s
 export function SignupLoginScreen({
   onAuthenticated,
 }: {
-  onAuthenticated: (session: StoredSession) => void;
+  onAuthenticated: (session: StoredSession, isNewUser: boolean) => void;
 }) {
   const [step, setStep] = useState<Step>({ name: "phone" });
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -45,7 +45,7 @@ export function SignupLoginScreen({
       const result = await verifyOtp(step.requestId, code);
       const session: StoredSession = { token: result.token, user: result.user };
       await saveSession(session);
-      onAuthenticated(session);
+      onAuthenticated(session, result.isNewUser);
     } catch (err) {
       setError(err instanceof AuthApiError ? err.message : "Something went wrong");
     } finally {
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   },
   input: {
     width: "100%",
-    backgroundColor: "rgba(23,20,12,0.045)",
+    backgroundColor: colors.fieldFill,
     borderWidth: 1.5,
     borderColor: "transparent",
     borderRadius: radii.md,

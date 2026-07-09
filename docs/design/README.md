@@ -20,6 +20,8 @@ The full design system, with live tokens and 21 rendered screens, is [`poolpay-u
 
 **Spacing**: 4pt base — `s1 4, s2 8, s3 12, s4 16, s5 20, s6 24, s7 32, s8 40`. Screen gutter is fixed at 22. Cards pad s4–s5. Gap between cards is s3.
 
+**Alpha/fill tokens** (from the kit's `--line`/`--line-strong` and component-level rules — easy to mistake for ad hoc values if you only check hex colors): `line rgba(23,20,12,0.10)` (hairline dividers), `line-strong rgba(23,20,12,0.20)` (stronger borders, e.g. unselected type-cards), `field-fill rgba(23,20,12,0.045)` (resting input background), `selected-fill rgba(23,20,12,0.03)` (selected type-card background). In `mobile/src/theme/tokens.ts` these are `colors.line`, `colors.lineStrong`, `colors.fieldFill`, `colors.selectedFill` — use the named token, not the raw rgba string.
+
 **Radius**: `sm 10` (small controls) · `md 14` (buttons, fields) · `lg 18` (cards) · `xl 24` (balance card, sheets).
 
 **Shadows**: quiet — `shadow-sm` on cards, `shadow-lg` reserved for sheets/toasts only.
@@ -48,4 +50,4 @@ The kit's 21 screens map closely to our tickets — use them as the target, not 
 
 ## Known drift
 
-Ticket #1's existing mobile screen (`mobile/src/screens/SignupLoginScreen.tsx`) predates this kit and does **not** follow it (uses default black/white/gray styling, no tokens). It needs a re-skin pass — not done automatically, ask before touching it.
+None currently. Ticket #1's login screen was re-skinned to the kit's tokens as part of ticket #2 (with explicit permission to touch ticket #1's UI). If a screen drifts from the kit again, note it here with which screen and why, rather than leaving it undocumented.

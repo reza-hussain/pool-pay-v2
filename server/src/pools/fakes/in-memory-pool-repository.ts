@@ -1,14 +1,11 @@
-import type { Pool, PoolRepository, PoolType } from "../types.js";
+import type { CreatePoolData, Pool, PoolRepository } from "../types.js";
 
 let nextId = 1;
 
 export class InMemoryPoolRepository implements PoolRepository {
   pools: Pool[] = [];
 
-  async create(
-    organizerId: string,
-    data: { name: string; type: PoolType; perPersonAmountPaise: number | null },
-  ): Promise<Pool> {
+  async create(organizerId: string, data: CreatePoolData): Promise<Pool> {
     const pool: Pool = {
       id: `pool_${nextId++}`,
       name: data.name,

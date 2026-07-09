@@ -1,13 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
-import type { Pool, PoolRepository, PoolType } from "./types.js";
+import type { CreatePoolData, Pool, PoolRepository, PoolType } from "./types.js";
 
 export class PrismaPoolRepository implements PoolRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async create(
-    organizerId: string,
-    data: { name: string; type: PoolType; perPersonAmountPaise: number | null },
-  ): Promise<Pool> {
+  async create(organizerId: string, data: CreatePoolData): Promise<Pool> {
     const row = await this.prisma.pool.create({
       data: {
         name: data.name,

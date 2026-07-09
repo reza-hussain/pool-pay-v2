@@ -1,19 +1,28 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
+import type { StoredSession } from "../api/session";
+import { paiseToRupeeLabel } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
 // No "list pools" endpoint exists yet — this only shows Pools created during
 // this app session, not fetched from the server. Will be replaced once a
 // list-pools ticket exists.
 export function PoolsHomeScreen({
+  session,
+  isNewUser,
   pools,
   onCreatePool,
 }: {
+  session: StoredSession;
+  isNewUser: boolean;
   pools: Pool[];
   onCreatePool: () => void;
 }) {
   return (
     <View style={styles.container}>
+      <Text style={styles.greeting}>
+        {isNewUser ? "Welcome to Pool Pay" : `Hey, ${session.user.phoneNumber}`}
+      </Text>
       {pools.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No Pools yet</Text>
@@ -47,7 +56,7 @@ function PoolCard({ pool }: { pool: Pool }) {
       <Text style={styles.cardTitle}>{pool.name}</Text>
       <Text style={styles.cardType}>
         {pool.type === "EQUAL_SPLIT"
-          ? `Equal Split · ₹${((pool.perPersonAmountPaise ?? 0) / 100).toLocaleString("en-IN")} / person`
+          ? `Equal Split · ${paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)} / person`
           : "Open Pool"}
       </Text>
     </View>
@@ -59,6 +68,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.cream,
     padding: spacing.s6,
+  },
+  greeting: {
+    ...type.body,
+    color: colors.ink600,
+    marginBottom: spacing.s4,
   },
   empty: {
     flex: 1,

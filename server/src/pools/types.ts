@@ -18,11 +18,16 @@ export interface CreatePoolInput {
   perPersonAmountPaise?: number;
 }
 
+// The validated shape PoolService hands to a repository — always resolved to
+// either a positive integer or null, never the input's optional-and-unvalidated form.
+export interface CreatePoolData {
+  name: string;
+  type: PoolType;
+  perPersonAmountPaise: number | null;
+}
+
 export interface PoolRepository {
-  create(
-    organizerId: string,
-    data: { name: string; type: PoolType; perPersonAmountPaise: number | null },
-  ): Promise<Pool>;
+  create(organizerId: string, data: CreatePoolData): Promise<Pool>;
 }
 
 export class InvalidPoolNameError extends Error {
