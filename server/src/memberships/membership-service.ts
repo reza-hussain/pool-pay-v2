@@ -1,4 +1,4 @@
-import type { PoolRepository } from "../pools/types.js";
+import type { Pool, PoolRepository } from "../pools/types.js";
 import {
   InvalidJoinCodeError,
   PoolClosedError,
@@ -26,7 +26,7 @@ export class MembershipService {
     if (!pool) {
       throw new PoolNotFoundError();
     }
-    return this.join(userId, pool.id, pool.state);
+    return this.join(userId, pool);
   }
 
   async joinByCode(userId: string, joinCode: string): Promise<Membership> {
@@ -34,26 +34,24 @@ export class MembershipService {
     if (!pool) {
       throw new InvalidJoinCodeError();
     }
-    return this.join(userId, pool.id, pool.state);
+    return this.join(userId, pool);
   }
 
   async listMembers(poolId: string): Promise<Membership[]> {
     return this.membershipRepository.listByPool(poolId);
   }
 
-  private async join(
-    userId: string,
-    poolId: string,
-    poolState: string,
-  ): Promise<Membership> {
-    if (poolState === "CLOSED") {
+  private async join(userId: string, pool: Pool): Promise<Membership> {
+    if (pool.state === "CLOSED") {
       throw new PoolClosedError();
     }
+    // Locked only stops deposits (see CONTEXT.md / ADR 0006) — joining a
+    // Locked Pool is still allowed, only Closed is end-of-life.
 
-    const existing = await this.membershipRepository.find(poolId, userId);
+    const existing = await this.membershipRepository.find(pool.id, userId);
     if (existing) {
       return existing;
     }
-    return this.membershipRepository.create(poolId, userId, "MEMBER");
+    return this.membershipRepository.create(pool.id, userId, "MEMBER");
   }
 }

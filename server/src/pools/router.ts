@@ -18,7 +18,7 @@ const createPoolSchema = z.object({
 });
 
 const joinByCodeSchema = z.object({
-  code: z.string(),
+  code: z.string().regex(/^\d{6}$/, "code must be six digits"),
 });
 
 export function createPoolsRouter(
@@ -102,9 +102,16 @@ export function createPoolsRouter(
     },
   );
 
-  router.get("/:poolId/members", requireAuth(jwtSecret), async (req, res) => {
-    const members = await membershipService.listMembers(req.params.poolId);
-    res.status(200).json({ members });
+  // Open to any authenticated user, not just Members of this Pool — no
+  // per-pool authorization exists yet in v1. ADR 0008 frames ledger
+  // visibility as a Member entitlement; revisit this once that's built.
+  router.get("/:poolId/members", requireAuth(jwtSecret), async (req, res, next) => {
+    try {
+      const members = await membershipService.listMembers(req.params.poolId);
+      res.status(200).json({ members });
+    } catch (error) {
+      next(error);
+    }
   });
 
   return router;

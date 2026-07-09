@@ -7,6 +7,7 @@ import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repo
 import { InMemoryOtpStore } from "../../src/auth/fakes/in-memory-otp-store.js";
 import { FakeOtpSender } from "../../src/auth/fakes/fake-otp-sender.js";
 import { makeTestPoolService } from "../support/make-pool-service.js";
+import { MembershipService } from "../../src/memberships/membership-service.js";
 
 const JWT_SECRET = "test-secret";
 const ORGANIZER_ID = "user_organizer";
@@ -123,5 +124,30 @@ describe("GET /pools/:poolId/members", () => {
 
     const userIds = res.body.members.map((m: { userId: string }) => m.userId).sort();
     expect(userIds).toEqual([MEMBER_ID, ORGANIZER_ID].sort());
+  });
+
+  it("returns 500 instead of hanging when a dependency throws unexpectedly", async () => {
+    const authService = new AuthService({
+      userRepository: new InMemoryUserRepository(),
+      otpStore: new InMemoryOtpStore(),
+      otpSender: new FakeOtpSender(),
+    });
+    const { poolService, poolRepository, membershipRepository } = makeTestPoolService();
+    membershipRepository.listByPool = async () => {
+      throw new Error("database is on fire");
+    };
+    const membershipService = new MembershipService({ poolRepository, membershipRepository });
+    const app = createApp({ authService, poolService, membershipService, jwtSecret: JWT_SECRET });
+
+    const createRes = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ name: "Goa Trip", type: "OPEN" });
+
+    const res = await request(app)
+      .get(`/pools/${createRes.body.pool.id}/members`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(500);
   });
 });
