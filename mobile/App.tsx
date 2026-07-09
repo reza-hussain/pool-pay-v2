@@ -16,6 +16,7 @@ import { PoolsHomeScreen } from './src/screens/PoolsHomeScreen';
 import { CreatePoolScreen } from './src/screens/CreatePoolScreen';
 import { InviteScreen } from './src/screens/InviteScreen';
 import { JoinPoolScreen } from './src/screens/JoinPoolScreen';
+import { DepositScreen } from './src/screens/DepositScreen';
 import { loadSession, type StoredSession } from './src/api/session';
 import type { Pool } from './src/api/poolsClient';
 import { joinByPoolId } from './src/api/membersClient';
@@ -28,7 +29,8 @@ type Route =
   | { name: 'home' }
   | { name: 'createPool' }
   | { name: 'invite'; pool: Pool }
-  | { name: 'joinPool' };
+  | { name: 'joinPool' }
+  | { name: 'deposit'; pool: Pool };
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -100,6 +102,7 @@ export default function App() {
           pools={pools}
           onCreatePool={() => setRoute({ name: 'createPool' })}
           onJoinPool={() => setRoute({ name: 'joinPool' })}
+          onSelectPool={(pool) => setRoute({ name: 'deposit', pool })}
         />
       ) : route.name === 'createPool' ? (
         <CreatePoolScreen
@@ -112,10 +115,17 @@ export default function App() {
         />
       ) : route.name === 'invite' ? (
         <InviteScreen pool={route.pool} onDone={() => setRoute({ name: 'home' })} />
-      ) : (
+      ) : route.name === 'joinPool' ? (
         <JoinPoolScreen
           session={session}
           onJoined={() => setRoute({ name: 'home' })}
+          onCancel={() => setRoute({ name: 'home' })}
+        />
+      ) : (
+        <DepositScreen
+          session={session}
+          pool={route.pool}
+          onDone={() => setRoute({ name: 'home' })}
           onCancel={() => setRoute({ name: 'home' })}
         />
       )}

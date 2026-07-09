@@ -13,6 +13,7 @@ model User {
   createdAt      DateTime     @default(now())
   organizedPools Pool[]
   memberships    Membership[]
+  deposits       Deposit[]
 }
 
 model Pool {
@@ -31,8 +32,24 @@ model Pool {
   // id embedded in a deep link — no separate stored field needed for that.
   joinCode    String       @unique
   memberships Membership[]
+  deposits    Deposit[]
 
   @@index([organizerId])
+}
+
+model Deposit {
+  id     String @id @default(cuid())
+  poolId String
+  pool   Pool   @relation(fields: [poolId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  // In paise. Never validated against the Pool's per-person amount — Equal
+  // Split deposits arriving at a different amount are recorded, not rejected.
+  amountPaise Int
+  createdAt   DateTime @default(now())
+
+  @@index([poolId])
+  @@index([poolId, userId])
 }
 
 model Membership {

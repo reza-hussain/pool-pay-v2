@@ -13,12 +13,14 @@ export function PoolsHomeScreen({
   pools,
   onCreatePool,
   onJoinPool,
+  onSelectPool,
 }: {
   session: StoredSession;
   isNewUser: boolean;
   pools: Pool[];
   onCreatePool: () => void;
   onJoinPool: () => void;
+  onSelectPool: (pool: Pool) => void;
 }) {
   return (
     <View style={styles.container}>
@@ -44,7 +46,9 @@ export function PoolsHomeScreen({
             data={pools}
             keyExtractor={(pool) => pool.id}
             contentContainerStyle={styles.list}
-            renderItem={({ item }) => <PoolCard pool={item} />}
+            renderItem={({ item }) => (
+              <PoolCard pool={item} onPress={() => onSelectPool(item)} />
+            )}
           />
           <Pressable style={[styles.button, styles.fab]} onPress={onCreatePool}>
             <Text style={styles.buttonText}>Create a Pool</Text>
@@ -58,16 +62,16 @@ export function PoolsHomeScreen({
   );
 }
 
-function PoolCard({ pool }: { pool: Pool }) {
+function PoolCard({ pool, onPress }: { pool: Pool; onPress: () => void }) {
   return (
-    <View style={styles.card}>
+    <Pressable style={styles.card} onPress={onPress}>
       <Text style={styles.cardTitle}>{pool.name}</Text>
       <Text style={styles.cardType}>
         {pool.type === "EQUAL_SPLIT"
           ? `Equal Split · ${paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)} / person`
           : "Open Pool"}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 

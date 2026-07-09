@@ -5,7 +5,7 @@ import { AuthService } from "../../src/auth/auth-service.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { InMemoryOtpStore } from "../../src/auth/fakes/in-memory-otp-store.js";
 import { FakeOtpSender } from "../../src/auth/fakes/fake-otp-sender.js";
-import { makeTestPoolService } from "../support/make-pool-service.js";
+import { makeTestServices } from "../support/make-test-services.js";
 
 const PHONE = "+919876543210";
 const JWT_SECRET = "test-secret";
@@ -17,8 +17,14 @@ function makeApp() {
     otpStore: new InMemoryOtpStore(),
     otpSender,
   });
-  const { poolService, membershipService } = makeTestPoolService();
-  const app = createApp({ authService, poolService, membershipService, jwtSecret: JWT_SECRET });
+  const { poolService, membershipService, depositService } = makeTestServices();
+  const app = createApp({
+    authService,
+    poolService,
+    membershipService,
+    depositService,
+    jwtSecret: JWT_SECRET,
+  });
   return { app, otpSender };
 }
 

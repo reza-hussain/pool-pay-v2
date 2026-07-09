@@ -9,6 +9,9 @@ import { PoolService } from "./pools/pool-service.js";
 import { PrismaPoolRepository } from "./pools/prisma-pool-repository.js";
 import { MembershipService } from "./memberships/membership-service.js";
 import { PrismaMembershipRepository } from "./memberships/prisma-membership-repository.js";
+import { DepositService } from "./deposits/deposit-service.js";
+import { PrismaDepositRepository } from "./deposits/prisma-deposit-repository.js";
+import { FakePaymentProvider } from "./payments/fakes/fake-payment-provider.js";
 
 const authService = new AuthService({
   userRepository: new PrismaUserRepository(prisma),
@@ -18,11 +21,29 @@ const authService = new AuthService({
 
 const poolRepository = new PrismaPoolRepository(prisma);
 const membershipRepository = new PrismaMembershipRepository(prisma);
+const depositRepository = new PrismaDepositRepository(prisma);
+// No real BaaS/UPI partner is wired up yet (see ADR 0002, ADR 0005, and
+// docs/spec-mvp.md's Testing Decisions) — every deposit/spend/refund runs
+// through this fake until a later ticket swaps in a real implementation
+// behind the same PaymentProvider interface.
+const paymentProvider = new FakePaymentProvider();
 
 const poolService = new PoolService({ poolRepository, membershipRepository });
 const membershipService = new MembershipService({ poolRepository, membershipRepository });
+const depositService = new DepositService({
+  poolRepository,
+  membershipRepository,
+  depositRepository,
+  paymentProvider,
+});
 
-const app = createApp({ authService, poolService, membershipService, jwtSecret: env.JWT_SECRET });
+const app = createApp({
+  authService,
+  poolService,
+  membershipService,
+  depositService,
+  jwtSecret: env.JWT_SECRET,
+});
 
 const port = Number(env.PORT);
 app.listen(port, () => {
