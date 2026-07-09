@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { DepositService } from "../../src/deposits/deposit-service.js";
 import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-deposit-repository.js";
+import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-repository.js";
+import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/in-memory-reimbursement-repository.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
@@ -14,11 +16,15 @@ async function makeService() {
   const poolRepository = new InMemoryPoolRepository();
   const membershipRepository = new InMemoryMembershipRepository();
   const depositRepository = new InMemoryDepositRepository();
+  const spendRepository = new InMemorySpendRepository();
+  const reimbursementRepository = new InMemoryReimbursementRepository();
   const paymentProvider = new FakePaymentProvider();
   const depositService = new DepositService({
     poolRepository,
     membershipRepository,
     depositRepository,
+    spendRepository,
+    reimbursementRepository,
     paymentProvider,
   });
 
@@ -42,6 +48,8 @@ async function makeService() {
     poolRepository,
     membershipRepository,
     depositRepository,
+    spendRepository,
+    reimbursementRepository,
     paymentProvider,
     equalSplitPool,
     openPool,
@@ -150,6 +158,26 @@ describe("DepositService.recordDeposit", () => {
     await expect(
       depositService.recordDeposit(openPool.id, MEMBER_ID, 1000),
     ).rejects.toThrow(PoolNotAcceptingDepositsError);
+  });
+});
+
+describe("DepositService.getPoolBalance", () => {
+  it("subtracts Spends (amount + fee) from total deposited", async () => {
+    const { depositService, spendRepository, openPool } = await makeService();
+
+    await depositService.recordDeposit(openPool.id, MEMBER_ID, 100000);
+    await spendRepository.create(openPool.id, ORGANIZER_ID, "merchant@upi", 30000, 300);
+
+    expect(await depositService.getPoolBalance(openPool.id)).toBe(100000 - 30000 - 300);
+  });
+
+  it("subtracts Reimbursements from total deposited", async () => {
+    const { depositService, reimbursementRepository, openPool } = await makeService();
+
+    await depositService.recordDeposit(openPool.id, MEMBER_ID, 100000);
+    await reimbursementRepository.create(openPool.id, MEMBER_ID, "member@upi", 20000);
+
+    expect(await depositService.getPoolBalance(openPool.id)).toBe(100000 - 20000);
   });
 });
 

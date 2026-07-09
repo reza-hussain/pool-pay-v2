@@ -19,12 +19,22 @@ async function makeApp() {
     otpStore: new InMemoryOtpStore(),
     otpSender: new FakeOtpSender(),
   });
-  const { poolService, membershipService, depositService } = makeTestServices();
+  const {
+    poolService,
+    membershipService,
+    depositService,
+    spendService,
+    reimbursementService,
+    ledgerService,
+  } = makeTestServices();
   const app = createApp({
     authService,
     poolService,
     membershipService,
     depositService,
+    spendService,
+    reimbursementService,
+    ledgerService,
     jwtSecret: JWT_SECRET,
   });
 
@@ -138,8 +148,15 @@ describe("GET /pools/:poolId/members", () => {
       otpStore: new InMemoryOtpStore(),
       otpSender: new FakeOtpSender(),
     });
-    const { poolService, depositService, poolRepository, membershipRepository } =
-      makeTestServices();
+    const {
+      poolService,
+      depositService,
+      spendService,
+      reimbursementService,
+      ledgerService,
+      poolRepository,
+      membershipRepository,
+    } = makeTestServices();
     membershipRepository.listByPool = async () => {
       throw new Error("database is on fire");
     };
@@ -149,6 +166,9 @@ describe("GET /pools/:poolId/members", () => {
       poolService,
       membershipService,
       depositService,
+      spendService,
+      reimbursementService,
+      ledgerService,
       jwtSecret: JWT_SECRET,
     });
 

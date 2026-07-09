@@ -44,3 +44,33 @@ describe("FakePaymentProvider.simulateDeposit", () => {
     expect(() => provider.simulateDeposit("does-not-exist", 1000)).toThrow();
   });
 });
+
+describe("FakePaymentProvider.initiateSpend", () => {
+  it("confirms the Spend instantly with the given merchant reference and amount", async () => {
+    const provider = new FakePaymentProvider();
+
+    const confirmation = await provider.initiateSpend("pool_1", "merchant@upi", 50000);
+
+    expect(confirmation).toMatchObject({
+      poolId: "pool_1",
+      merchantRef: "merchant@upi",
+      amountPaise: 50000,
+    });
+    expect(confirmation.id).toBeTruthy();
+  });
+});
+
+describe("FakePaymentProvider.initiateTransfer", () => {
+  it("confirms the transfer instantly with the given VPA and amount", async () => {
+    const provider = new FakePaymentProvider();
+
+    const confirmation = await provider.initiateTransfer("pool_1", "member@upi", 25000);
+
+    expect(confirmation).toMatchObject({
+      poolId: "pool_1",
+      vpa: "member@upi",
+      amountPaise: 25000,
+    });
+    expect(confirmation.id).toBeTruthy();
+  });
+});

@@ -17,12 +17,22 @@ function makeApp() {
     otpStore: new InMemoryOtpStore(),
     otpSender,
   });
-  const { poolService, membershipService, depositService } = makeTestServices();
+  const {
+    poolService,
+    membershipService,
+    depositService,
+    spendService,
+    reimbursementService,
+    ledgerService,
+  } = makeTestServices();
   const app = createApp({
     authService,
     poolService,
     membershipService,
     depositService,
+    spendService,
+    reimbursementService,
+    ledgerService,
     jwtSecret: JWT_SECRET,
   });
   return { app, otpSender };
@@ -40,12 +50,22 @@ describe("error handling", () => {
       otpStore: new InMemoryOtpStore(),
       otpSender,
     });
-    const { poolService, membershipService, depositService } = makeTestServices();
+    const {
+      poolService,
+      membershipService,
+      depositService,
+      spendService,
+      reimbursementService,
+      ledgerService,
+    } = makeTestServices();
     const app = createApp({
       authService,
       poolService,
       membershipService,
       depositService,
+      spendService,
+      reimbursementService,
+      ledgerService,
       jwtSecret: JWT_SECRET,
     });
 

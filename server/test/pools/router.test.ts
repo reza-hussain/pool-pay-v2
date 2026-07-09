@@ -17,12 +17,23 @@ function makeApp() {
     otpStore: new InMemoryOtpStore(),
     otpSender: new FakeOtpSender(),
   });
-  const { poolService, membershipService, depositService, poolRepository } = makeTestServices();
+  const {
+    poolService,
+    membershipService,
+    depositService,
+    spendService,
+    reimbursementService,
+    ledgerService,
+    poolRepository,
+  } = makeTestServices();
   const app = createApp({
     authService,
     poolService,
     membershipService,
     depositService,
+    spendService,
+    reimbursementService,
+    ledgerService,
     jwtSecret: JWT_SECRET,
   });
   return { app, poolRepository };

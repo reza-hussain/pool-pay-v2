@@ -1,7 +1,10 @@
 import { PoolNotFoundError } from "../memberships/types.js";
 import type { MembershipRepository } from "../memberships/types.js";
+import { getPoolBalance } from "../pools/pool-balance.js";
 import type { PoolRepository } from "../pools/types.js";
 import type { DepositIntent, PaymentProvider } from "../payments/types.js";
+import type { SpendRepository } from "../spends/types.js";
+import type { ReimbursementRepository } from "../reimbursements/types.js";
 import {
   InvalidDepositAmountError,
   NotAMemberError,
@@ -15,6 +18,11 @@ export interface DepositServiceOptions {
   poolRepository: PoolRepository;
   membershipRepository: MembershipRepository;
   depositRepository: DepositRepository;
+  // Needed so getPoolBalance reflects money spent/transferred out, not just
+  // deposited — "Pool balance" is one concept even though Deposits, Spends,
+  // and Reimbursements are recorded by separate services/repositories.
+  spendRepository: SpendRepository;
+  reimbursementRepository: ReimbursementRepository;
   paymentProvider: PaymentProvider;
 }
 
@@ -22,12 +30,16 @@ export class DepositService {
   private readonly poolRepository: PoolRepository;
   private readonly membershipRepository: MembershipRepository;
   private readonly depositRepository: DepositRepository;
+  private readonly spendRepository: SpendRepository;
+  private readonly reimbursementRepository: ReimbursementRepository;
   private readonly paymentProvider: PaymentProvider;
 
   constructor(options: DepositServiceOptions) {
     this.poolRepository = options.poolRepository;
     this.membershipRepository = options.membershipRepository;
     this.depositRepository = options.depositRepository;
+    this.spendRepository = options.spendRepository;
+    this.reimbursementRepository = options.reimbursementRepository;
     this.paymentProvider = options.paymentProvider;
   }
 
@@ -62,7 +74,14 @@ export class DepositService {
   }
 
   async getPoolBalance(poolId: string): Promise<number> {
-    return this.depositRepository.sumByPool(poolId);
+    return getPoolBalance(
+      {
+        depositRepository: this.depositRepository,
+        spendRepository: this.spendRepository,
+        reimbursementRepository: this.reimbursementRepository,
+      },
+      poolId,
+    );
   }
 
   async getContributionSummary(poolId: string, userId: string): Promise<ContributionSummary> {

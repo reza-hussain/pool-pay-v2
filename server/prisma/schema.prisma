@@ -14,6 +14,8 @@ model User {
   organizedPools Pool[]
   memberships    Membership[]
   deposits       Deposit[]
+  spends         Spend[]
+  reimbursements Reimbursement[]
 }
 
 model Pool {
@@ -31,8 +33,10 @@ model Pool {
   // Six-digit code for manual Pool joining. An Invite Link is just this Pool's
   // id embedded in a deep link — no separate stored field needed for that.
   joinCode    String       @unique
-  memberships Membership[]
-  deposits    Deposit[]
+  memberships    Membership[]
+  deposits       Deposit[]
+  spends         Spend[]
+  reimbursements Reimbursement[]
 
   @@index([organizerId])
 }
@@ -50,6 +54,40 @@ model Deposit {
 
   @@index([poolId])
   @@index([poolId, userId])
+}
+
+model Spend {
+  id     String @id @default(cuid())
+  poolId String
+  pool   Pool   @relation(fields: [poolId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  // The merchant's UPI reference the Organizer scanned/entered.
+  merchantRef String
+  // In paise. The per-Spend fee (ADR 0010) — Pool Pay's own monetization,
+  // never applied to Deposits or Refunds.
+  amountPaise Int
+  feePaise    Int
+  createdAt   DateTime @default(now())
+
+  @@index([poolId])
+}
+
+model Reimbursement {
+  id     String @id @default(cuid())
+  poolId String
+  pool   Pool   @relation(fields: [poolId], references: [id])
+  // The Member being paid back. Named memberId (not userId) since, unlike
+  // Deposit/Spend, this row isn't about the actor (always the Organizer) —
+  // it's about who received the money.
+  memberId String
+  member   User   @relation(fields: [memberId], references: [id])
+  vpa      String
+  // In paise. No fee — Reimbursements are never fee-bearing (ADR 0010).
+  amountPaise Int
+  createdAt   DateTime @default(now())
+
+  @@index([poolId])
 }
 
 model Membership {

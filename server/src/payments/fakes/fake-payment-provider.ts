@@ -1,4 +1,9 @@
-import type { DepositIntent, PaymentProvider } from "../types.js";
+import type {
+  DepositIntent,
+  PaymentProvider,
+  SpendConfirmation,
+  TransferConfirmation,
+} from "../types.js";
 
 let nextId = 1;
 
@@ -33,5 +38,21 @@ export class FakePaymentProvider implements PaymentProvider {
       throw new Error(`Unknown deposit intent: ${intentId}`);
     }
     return { poolId: intent.poolId, amountPaise };
+  }
+
+  async initiateSpend(
+    poolId: string,
+    merchantRef: string,
+    amountPaise: number,
+  ): Promise<SpendConfirmation> {
+    return { id: `spend_confirmation_${nextId++}`, poolId, merchantRef, amountPaise };
+  }
+
+  async initiateTransfer(
+    poolId: string,
+    vpa: string,
+    amountPaise: number,
+  ): Promise<TransferConfirmation> {
+    return { id: `transfer_confirmation_${nextId++}`, poolId, vpa, amountPaise };
   }
 }

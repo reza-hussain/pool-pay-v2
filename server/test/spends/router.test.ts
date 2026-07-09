@@ -40,10 +40,14 @@ async function makeApp() {
   const createRes = await request(app)
     .post("/pools")
     .set("Authorization", bearerFor(ORGANIZER_ID))
-    .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
+    .send({ name: "Goa Trip", type: "OPEN" });
   const pool = createRes.body.pool as { id: string };
 
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+  await request(app)
+    .post(`/pools/${pool.id}/deposits`)
+    .set("Authorization", bearerFor(MEMBER_ID))
+    .send({ amountPaise: 100000 });
 
   return { app, pool };
 }
@@ -52,78 +56,76 @@ function bearerFor(userId: string) {
   return `Bearer ${jwt.sign({ sub: userId }, JWT_SECRET)}`;
 }
 
-describe("GET /pools/:poolId/deposit-intent", () => {
-  it("returns a locked amount for an Equal Split Pool", async () => {
-    const { app, pool } = await makeApp();
-    const res = await request(app)
-      .get(`/pools/${pool.id}/deposit-intent`)
-      .set("Authorization", bearerFor(MEMBER_ID));
-
-    expect(res.status).toBe(200);
-    expect(res.body.intent).toMatchObject({ poolId: pool.id, fixedAmountPaise: 100000 });
-  });
-
-  it("returns 404 for an unknown pool", async () => {
-    const { app } = await makeApp();
-    const res = await request(app)
-      .get("/pools/does-not-exist/deposit-intent")
-      .set("Authorization", bearerFor(MEMBER_ID));
-    expect(res.status).toBe(404);
-  });
-});
-
-describe("POST /pools/:poolId/deposits", () => {
-  it("records a matching deposit and reports the updated balance", async () => {
+describe("POST /pools/:poolId/spends", () => {
+  it("records a Spend for the Organizer and reports the updated balance", async () => {
     const { app, pool } = await makeApp();
 
     const res = await request(app)
-      .post(`/pools/${pool.id}/deposits`)
-      .set("Authorization", bearerFor(MEMBER_ID))
-      .send({ amountPaise: 100000 });
+      .post(`/pools/${pool.id}/spends`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ merchantRef: "merchant@upi", amountPaise: 50000 });
 
     expect(res.status).toBe(201);
-    expect(res.body.deposit).toMatchObject({ poolId: pool.id, userId: MEMBER_ID, amountPaise: 100000 });
-    expect(res.body.poolBalancePaise).toBe(100000);
-    expect(res.body.contributionSummary).toEqual({
-      contributedPaise: 100000,
-      expectedPaise: 100000,
-      shortfallPaise: 0,
+    expect(res.body.spend).toMatchObject({
+      poolId: pool.id,
+      userId: ORGANIZER_ID,
+      merchantRef: "merchant@upi",
+      amountPaise: 50000,
+      feePaise: 500,
     });
+    expect(res.body.poolBalancePaise).toBe(100000 - 50000 - 500);
   });
 
-  it("accepts a mismatched amount for an Equal Split Pool", async () => {
+  it("returns 403 for a non-Organizer", async () => {
     const { app, pool } = await makeApp();
-
     const res = await request(app)
-      .post(`/pools/${pool.id}/deposits`)
+      .post(`/pools/${pool.id}/spends`)
       .set("Authorization", bearerFor(MEMBER_ID))
-      .send({ amountPaise: 40000 });
-
-    expect(res.status).toBe(201);
-    expect(res.body.contributionSummary.shortfallPaise).toBe(60000);
+      .send({ merchantRef: "merchant@upi", amountPaise: 50000 });
+    expect(res.status).toBe(403);
   });
 
-  it("returns 403 for a user who hasn't joined the Pool", async () => {
+  it("returns 400 when the Spend would exceed the Pool's balance", async () => {
     const { app, pool } = await makeApp();
     const res = await request(app)
-      .post(`/pools/${pool.id}/deposits`)
-      .set("Authorization", bearerFor("user_stranger"))
-      .send({ amountPaise: 100000 });
-    expect(res.status).toBe(403);
+      .post(`/pools/${pool.id}/spends`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ merchantRef: "merchant@upi", amountPaise: 100000 });
+    expect(res.status).toBe(400);
   });
 
   it("returns 400 for a non-positive amount", async () => {
     const { app, pool } = await makeApp();
     const res = await request(app)
-      .post(`/pools/${pool.id}/deposits`)
-      .set("Authorization", bearerFor(MEMBER_ID))
-      .send({ amountPaise: 0 });
+      .post(`/pools/${pool.id}/spends`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ merchantRef: "merchant@upi", amountPaise: 0 });
     expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for a missing merchant reference", async () => {
+    const { app, pool } = await makeApp();
+    const res = await request(app)
+      .post(`/pools/${pool.id}/spends`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ amountPaise: 1000 });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 for an unknown pool", async () => {
+    const { app } = await makeApp();
+    const res = await request(app)
+      .post("/pools/pool_missing/spends")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ merchantRef: "merchant@upi", amountPaise: 1000 });
+    expect(res.status).toBe(404);
   });
 
   it("returns 401 without a bearer token", async () => {
     const { app, pool } = await makeApp();
-    const res = await request(app).post(`/pools/${pool.id}/deposits`).send({ amountPaise: 1000 });
+    const res = await request(app)
+      .post(`/pools/${pool.id}/spends`)
+      .send({ merchantRef: "merchant@upi", amountPaise: 1000 });
     expect(res.status).toBe(401);
   });
 });
