@@ -16,6 +16,10 @@ model User {
   // POST /auth/verify rather than a real verification flow, until the real
   // BaaS/UPI partner integration (ticket #14) wires up an actual KYC check.
   isVerified     Boolean      @default(false)
+  // Freemium subscription (ticket #13, ADR 0011) — waives the per-Spend fee,
+  // lifts the concurrent-Active-Pool cap, and unlocks cross-Pool analytics.
+  // Stubbed: set instantly by POST /auth/subscribe, no real billing yet.
+  isSubscribed   Boolean      @default(false)
   organizedPools Pool[]
   memberships    Membership[]
   deposits       Deposit[]

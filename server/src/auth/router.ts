@@ -8,9 +8,19 @@ import {
   OtpAlreadyUsedError,
   OtpExpiredError,
   OtpNotFoundError,
+  type User,
 } from "./types.js";
 import { signSessionToken } from "./session.js";
 import { requireAuth, type AuthenticatedRequest } from "./require-auth.js";
+
+function publicUser(user: User) {
+  return {
+    id: user.id,
+    phoneNumber: user.phoneNumber,
+    isVerified: user.isVerified,
+    isSubscribed: user.isSubscribed,
+  };
+}
 
 const requestOtpSchema = z.object({
   phoneNumber: z.string(),
@@ -76,7 +86,7 @@ export function createAuthRouter(authService: AuthService, jwtSecret: string): R
       res.status(200).json({
         token,
         isNewUser,
-        user: { id: user.id, phoneNumber: user.phoneNumber, isVerified: user.isVerified },
+        user: publicUser(user),
       });
     } catch (error) {
       if (error instanceof OtpNotFoundError) {
@@ -104,7 +114,22 @@ export function createAuthRouter(authService: AuthService, jwtSecret: string): R
     async (req: AuthenticatedRequest, res, next) => {
       try {
         const user = await authService.verifyIdentity(req.userId as string);
-        res.status(200).json({ user: { id: user.id, phoneNumber: user.phoneNumber, isVerified: user.isVerified } });
+        res.status(200).json({ user: publicUser(user) });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  // Stubbed freemium subscription (ticket #13) — passes instantly, no real
+  // billing flow yet.
+  router.post(
+    "/subscribe",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      try {
+        const user = await authService.subscribe(req.userId as string);
+        res.status(200).json({ user: publicUser(user) });
       } catch (error) {
         next(error);
       }

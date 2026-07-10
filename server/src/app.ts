@@ -16,6 +16,8 @@ import type { ClosureService } from "./closure/closure-service.js";
 import { createClosureRouter } from "./closure/router.js";
 import type { VoteService } from "./votes/vote-service.js";
 import { createVotesRouter } from "./votes/router.js";
+import type { AnalyticsService } from "./analytics/analytics-service.js";
+import { createAnalyticsRouter } from "./analytics/router.js";
 
 export interface AppDependencies {
   authService: AuthService;
@@ -27,6 +29,7 @@ export interface AppDependencies {
   ledgerService: LedgerService;
   closureService: ClosureService;
   voteService: VoteService;
+  analyticsService: AnalyticsService;
   jwtSecret: string;
 }
 
@@ -40,6 +43,7 @@ export function createApp({
   ledgerService,
   closureService,
   voteService,
+  analyticsService,
   jwtSecret,
 }: AppDependencies): Express {
   const app = express();
@@ -52,6 +56,7 @@ export function createApp({
   app.use("/pools", createLedgerRouter(ledgerService, jwtSecret));
   app.use("/pools", createClosureRouter(closureService, jwtSecret));
   app.use("/pools", createVotesRouter(voteService, jwtSecret));
+  app.use("/analytics", createAnalyticsRouter(analyticsService, jwtSecret));
 
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     console.error(error);

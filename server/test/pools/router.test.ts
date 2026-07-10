@@ -28,6 +28,7 @@ function makeApp() {
     ledgerService,
     closureService,
     voteService,
+    analyticsService,
     poolRepository,
   } = makeTestServices({ userRepository });
   const app = createApp({
@@ -40,6 +41,7 @@ function makeApp() {
     ledgerService,
     closureService,
     voteService,
+    analyticsService,
     jwtSecret: JWT_SECRET,
   });
   return { app, poolRepository };
@@ -113,6 +115,23 @@ describe("POST /pools", () => {
       .post("/pools")
       .set("Authorization", bearerFor("user_not_yet_verified"))
       .send({ name: "Goa Trip", type: "OPEN" });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for a non-subscribed user's 4th concurrently Active Pool (ticket #13)", async () => {
+    const { app } = makeApp();
+    for (const name of ["Pool 1", "Pool 2", "Pool 3"]) {
+      const res = await request(app)
+        .post("/pools")
+        .set("Authorization", bearerFor(ORGANIZER_ID))
+        .send({ name, type: "OPEN" });
+      expect(res.status).toBe(201);
+    }
+
+    const res = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ name: "Pool 4", type: "OPEN" });
     expect(res.status).toBe(403);
   });
 });

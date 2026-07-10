@@ -36,4 +36,8 @@ export class InMemoryPoolRepository implements PoolRepository {
     pool.state = state;
     return pool;
   }
+
+  async listByOrganizer(organizerId: string): Promise<Pool[]> {
+    return this.pools.filter((p) => p.organizerId === organizerId);
+  }
 }

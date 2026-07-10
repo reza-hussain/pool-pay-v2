@@ -26,6 +26,7 @@ function makeApp() {
     ledgerService,
     closureService,
     voteService,
+    analyticsService,
   } = makeTestServices();
   const app = createApp({
     authService,
@@ -37,6 +38,7 @@ function makeApp() {
     ledgerService,
     closureService,
     voteService,
+    analyticsService,
     jwtSecret: JWT_SECRET,
   });
   return { app, otpSender };
@@ -63,6 +65,7 @@ describe("error handling", () => {
       ledgerService,
       closureService,
       voteService,
+      analyticsService,
     } = makeTestServices();
     const app = createApp({
       authService,
@@ -74,6 +77,7 @@ describe("error handling", () => {
       ledgerService,
       closureService,
       voteService,
+      analyticsService,
       jwtSecret: JWT_SECRET,
     });
 
@@ -184,6 +188,30 @@ describe("POST /auth/verify", () => {
   it("returns 401 without a bearer token", async () => {
     const { app } = makeApp();
     const res = await request(app).post("/auth/verify");
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("POST /auth/subscribe", () => {
+  it("marks the signed-up user as subscribed (stubbed billing, ticket #13)", async () => {
+    const { app, otpSender } = makeApp();
+    const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyOtpRes = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+    expect(verifyOtpRes.body.user.isSubscribed).toBe(false);
+
+    const res = await request(app)
+      .post("/auth/subscribe")
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.isSubscribed).toBe(true);
+  });
+
+  it("returns 401 without a bearer token", async () => {
+    const { app } = makeApp();
+    const res = await request(app).post("/auth/subscribe");
     expect(res.status).toBe(401);
   });
 });

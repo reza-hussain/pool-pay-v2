@@ -15,6 +15,7 @@ import { VoteService } from "../../src/votes/vote-service.js";
 import { InMemoryRefundVoteRepository } from "../../src/votes/fakes/in-memory-refund-vote-repository.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import type { UserRepository } from "../../src/auth/types.js";
+import { AnalyticsService } from "../../src/analytics/analytics-service.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 
 // Shared across test files that just need working Pool/Membership/Deposit/Spend/
@@ -55,6 +56,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     spendRepository,
     reimbursementRepository,
     refundRepository,
+    userRepository,
     paymentProvider,
   });
   const reimbursementService = new ReimbursementService({
@@ -88,6 +90,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     refundVoteRepository,
     closureService,
   });
+  const analyticsService = new AnalyticsService({ userRepository, poolRepository, spendRepository });
 
   return {
     poolService,
@@ -98,6 +101,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     ledgerService,
     closureService,
     voteService,
+    analyticsService,
     poolRepository,
     membershipRepository,
     userRepository,

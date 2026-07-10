@@ -88,6 +88,12 @@ export class AuthService {
   async verifyIdentity(userId: string): Promise<User> {
     return this.userRepository.markFullyVerified(userId);
   }
+
+  // Stubbed freemium subscription (ticket #13, ADR 0011) — passes instantly,
+  // no real billing/payment flow yet.
+  async subscribe(userId: string): Promise<User> {
+    return this.userRepository.subscribe(userId);
+  }
 }
 
 function defaultGenerateCode(): string {

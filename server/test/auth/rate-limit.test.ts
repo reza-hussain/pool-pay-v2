@@ -26,6 +26,7 @@ function makeApp() {
     ledgerService,
     closureService,
     voteService,
+    analyticsService,
   } = makeTestServices();
   const app = createApp({
     authService,
@@ -37,6 +38,7 @@ function makeApp() {
     ledgerService,
     closureService,
     voteService,
+    analyticsService,
     jwtSecret: JWT_SECRET,
   });
   return { app, otpSender };

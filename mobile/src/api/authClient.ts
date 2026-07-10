@@ -6,14 +6,25 @@ export interface RequestOtpResult {
   requestId: string;
 }
 
+export interface PublicUser {
+  id: string;
+  phoneNumber: string;
+  isVerified: boolean;
+  isSubscribed: boolean;
+}
+
 export interface VerifyOtpResult {
   token: string;
   isNewUser: boolean;
-  user: { id: string; phoneNumber: string; isVerified: boolean };
+  user: PublicUser;
 }
 
 export interface VerifyIdentityResult {
-  user: { id: string; phoneNumber: string; isVerified: boolean };
+  user: PublicUser;
+}
+
+export interface SubscribeResult {
+  user: PublicUser;
 }
 
 async function postJson<T>(path: string, body: unknown, token?: string): Promise<T> {
@@ -44,4 +55,9 @@ export function verifyOtp(requestId: string, code: string): Promise<VerifyOtpRes
 // Stubbed full-KYC (ticket #12) — passes instantly, no real verification flow yet.
 export function verifyIdentity(token: string): Promise<VerifyIdentityResult> {
   return postJson("/auth/verify", undefined, token);
+}
+
+// Stubbed freemium subscription (ticket #13) — passes instantly, no real billing flow yet.
+export function subscribe(token: string): Promise<SubscribeResult> {
+  return postJson("/auth/subscribe", undefined, token);
 }

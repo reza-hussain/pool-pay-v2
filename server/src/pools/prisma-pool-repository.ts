@@ -31,6 +31,11 @@ export class PrismaPoolRepository implements PoolRepository {
     const row = await this.prisma.pool.update({ where: { id }, data: { state } });
     return toPool(row);
   }
+
+  async listByOrganizer(organizerId: string): Promise<Pool[]> {
+    const rows = await this.prisma.pool.findMany({ where: { organizerId } });
+    return rows.map(toPool);
+  }
 }
 
 function toPool(row: {

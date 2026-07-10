@@ -6,6 +6,7 @@ import { requireAuth, type AuthenticatedRequest } from "../auth/require-auth.js"
 import {
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
+  MaxActivePoolsExceededError,
   MissingPerPersonAmountError,
   NotPoolOrganizerError,
   OrganizerNotVerifiedError,
@@ -57,6 +58,10 @@ export function createPoolsRouter(
         return;
       }
       if (error instanceof OrganizerNotVerifiedError) {
+        res.status(403).json({ error: error.message });
+        return;
+      }
+      if (error instanceof MaxActivePoolsExceededError) {
         res.status(403).json({ error: error.message });
         return;
       }

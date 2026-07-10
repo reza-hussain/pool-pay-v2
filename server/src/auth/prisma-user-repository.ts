@@ -19,4 +19,8 @@ export class PrismaUserRepository implements UserRepository {
   async markFullyVerified(id: string): Promise<User> {
     return this.prisma.user.update({ where: { id }, data: { isVerified: true } });
   }
+
+  async subscribe(id: string): Promise<User> {
+    return this.prisma.user.update({ where: { id }, data: { isSubscribed: true } });
+  }
 }

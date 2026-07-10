@@ -5,6 +5,7 @@ import { NotPoolOrganizerError, type PoolRepository } from "../pools/types.js";
 import type { PaymentProvider } from "../payments/types.js";
 import type { ReimbursementRepository } from "../reimbursements/types.js";
 import type { RefundRepository } from "../closure/types.js";
+import type { UserRepository } from "../auth/types.js";
 import {
   InsufficientPoolBalanceError,
   InvalidMerchantReferenceError,
@@ -14,7 +15,8 @@ import {
 } from "./types.js";
 
 // Pool Pay's own monetization (ADR 0010), not a payment-rail cost — deliberately
-// not configurable via the PaymentProvider interface.
+// not configurable via the PaymentProvider interface. Waived entirely for a
+// subscribed Organizer (ticket #13, ADR 0011).
 const FEE_RATE = 0.01;
 
 export interface SpendServiceOptions {
@@ -23,6 +25,7 @@ export interface SpendServiceOptions {
   spendRepository: SpendRepository;
   reimbursementRepository: ReimbursementRepository;
   refundRepository: RefundRepository;
+  userRepository: UserRepository;
   paymentProvider: PaymentProvider;
 }
 
@@ -32,6 +35,7 @@ export class SpendService {
   private readonly spendRepository: SpendRepository;
   private readonly reimbursementRepository: ReimbursementRepository;
   private readonly refundRepository: RefundRepository;
+  private readonly userRepository: UserRepository;
   private readonly paymentProvider: PaymentProvider;
 
   constructor(options: SpendServiceOptions) {
@@ -40,6 +44,7 @@ export class SpendService {
     this.spendRepository = options.spendRepository;
     this.reimbursementRepository = options.reimbursementRepository;
     this.refundRepository = options.refundRepository;
+    this.userRepository = options.userRepository;
     this.paymentProvider = options.paymentProvider;
   }
 
@@ -67,7 +72,8 @@ export class SpendService {
       throw new PoolClosedError();
     }
 
-    const feePaise = Math.round(amountPaise * FEE_RATE);
+    const organizer = await this.userRepository.findById(userId);
+    const feePaise = organizer?.isSubscribed ? 0 : Math.round(amountPaise * FEE_RATE);
     const balance = await this.getPoolBalance(poolId);
     if (amountPaise + feePaise > balance) {
       throw new InsufficientPoolBalanceError();

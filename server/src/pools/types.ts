@@ -35,6 +35,7 @@ export interface PoolRepository {
   findById(id: string): Promise<Pool | null>;
   findByJoinCode(joinCode: string): Promise<Pool | null>;
   updateState(id: string, state: PoolState): Promise<Pool>;
+  listByOrganizer(organizerId: string): Promise<Pool[]>;
 }
 
 export class InvalidPoolNameError extends Error {
@@ -76,5 +77,12 @@ export class OrganizerNotVerifiedError extends Error {
   constructor() {
     super("Verify your identity before creating a Pool");
     this.name = "OrganizerNotVerifiedError";
+  }
+}
+
+export class MaxActivePoolsExceededError extends Error {
+  constructor() {
+    super("Free accounts are limited to 3 concurrently Active Pools — subscribe for unlimited Pools");
+    this.name = "MaxActivePoolsExceededError";
   }
 }

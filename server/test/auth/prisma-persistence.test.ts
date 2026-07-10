@@ -76,6 +76,18 @@ describe("PrismaUserRepository", () => {
     const found = await repo.findById(created.id);
     expect(found?.isVerified).toBe(true);
   });
+
+  it("creates a new user as not subscribed, and can mark them subscribed", async () => {
+    const repo = new PrismaUserRepository(prisma);
+    const created = await repo.create("+919876543210");
+    expect(created.isSubscribed).toBe(false);
+
+    const subscribed = await repo.subscribe(created.id);
+    expect(subscribed.isSubscribed).toBe(true);
+
+    const found = await repo.findById(created.id);
+    expect(found?.isSubscribed).toBe(true);
+  });
 });
 
 describe("PrismaOtpStore", () => {

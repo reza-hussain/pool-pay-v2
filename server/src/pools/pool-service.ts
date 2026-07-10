@@ -5,6 +5,7 @@ import type { UserRepository } from "../auth/types.js";
 import {
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
+  MaxActivePoolsExceededError,
   MissingPerPersonAmountError,
   NotPoolOrganizerError,
   OrganizerNotVerifiedError,
@@ -14,6 +15,10 @@ import {
   type PoolRepository,
   type PoolType,
 } from "./types.js";
+
+// Free-tier cap on concurrently Active Pools an Organizer may run (ticket
+// #13, ADR 0011) — lifted entirely for a subscribed user.
+const FREE_TIER_MAX_ACTIVE_POOLS = 3;
 
 export interface PoolServiceOptions {
   poolRepository: PoolRepository;
@@ -39,6 +44,14 @@ export class PoolService {
     const organizer = await this.userRepository.findById(organizerId);
     if (!organizer?.isVerified) {
       throw new OrganizerNotVerifiedError();
+    }
+
+    if (!organizer.isSubscribed) {
+      const existingPools = await this.poolRepository.listByOrganizer(organizerId);
+      const activeCount = existingPools.filter((p) => p.state === "ACTIVE").length;
+      if (activeCount >= FREE_TIER_MAX_ACTIVE_POOLS) {
+        throw new MaxActivePoolsExceededError();
+      }
     }
 
     const name = input.name.trim();

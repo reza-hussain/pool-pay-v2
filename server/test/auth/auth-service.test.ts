@@ -153,3 +153,17 @@ describe("AuthService.verifyIdentity", () => {
     expect(verified.isVerified).toBe(true);
   });
 });
+
+describe("AuthService.subscribe", () => {
+  it("marks the user as subscribed (stubbed billing, ticket #13)", async () => {
+    const { authService, otpSender } = makeAuthService();
+    const { requestId } = await authService.requestOtp(PHONE);
+    const code = otpSender.lastCodeSentTo(PHONE)!;
+    const { user } = await authService.verifyOtp(requestId, code);
+    expect(user.isSubscribed).toBe(false);
+
+    const subscribed = await authService.subscribe(user.id);
+
+    expect(subscribed.isSubscribed).toBe(true);
+  });
+});

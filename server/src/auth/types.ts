@@ -3,6 +3,7 @@ export interface User {
   phoneNumber: string;
   createdAt: Date;
   isVerified: boolean;
+  isSubscribed: boolean;
 }
 
 export interface UserRepository {
@@ -10,6 +11,7 @@ export interface UserRepository {
   findById(id: string): Promise<User | null>;
   create(phoneNumber: string): Promise<User>;
   markFullyVerified(id: string): Promise<User>;
+  subscribe(id: string): Promise<User>;
 }
 
 export interface OtpChallenge {

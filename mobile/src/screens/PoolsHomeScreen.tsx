@@ -18,6 +18,7 @@ export function PoolsHomeScreen({
   onOpenOrganizerControls,
   onViewLedger,
   onVoteToRefund,
+  onOpenAnalytics,
 }: {
   session: StoredSession;
   isNewUser: boolean;
@@ -28,13 +29,19 @@ export function PoolsHomeScreen({
   onOpenOrganizerControls: (pool: Pool) => void;
   onViewLedger: (pool: Pool) => void;
   onVoteToRefund: (pool: Pool) => void;
+  onOpenAnalytics: () => void;
 }) {
   return (
     <Screen backgroundColor={colors.cream}>
     <View style={styles.container}>
-      <Text style={styles.greeting}>
-        {isNewUser ? "Welcome to Pool Pay" : `Hey, ${session.user.phoneNumber}`}
-      </Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.greeting}>
+          {isNewUser ? "Welcome to Pool Pay" : `Hey, ${session.user.phoneNumber}`}
+        </Text>
+        <Pressable onPress={onOpenAnalytics}>
+          <Text style={styles.analyticsLink}>{session.user.isSubscribed ? "Analytics" : "Go Pro"}</Text>
+        </Pressable>
+      </View>
       {pools.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No Pools yet</Text>
@@ -155,10 +162,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cream,
     padding: spacing.s6,
   },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.s4,
+  },
   greeting: {
     ...type.body,
     color: colors.ink600,
-    marginBottom: spacing.s4,
+  },
+  analyticsLink: {
+    ...type.label,
+    color: colors.ink600,
   },
   empty: {
     flex: 1,

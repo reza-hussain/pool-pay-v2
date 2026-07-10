@@ -4,7 +4,7 @@ const SESSION_KEY = "pool-pay-session";
 
 export interface StoredSession {
   token: string;
-  user: { id: string; phoneNumber: string; isVerified: boolean };
+  user: { id: string; phoneNumber: string; isVerified: boolean; isSubscribed: boolean };
 }
 
 export async function saveSession(session: StoredSession): Promise<void> {

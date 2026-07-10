@@ -112,4 +112,25 @@ describe("PrismaPoolRepository", () => {
     const found = await repo.findById(created.id);
     expect(found?.state).toBe("LOCKED");
   });
+
+  it("lists every Pool for an organizer", async () => {
+    const repo = new PrismaPoolRepository(prisma);
+    await repo.create(organizerId, {
+      name: "Goa Trip",
+      type: "OPEN",
+      perPersonAmountPaise: null,
+      joinCode: "666666",
+    });
+    await repo.create(organizerId, {
+      name: "Flat 3B Rent",
+      type: "OPEN",
+      perPersonAmountPaise: null,
+      joinCode: "777777",
+    });
+
+    const pools = await repo.listByOrganizer(organizerId);
+    expect(pools).toHaveLength(2);
+
+    await expect(repo.listByOrganizer("does-not-exist")).resolves.toEqual([]);
+  });
 });

@@ -6,6 +6,7 @@ import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repo
 import {
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
+  MaxActivePoolsExceededError,
   MissingPerPersonAmountError,
   NotPoolOrganizerError,
   OrganizerNotVerifiedError,
@@ -149,6 +150,41 @@ describe("PoolService.createPool", () => {
     await expect(
       poolService.createPool("user_never_signed_up", { name: "Goa Trip", type: "OPEN" }),
     ).rejects.toThrow(OrganizerNotVerifiedError);
+  });
+
+  it("rejects a 4th concurrently Active Pool for a non-subscribed user (ticket #13)", async () => {
+    const { poolService } = makePoolService();
+    await poolService.createPool(ORGANIZER_ID, { name: "Pool 1", type: "OPEN" });
+    await poolService.createPool(ORGANIZER_ID, { name: "Pool 2", type: "OPEN" });
+    await poolService.createPool(ORGANIZER_ID, { name: "Pool 3", type: "OPEN" });
+
+    await expect(
+      poolService.createPool(ORGANIZER_ID, { name: "Pool 4", type: "OPEN" }),
+    ).rejects.toThrow(MaxActivePoolsExceededError);
+  });
+
+  it("does not count a Closed Pool against the free-tier cap", async () => {
+    const { poolService, poolRepository } = makePoolService();
+    const closed = await poolService.createPool(ORGANIZER_ID, { name: "Pool 1", type: "OPEN" });
+    await poolRepository.updateState(closed.id, "CLOSED");
+    await poolService.createPool(ORGANIZER_ID, { name: "Pool 2", type: "OPEN" });
+    await poolService.createPool(ORGANIZER_ID, { name: "Pool 3", type: "OPEN" });
+
+    await expect(
+      poolService.createPool(ORGANIZER_ID, { name: "Pool 4", type: "OPEN" }),
+    ).resolves.toMatchObject({ name: "Pool 4" });
+  });
+
+  it("allows a subscribed user unlimited concurrently Active Pools", async () => {
+    const { poolService, userRepository } = makePoolService();
+    await userRepository.subscribe(ORGANIZER_ID);
+    await poolService.createPool(ORGANIZER_ID, { name: "Pool 1", type: "OPEN" });
+    await poolService.createPool(ORGANIZER_ID, { name: "Pool 2", type: "OPEN" });
+    await poolService.createPool(ORGANIZER_ID, { name: "Pool 3", type: "OPEN" });
+
+    await expect(
+      poolService.createPool(ORGANIZER_ID, { name: "Pool 4", type: "OPEN" }),
+    ).resolves.toMatchObject({ name: "Pool 4" });
   });
 });
 

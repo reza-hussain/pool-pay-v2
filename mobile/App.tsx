@@ -27,6 +27,7 @@ import { ClosedScreen } from './src/screens/ClosedScreen';
 import { VoteScreen } from './src/screens/VoteScreen';
 import { MembersScreen } from './src/screens/MembersScreen';
 import { VerifyIdentityScreen } from './src/screens/VerifyIdentityScreen';
+import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
 import type { ClosureRefund } from './src/api/closureClient';
 import { loadSession, saveSession, type StoredSession } from './src/api/session';
@@ -54,6 +55,7 @@ type AppStackParamList = {
   Closed: { pool: Pool; refunds: ClosureRefund[] };
   Vote: { pool: Pool };
   Members: { pool: Pool };
+  Analytics: undefined;
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -112,6 +114,7 @@ function HomeRoute({ navigation }: NativeStackScreenProps<AppStackParamList, 'Ho
         onOpenOrganizerControls={(pool) => setOrganizerControlsPool(pool)}
         onViewLedger={(pool) => navigation.navigate('Ledger', { pool })}
         onVoteToRefund={(pool) => navigation.navigate('Vote', { pool })}
+        onOpenAnalytics={() => navigation.navigate('Analytics')}
       />
       {organizerControlsPool ? (
         <OrganizerControlsSheet
@@ -284,6 +287,17 @@ function MembersRoute({ route, navigation }: NativeStackScreenProps<AppStackPara
   );
 }
 
+function AnalyticsRoute({ navigation }: NativeStackScreenProps<AppStackParamList, 'Analytics'>) {
+  const { session, setSession } = useSessionContext();
+  return (
+    <AnalyticsScreen
+      session={session}
+      onSubscribed={setSession}
+      onCancel={() => navigation.goBack()}
+    />
+  );
+}
+
 export default function App() {
   const [fontsLoaded] = useFonts({
     Onest_400Regular,
@@ -379,6 +393,7 @@ export default function App() {
               />
               <AppStack.Screen name="Vote" component={VoteRoute} />
               <AppStack.Screen name="Members" component={MembersRoute} />
+              <AppStack.Screen name="Analytics" component={AnalyticsRoute} />
             </AppStack.Navigator>
           </SessionContext.Provider>
         )}

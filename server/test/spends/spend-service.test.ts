@@ -5,6 +5,7 @@ import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-de
 import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/in-memory-reimbursement-repository.js";
 import { InMemoryRefundRepository } from "../../src/closure/fakes/in-memory-refund-repository.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
+import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 import {
   InsufficientPoolBalanceError,
@@ -23,6 +24,8 @@ async function makeService() {
   const spendRepository = new InMemorySpendRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
   const refundRepository = new InMemoryRefundRepository();
+  const userRepository = new InMemoryUserRepository();
+  userRepository.seedVerifiedUser(ORGANIZER_ID);
   const paymentProvider = new FakePaymentProvider();
   const spendService = new SpendService({
     poolRepository,
@@ -30,6 +33,7 @@ async function makeService() {
     spendRepository,
     reimbursementRepository,
     refundRepository,
+    userRepository,
     paymentProvider,
   });
 
@@ -48,6 +52,7 @@ async function makeService() {
     spendRepository,
     reimbursementRepository,
     refundRepository,
+    userRepository,
     paymentProvider,
     pool,
   };
@@ -152,5 +157,14 @@ describe("SpendService.recordSpend", () => {
     await expect(
       spendService.recordSpend(pool.id, ORGANIZER_ID, "merchant@upi", 1000),
     ).rejects.toThrow(PoolClosedError);
+  });
+
+  it("waives the fee for a subscribed Organizer (ticket #13)", async () => {
+    const { spendService, userRepository, pool } = await makeService();
+    await userRepository.subscribe(ORGANIZER_ID);
+
+    const spend = await spendService.recordSpend(pool.id, ORGANIZER_ID, "merchant@upi", 50000);
+
+    expect(spend.feePaise).toBe(0);
   });
 });

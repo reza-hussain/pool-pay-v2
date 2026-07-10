@@ -21,6 +21,7 @@ import { ClosureService } from "./closure/closure-service.js";
 import { PrismaRefundRepository } from "./closure/prisma-refund-repository.js";
 import { VoteService } from "./votes/vote-service.js";
 import { PrismaRefundVoteRepository } from "./votes/prisma-refund-vote-repository.js";
+import { AnalyticsService } from "./analytics/analytics-service.js";
 import { FakePaymentProvider } from "./payments/fakes/fake-payment-provider.js";
 
 const userRepository = new PrismaUserRepository(prisma);
@@ -60,6 +61,7 @@ const spendService = new SpendService({
   spendRepository,
   reimbursementRepository,
   refundRepository,
+  userRepository,
   paymentProvider,
 });
 const reimbursementService = new ReimbursementService({
@@ -93,6 +95,7 @@ const voteService = new VoteService({
   refundVoteRepository,
   closureService,
 });
+const analyticsService = new AnalyticsService({ userRepository, poolRepository, spendRepository });
 
 const app = createApp({
   authService,
@@ -104,6 +107,7 @@ const app = createApp({
   ledgerService,
   closureService,
   voteService,
+  analyticsService,
   jwtSecret: env.JWT_SECRET,
 });
 

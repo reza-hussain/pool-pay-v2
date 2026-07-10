@@ -30,6 +30,7 @@ async function makeApp() {
     ledgerService,
     closureService,
     voteService,
+    analyticsService,
   } = makeTestServices({ userRepository });
   const app = createApp({
     authService,
@@ -41,6 +42,7 @@ async function makeApp() {
     ledgerService,
     closureService,
     voteService,
+    analyticsService,
     jwtSecret: JWT_SECRET,
   });
 
