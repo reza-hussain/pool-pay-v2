@@ -5,6 +5,7 @@ import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-de
 import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-repository.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
+import { InMemoryRefundRepository } from "../../src/closure/fakes/in-memory-refund-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 import {
   InsufficientPoolBalanceError,
@@ -25,6 +26,7 @@ async function makeService() {
   const depositRepository = new InMemoryDepositRepository();
   const spendRepository = new InMemorySpendRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
+  const refundRepository = new InMemoryRefundRepository();
   const paymentProvider = new FakePaymentProvider();
   const reimbursementService = new ReimbursementService({
     poolRepository,
@@ -32,6 +34,7 @@ async function makeService() {
     depositRepository,
     spendRepository,
     reimbursementRepository,
+    refundRepository,
     paymentProvider,
   });
 
@@ -50,6 +53,7 @@ async function makeService() {
     depositRepository,
     spendRepository,
     reimbursementRepository,
+    refundRepository,
     paymentProvider,
     pool,
   };

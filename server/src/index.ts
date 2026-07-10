@@ -17,6 +17,8 @@ import { PrismaSpendRepository } from "./spends/prisma-spend-repository.js";
 import { ReimbursementService } from "./reimbursements/reimbursement-service.js";
 import { PrismaReimbursementRepository } from "./reimbursements/prisma-reimbursement-repository.js";
 import { LedgerService } from "./ledger/ledger-service.js";
+import { ClosureService } from "./closure/closure-service.js";
+import { PrismaRefundRepository } from "./closure/prisma-refund-repository.js";
 import { FakePaymentProvider } from "./payments/fakes/fake-payment-provider.js";
 
 const authService = new AuthService({
@@ -30,6 +32,7 @@ const membershipRepository = new PrismaMembershipRepository(prisma);
 const depositRepository = new PrismaDepositRepository(prisma);
 const spendRepository = new PrismaSpendRepository(prisma);
 const reimbursementRepository = new PrismaReimbursementRepository(prisma);
+const refundRepository = new PrismaRefundRepository(prisma);
 // No real BaaS/UPI partner is wired up yet (see ADR 0002, ADR 0005, and
 // docs/spec-mvp.md's Testing Decisions) — every deposit/spend/refund runs
 // through this fake until a later ticket swaps in a real implementation
@@ -44,6 +47,7 @@ const depositService = new DepositService({
   depositRepository,
   spendRepository,
   reimbursementRepository,
+  refundRepository,
   paymentProvider,
 });
 const spendService = new SpendService({
@@ -51,6 +55,7 @@ const spendService = new SpendService({
   depositRepository,
   spendRepository,
   reimbursementRepository,
+  refundRepository,
   paymentProvider,
 });
 const reimbursementService = new ReimbursementService({
@@ -59,6 +64,7 @@ const reimbursementService = new ReimbursementService({
   depositRepository,
   spendRepository,
   reimbursementRepository,
+  refundRepository,
   paymentProvider,
 });
 const ledgerService = new LedgerService({
@@ -67,6 +73,15 @@ const ledgerService = new LedgerService({
   depositRepository,
   spendRepository,
   reimbursementRepository,
+  refundRepository,
+});
+const closureService = new ClosureService({
+  poolRepository,
+  depositRepository,
+  spendRepository,
+  reimbursementRepository,
+  refundRepository,
+  paymentProvider,
 });
 
 const app = createApp({
@@ -77,6 +92,7 @@ const app = createApp({
   spendService,
   reimbursementService,
   ledgerService,
+  closureService,
   jwtSecret: env.JWT_SECRET,
 });
 

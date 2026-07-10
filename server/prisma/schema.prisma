@@ -16,6 +16,7 @@ model User {
   deposits       Deposit[]
   spends         Spend[]
   reimbursements Reimbursement[]
+  refunds        Refund[]
 }
 
 model Pool {
@@ -37,6 +38,7 @@ model Pool {
   deposits       Deposit[]
   spends         Spend[]
   reimbursements Reimbursement[]
+  refunds        Refund[]
 
   @@index([organizerId])
 }
@@ -84,6 +86,23 @@ model Reimbursement {
   member   User   @relation(fields: [memberId], references: [id])
   vpa      String
   // In paise. No fee — Reimbursements are never fee-bearing (ADR 0010).
+  amountPaise Int
+  createdAt   DateTime @default(now())
+
+  @@index([poolId])
+}
+
+model Refund {
+  id     String @id @default(cuid())
+  poolId String
+  pool   Pool   @relation(fields: [poolId], references: [id])
+  // The Member being refunded, paid pro-rata against their total contributions
+  // (see closePool) — not the Organizer, who initiates Closure but isn't
+  // treated specially in the payout itself.
+  memberId String
+  member   User   @relation(fields: [memberId], references: [id])
+  vpa      String
+  // In paise. No fee — Refunds are never fee-bearing (ADR 0010).
   amountPaise Int
   createdAt   DateTime @default(now())
 

@@ -9,18 +9,22 @@ import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-
 import { ReimbursementService } from "../../src/reimbursements/reimbursement-service.js";
 import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/in-memory-reimbursement-repository.js";
 import { LedgerService } from "../../src/ledger/ledger-service.js";
+import { ClosureService } from "../../src/closure/closure-service.js";
+import { InMemoryRefundRepository } from "../../src/closure/fakes/in-memory-refund-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 
 // Shared across test files that just need working Pool/Membership/Deposit/Spend/
-// Reimbursement/Ledger services and don't care about their internals — avoids
-// re-wiring the same fakes everywhere. All services share the same repository
-// instances, since e.g. a Pool created via poolService must be findable by others.
+// Reimbursement/Ledger/Closure services and don't care about their internals —
+// avoids re-wiring the same fakes everywhere. All services share the same
+// repository instances, since e.g. a Pool created via poolService must be
+// findable by others.
 export function makeTestServices() {
   const poolRepository = new InMemoryPoolRepository();
   const membershipRepository = new InMemoryMembershipRepository();
   const depositRepository = new InMemoryDepositRepository();
   const spendRepository = new InMemorySpendRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
+  const refundRepository = new InMemoryRefundRepository();
   const paymentProvider = new FakePaymentProvider();
 
   const poolService = new PoolService({ poolRepository, membershipRepository });
@@ -31,6 +35,7 @@ export function makeTestServices() {
     depositRepository,
     spendRepository,
     reimbursementRepository,
+    refundRepository,
     paymentProvider,
   });
   const spendService = new SpendService({
@@ -38,6 +43,7 @@ export function makeTestServices() {
     depositRepository,
     spendRepository,
     reimbursementRepository,
+    refundRepository,
     paymentProvider,
   });
   const reimbursementService = new ReimbursementService({
@@ -46,6 +52,7 @@ export function makeTestServices() {
     depositRepository,
     spendRepository,
     reimbursementRepository,
+    refundRepository,
     paymentProvider,
   });
   const ledgerService = new LedgerService({
@@ -54,6 +61,15 @@ export function makeTestServices() {
     depositRepository,
     spendRepository,
     reimbursementRepository,
+    refundRepository,
+  });
+  const closureService = new ClosureService({
+    poolRepository,
+    depositRepository,
+    spendRepository,
+    reimbursementRepository,
+    refundRepository,
+    paymentProvider,
   });
 
   return {
@@ -63,11 +79,13 @@ export function makeTestServices() {
     spendService,
     reimbursementService,
     ledgerService,
+    closureService,
     poolRepository,
     membershipRepository,
     depositRepository,
     spendRepository,
     reimbursementRepository,
+    refundRepository,
     paymentProvider,
   };
 }

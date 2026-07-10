@@ -3,6 +3,7 @@ import { DepositService } from "../../src/deposits/deposit-service.js";
 import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-deposit-repository.js";
 import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-repository.js";
 import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/in-memory-reimbursement-repository.js";
+import { InMemoryRefundRepository } from "../../src/closure/fakes/in-memory-refund-repository.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
@@ -18,6 +19,7 @@ async function makeService() {
   const depositRepository = new InMemoryDepositRepository();
   const spendRepository = new InMemorySpendRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
+  const refundRepository = new InMemoryRefundRepository();
   const paymentProvider = new FakePaymentProvider();
   const depositService = new DepositService({
     poolRepository,
@@ -25,6 +27,7 @@ async function makeService() {
     depositRepository,
     spendRepository,
     reimbursementRepository,
+    refundRepository,
     paymentProvider,
   });
 
@@ -50,6 +53,7 @@ async function makeService() {
     depositRepository,
     spendRepository,
     reimbursementRepository,
+    refundRepository,
     paymentProvider,
     equalSplitPool,
     openPool,
@@ -178,6 +182,15 @@ describe("DepositService.getPoolBalance", () => {
     await reimbursementRepository.create(openPool.id, MEMBER_ID, "member@upi", 20000);
 
     expect(await depositService.getPoolBalance(openPool.id)).toBe(100000 - 20000);
+  });
+
+  it("subtracts Refunds from total deposited", async () => {
+    const { depositService, refundRepository, openPool } = await makeService();
+
+    await depositService.recordDeposit(openPool.id, MEMBER_ID, 100000);
+    await refundRepository.create(openPool.id, MEMBER_ID, "member@fakebank", 40000);
+
+    expect(await depositService.getPoolBalance(openPool.id)).toBe(100000 - 40000);
   });
 });
 

@@ -1,9 +1,10 @@
 import type { DepositRepository } from "../deposits/types.js";
-import { PoolNotFoundError } from "../memberships/types.js";
+import { PoolClosedError, PoolNotFoundError } from "../memberships/types.js";
 import { getPoolBalance } from "../pools/pool-balance.js";
 import { NotPoolOrganizerError, type PoolRepository } from "../pools/types.js";
 import type { PaymentProvider } from "../payments/types.js";
 import type { ReimbursementRepository } from "../reimbursements/types.js";
+import type { RefundRepository } from "../closure/types.js";
 import {
   InsufficientPoolBalanceError,
   InvalidMerchantReferenceError,
@@ -21,6 +22,7 @@ export interface SpendServiceOptions {
   depositRepository: DepositRepository;
   spendRepository: SpendRepository;
   reimbursementRepository: ReimbursementRepository;
+  refundRepository: RefundRepository;
   paymentProvider: PaymentProvider;
 }
 
@@ -29,6 +31,7 @@ export class SpendService {
   private readonly depositRepository: DepositRepository;
   private readonly spendRepository: SpendRepository;
   private readonly reimbursementRepository: ReimbursementRepository;
+  private readonly refundRepository: RefundRepository;
   private readonly paymentProvider: PaymentProvider;
 
   constructor(options: SpendServiceOptions) {
@@ -36,6 +39,7 @@ export class SpendService {
     this.depositRepository = options.depositRepository;
     this.spendRepository = options.spendRepository;
     this.reimbursementRepository = options.reimbursementRepository;
+    this.refundRepository = options.refundRepository;
     this.paymentProvider = options.paymentProvider;
   }
 
@@ -59,6 +63,9 @@ export class SpendService {
     if (pool.organizerId !== userId) {
       throw new NotPoolOrganizerError();
     }
+    if (pool.state === "CLOSED") {
+      throw new PoolClosedError();
+    }
 
     const feePaise = Math.round(amountPaise * FEE_RATE);
     const balance = await this.getPoolBalance(poolId);
@@ -76,6 +83,7 @@ export class SpendService {
         depositRepository: this.depositRepository,
         spendRepository: this.spendRepository,
         reimbursementRepository: this.reimbursementRepository,
+        refundRepository: this.refundRepository,
       },
       poolId,
     );

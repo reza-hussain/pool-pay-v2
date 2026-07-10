@@ -58,84 +58,100 @@ function bearerFor(userId: string) {
   return `Bearer ${jwt.sign({ sub: userId }, JWT_SECRET)}`;
 }
 
-describe("POST /pools/:poolId/reimbursements", () => {
-  it("records a Reimbursement to a Member and reports the updated balance, no fee", async () => {
+describe("GET /pools/:poolId/close/preview", () => {
+  it("returns the refund breakdown without closing the Pool", async () => {
     const { app, pool } = await makeApp();
 
     const res = await request(app)
-      .post(`/pools/${pool.id}/reimbursements`)
-      .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ memberId: MEMBER_ID, vpa: "member@upi", amountPaise: 30000 });
+      .get(`/pools/${pool.id}/close/preview`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
 
-    expect(res.status).toBe(201);
-    expect(res.body.reimbursement).toMatchObject({
-      poolId: pool.id,
-      memberId: MEMBER_ID,
-      vpa: "member@upi",
-      amountPaise: 30000,
-    });
-    expect(res.body.poolBalancePaise).toBe(100000 - 30000);
+    expect(res.status).toBe(200);
+    expect(res.body.refundTotalPaise).toBe(100000);
+    expect(res.body.refunds).toEqual([
+      { memberId: MEMBER_ID, contributedPaise: 100000, amountPaise: 100000 },
+    ]);
   });
 
   it("returns 403 for a non-Organizer", async () => {
     const { app, pool } = await makeApp();
     const res = await request(app)
-      .post(`/pools/${pool.id}/reimbursements`)
-      .set("Authorization", bearerFor(MEMBER_ID))
-      .send({ memberId: MEMBER_ID, vpa: "member@upi", amountPaise: 1000 });
+      .get(`/pools/${pool.id}/close/preview`)
+      .set("Authorization", bearerFor(MEMBER_ID));
     expect(res.status).toBe(403);
   });
 
-  it("returns 400 for a recipient who isn't a Member", async () => {
-    const { app, pool } = await makeApp();
-    const res = await request(app)
-      .post(`/pools/${pool.id}/reimbursements`)
-      .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ memberId: "user_stranger", vpa: "stranger@upi", amountPaise: 1000 });
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 400 when the Reimbursement would exceed the Pool's balance", async () => {
-    const { app, pool } = await makeApp();
-    const res = await request(app)
-      .post(`/pools/${pool.id}/reimbursements`)
-      .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ memberId: MEMBER_ID, vpa: "member@upi", amountPaise: 100001 });
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 400 for a non-positive amount", async () => {
-    const { app, pool } = await makeApp();
-    const res = await request(app)
-      .post(`/pools/${pool.id}/reimbursements`)
-      .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ memberId: MEMBER_ID, vpa: "member@upi", amountPaise: 0 });
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 400 for a missing UPI ID", async () => {
-    const { app, pool } = await makeApp();
-    const res = await request(app)
-      .post(`/pools/${pool.id}/reimbursements`)
-      .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ memberId: MEMBER_ID, amountPaise: 1000 });
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 404 for an unknown pool", async () => {
+  it("returns 404 for an unknown Pool", async () => {
     const { app } = await makeApp();
     const res = await request(app)
-      .post("/pools/pool_missing/reimbursements")
-      .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ memberId: MEMBER_ID, vpa: "member@upi", amountPaise: 1000 });
+      .get("/pools/pool_missing/close/preview")
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /pools/:poolId/close", () => {
+  it("closes the Pool and refunds each Member pro-rata", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/close`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.pool.state).toBe("CLOSED");
+    expect(res.body.refundTotalPaise).toBe(100000);
+    expect(res.body.refunds).toHaveLength(1);
+    expect(res.body.refunds[0]).toMatchObject({ memberId: MEMBER_ID, amountPaise: 100000 });
+  });
+
+  it("returns 400 when closing an already-Closed Pool", async () => {
+    const { app, pool } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/close`).set("Authorization", bearerFor(ORGANIZER_ID));
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/close`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 403 for a non-Organizer", async () => {
+    const { app, pool } = await makeApp();
+    const res = await request(app)
+      .post(`/pools/${pool.id}/close`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 404 for an unknown Pool", async () => {
+    const { app } = await makeApp();
+    const res = await request(app)
+      .post("/pools/pool_missing/close")
+      .set("Authorization", bearerFor(ORGANIZER_ID));
     expect(res.status).toBe(404);
   });
 
   it("returns 401 without a bearer token", async () => {
     const { app, pool } = await makeApp();
-    const res = await request(app)
-      .post(`/pools/${pool.id}/reimbursements`)
-      .send({ memberId: MEMBER_ID, vpa: "member@upi", amountPaise: 1000 });
+    const res = await request(app).post(`/pools/${pool.id}/close`);
     expect(res.status).toBe(401);
+  });
+
+  it("a Closed Pool no longer accepts deposits or Spends", async () => {
+    const { app, pool } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/close`).set("Authorization", bearerFor(ORGANIZER_ID));
+
+    const depositRes = await request(app)
+      .post(`/pools/${pool.id}/deposits`)
+      .set("Authorization", bearerFor(MEMBER_ID))
+      .send({ amountPaise: 1000 });
+    expect(depositRes.status).toBe(400);
+
+    const spendRes = await request(app)
+      .post(`/pools/${pool.id}/spends`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ merchantRef: "merchant@upi", amountPaise: 1000 });
+    expect(spendRes.status).toBe(400);
   });
 });

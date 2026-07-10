@@ -6,6 +6,7 @@ import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-mem
 import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-deposit-repository.js";
 import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-repository.js";
 import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/in-memory-reimbursement-repository.js";
+import { InMemoryRefundRepository } from "../../src/closure/fakes/in-memory-refund-repository.js";
 import { PoolNotFoundError } from "../../src/memberships/types.js";
 
 const ORGANIZER_ID = "user_organizer";
@@ -18,12 +19,14 @@ async function makeService() {
   const depositRepository = new InMemoryDepositRepository();
   const spendRepository = new InMemorySpendRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
+  const refundRepository = new InMemoryRefundRepository();
   const ledgerService = new LedgerService({
     poolRepository,
     membershipRepository,
     depositRepository,
     spendRepository,
     reimbursementRepository,
+    refundRepository,
   });
 
   const pool = await poolRepository.create(ORGANIZER_ID, {
@@ -41,23 +44,44 @@ async function makeService() {
     depositRepository,
     spendRepository,
     reimbursementRepository,
+    refundRepository,
     pool,
   };
 }
 
 describe("LedgerService.getLedger", () => {
-  it("merges Deposits, Spends, and Reimbursements into one chronological list", async () => {
-    const { ledgerService, depositRepository, spendRepository, reimbursementRepository, pool } =
-      await makeService();
+  it("merges Deposits, Spends, Reimbursements, and Refunds into one chronological list", async () => {
+    const {
+      ledgerService,
+      depositRepository,
+      spendRepository,
+      reimbursementRepository,
+      refundRepository,
+      pool,
+    } = await makeService();
 
     await depositRepository.create(pool.id, MEMBER_ID, 100000);
     await spendRepository.create(pool.id, ORGANIZER_ID, "merchant@upi", 30000, 300);
     await reimbursementRepository.create(pool.id, MEMBER_ID, "member@upi", 20000);
+    await refundRepository.create(pool.id, MEMBER_ID, "member@fakebank", 10000);
 
     const entries = await ledgerService.getLedger(pool.id, MEMBER_ID);
 
-    expect(entries).toHaveLength(3);
-    expect(entries.map((e) => e.type).sort()).toEqual(["DEPOSIT", "REIMBURSEMENT", "SPEND"]);
+    expect(entries).toHaveLength(4);
+    expect(entries.map((e) => e.type).sort()).toEqual([
+      "DEPOSIT",
+      "REFUND",
+      "REIMBURSEMENT",
+      "SPEND",
+    ]);
+  });
+
+  it("shows the refunded Member as the counterparty for a Refund", async () => {
+    const { ledgerService, refundRepository, pool } = await makeService();
+    await refundRepository.create(pool.id, MEMBER_ID, "member@fakebank", 10000);
+
+    const [entry] = await ledgerService.getLedger(pool.id, MEMBER_ID);
+    expect(entry).toMatchObject({ type: "REFUND", amountPaise: 10000, counterparty: MEMBER_ID });
   });
 
   it("shows the depositing Member as the counterparty for a Deposit", async () => {

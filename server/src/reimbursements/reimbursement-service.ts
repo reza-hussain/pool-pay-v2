@@ -5,6 +5,7 @@ import { getPoolBalance } from "../pools/pool-balance.js";
 import { NotPoolOrganizerError, type PoolRepository } from "../pools/types.js";
 import type { PaymentProvider } from "../payments/types.js";
 import type { SpendRepository } from "../spends/types.js";
+import type { RefundRepository } from "../closure/types.js";
 import {
   InsufficientPoolBalanceError,
   InvalidReimbursementAmountError,
@@ -20,6 +21,7 @@ export interface ReimbursementServiceOptions {
   depositRepository: DepositRepository;
   spendRepository: SpendRepository;
   reimbursementRepository: ReimbursementRepository;
+  refundRepository: RefundRepository;
   paymentProvider: PaymentProvider;
 }
 
@@ -29,6 +31,7 @@ export class ReimbursementService {
   private readonly depositRepository: DepositRepository;
   private readonly spendRepository: SpendRepository;
   private readonly reimbursementRepository: ReimbursementRepository;
+  private readonly refundRepository: RefundRepository;
   private readonly paymentProvider: PaymentProvider;
 
   constructor(options: ReimbursementServiceOptions) {
@@ -37,6 +40,7 @@ export class ReimbursementService {
     this.depositRepository = options.depositRepository;
     this.spendRepository = options.spendRepository;
     this.reimbursementRepository = options.reimbursementRepository;
+    this.refundRepository = options.refundRepository;
     this.paymentProvider = options.paymentProvider;
   }
 
@@ -82,6 +86,7 @@ export class ReimbursementService {
         depositRepository: this.depositRepository,
         spendRepository: this.spendRepository,
         reimbursementRepository: this.reimbursementRepository,
+        refundRepository: this.refundRepository,
       },
       poolId,
     );

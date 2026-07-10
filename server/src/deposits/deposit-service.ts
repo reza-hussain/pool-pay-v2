@@ -5,6 +5,7 @@ import type { PoolRepository } from "../pools/types.js";
 import type { DepositIntent, PaymentProvider } from "../payments/types.js";
 import type { SpendRepository } from "../spends/types.js";
 import type { ReimbursementRepository } from "../reimbursements/types.js";
+import type { RefundRepository } from "../closure/types.js";
 import {
   InvalidDepositAmountError,
   NotAMemberError,
@@ -20,9 +21,10 @@ export interface DepositServiceOptions {
   depositRepository: DepositRepository;
   // Needed so getPoolBalance reflects money spent/transferred out, not just
   // deposited — "Pool balance" is one concept even though Deposits, Spends,
-  // and Reimbursements are recorded by separate services/repositories.
+  // Reimbursements, and Refunds are recorded by separate services/repositories.
   spendRepository: SpendRepository;
   reimbursementRepository: ReimbursementRepository;
+  refundRepository: RefundRepository;
   paymentProvider: PaymentProvider;
 }
 
@@ -32,6 +34,7 @@ export class DepositService {
   private readonly depositRepository: DepositRepository;
   private readonly spendRepository: SpendRepository;
   private readonly reimbursementRepository: ReimbursementRepository;
+  private readonly refundRepository: RefundRepository;
   private readonly paymentProvider: PaymentProvider;
 
   constructor(options: DepositServiceOptions) {
@@ -40,6 +43,7 @@ export class DepositService {
     this.depositRepository = options.depositRepository;
     this.spendRepository = options.spendRepository;
     this.reimbursementRepository = options.reimbursementRepository;
+    this.refundRepository = options.refundRepository;
     this.paymentProvider = options.paymentProvider;
   }
 
@@ -79,6 +83,7 @@ export class DepositService {
         depositRepository: this.depositRepository,
         spendRepository: this.spendRepository,
         reimbursementRepository: this.reimbursementRepository,
+        refundRepository: this.refundRepository,
       },
       poolId,
     );

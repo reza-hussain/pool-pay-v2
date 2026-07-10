@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { SpendService } from "./spend-service.js";
 import { requireAuth, type AuthenticatedRequest } from "../auth/require-auth.js";
-import { PoolNotFoundError } from "../memberships/types.js";
+import { PoolClosedError, PoolNotFoundError } from "../memberships/types.js";
 import { NotPoolOrganizerError } from "../pools/types.js";
 import {
   InsufficientPoolBalanceError,
@@ -47,7 +47,8 @@ export function createSpendsRouter(spendService: SpendService, jwtSecret: string
         if (
           error instanceof InvalidSpendAmountError ||
           error instanceof InvalidMerchantReferenceError ||
-          error instanceof InsufficientPoolBalanceError
+          error instanceof InsufficientPoolBalanceError ||
+          error instanceof PoolClosedError
         ) {
           res.status(400).json({ error: error.message });
           return;

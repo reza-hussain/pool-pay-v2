@@ -3,6 +3,7 @@ import { SpendService } from "../../src/spends/spend-service.js";
 import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-repository.js";
 import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-deposit-repository.js";
 import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/in-memory-reimbursement-repository.js";
+import { InMemoryRefundRepository } from "../../src/closure/fakes/in-memory-refund-repository.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 import {
@@ -10,7 +11,7 @@ import {
   InvalidMerchantReferenceError,
   InvalidSpendAmountError,
 } from "../../src/spends/types.js";
-import { PoolNotFoundError } from "../../src/memberships/types.js";
+import { PoolClosedError, PoolNotFoundError } from "../../src/memberships/types.js";
 import { NotPoolOrganizerError } from "../../src/pools/types.js";
 
 const ORGANIZER_ID = "user_organizer";
@@ -21,12 +22,14 @@ async function makeService() {
   const depositRepository = new InMemoryDepositRepository();
   const spendRepository = new InMemorySpendRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
+  const refundRepository = new InMemoryRefundRepository();
   const paymentProvider = new FakePaymentProvider();
   const spendService = new SpendService({
     poolRepository,
     depositRepository,
     spendRepository,
     reimbursementRepository,
+    refundRepository,
     paymentProvider,
   });
 
@@ -44,6 +47,7 @@ async function makeService() {
     depositRepository,
     spendRepository,
     reimbursementRepository,
+    refundRepository,
     paymentProvider,
     pool,
   };
@@ -139,5 +143,14 @@ describe("SpendService.recordSpend", () => {
     await expect(
       spendService.recordSpend(pool.id, ORGANIZER_ID, "merchant@upi", 30000),
     ).rejects.toThrow(InsufficientPoolBalanceError);
+  });
+
+  it("rejects a Spend from a Closed Pool", async () => {
+    const { spendService, poolRepository, pool } = await makeService();
+    await poolRepository.updateState(pool.id, "CLOSED");
+
+    await expect(
+      spendService.recordSpend(pool.id, ORGANIZER_ID, "merchant@upi", 1000),
+    ).rejects.toThrow(PoolClosedError);
   });
 });

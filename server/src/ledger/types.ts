@@ -1,4 +1,4 @@
-export type LedgerEntryType = "DEPOSIT" | "SPEND" | "REIMBURSEMENT";
+export type LedgerEntryType = "DEPOSIT" | "SPEND" | "REIMBURSEMENT" | "REFUND";
 
 export interface LedgerEntry {
   id: string;
@@ -10,7 +10,7 @@ export interface LedgerEntry {
   // (ADR 0008), rather than seeing one collapsed number.
   feePaise?: number;
   // DEPOSIT: depositing Member's userId. SPEND: merchant reference.
-  // REIMBURSEMENT: reimbursed Member's userId.
+  // REIMBURSEMENT/REFUND: the Member's userId.
   counterparty: string;
   createdAt: Date;
 }

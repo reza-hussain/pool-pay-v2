@@ -3,20 +3,19 @@ import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "rea
 import type { Pool } from "../api/poolsClient";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
-// Design kit's Organizer sheet (docs/design/poolpay-ui-kit.html, section 06) also
-// has a "Close Pool & refund" row — that lands with ticket #9, which doesn't
-// exist yet, so this sheet doesn't offer it.
 export function OrganizerControlsSheet({
   pool,
   onLock,
   onTransferOut,
   onReimburse,
+  onClosePool,
   onClose,
 }: {
   pool: Pool;
   onLock: () => Promise<void>;
   onTransferOut: () => void;
   onReimburse: () => void;
+  onClosePool: () => void;
   onClose: () => void;
 }) {
   const [locking, setLocking] = useState(false);
@@ -42,29 +41,42 @@ export function OrganizerControlsSheet({
         <Text style={styles.title}>{pool.name}</Text>
         <Text style={styles.subtitle}>Organizer controls</Text>
 
-        {pool.state !== "LOCKED" ? (
-          <Pressable style={styles.row} onPress={handleLock} disabled={locking}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Lock Pool</Text>
-              <Text style={styles.rowDescription}>Stop new deposits — balance stays as is</Text>
-            </View>
-            {locking ? <ActivityIndicator color={colors.ink600} /> : null}
-          </Pressable>
-        ) : null}
+        {pool.state === "CLOSED" ? (
+          <Text style={styles.closedNotice}>This Pool is closed — nothing left to do.</Text>
+        ) : (
+          <>
+            {pool.state !== "LOCKED" ? (
+              <Pressable style={styles.row} onPress={handleLock} disabled={locking}>
+                <View style={styles.rowText}>
+                  <Text style={styles.rowTitle}>Lock Pool</Text>
+                  <Text style={styles.rowDescription}>Stop new deposits — balance stays as is</Text>
+                </View>
+                {locking ? <ActivityIndicator color={colors.ink600} /> : null}
+              </Pressable>
+            ) : null}
 
-        <Pressable style={styles.row} onPress={onTransferOut}>
-          <View style={styles.rowText}>
-            <Text style={styles.rowTitle}>Transfer out</Text>
-            <Text style={styles.rowDescription}>Move funds out to pay for the trip</Text>
-          </View>
-        </Pressable>
+            <Pressable style={styles.row} onPress={onTransferOut}>
+              <View style={styles.rowText}>
+                <Text style={styles.rowTitle}>Transfer out</Text>
+                <Text style={styles.rowDescription}>Move funds out to pay for the trip</Text>
+              </View>
+            </Pressable>
 
-        <Pressable style={styles.row} onPress={onReimburse}>
-          <View style={styles.rowText}>
-            <Text style={styles.rowTitle}>Reimburse a Member</Text>
-            <Text style={styles.rowDescription}>Pay back a Member who spent out of pocket</Text>
-          </View>
-        </Pressable>
+            <Pressable style={styles.row} onPress={onReimburse}>
+              <View style={styles.rowText}>
+                <Text style={styles.rowTitle}>Reimburse a Member</Text>
+                <Text style={styles.rowDescription}>Pay back a Member who spent out of pocket</Text>
+              </View>
+            </Pressable>
+
+            <Pressable style={styles.row} onPress={onClosePool}>
+              <View style={styles.rowText}>
+                <Text style={[styles.rowTitle, styles.dangerText]}>Close Pool & refund</Text>
+                <Text style={styles.rowDescription}>Ends the Pool, refunds leftover pro-rata</Text>
+              </View>
+            </Pressable>
+          </>
+        )}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -123,6 +135,16 @@ const styles = StyleSheet.create({
   rowDescription: {
     ...type.caption,
     marginTop: 2,
+  },
+  dangerText: {
+    color: colors.danger600,
+  },
+  closedNotice: {
+    ...type.body,
+    color: colors.ink400,
+    paddingVertical: spacing.s4,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
   },
   error: {
     ...type.body,

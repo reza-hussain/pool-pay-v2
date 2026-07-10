@@ -4,6 +4,7 @@ import { PoolNotFoundError } from "../memberships/types.js";
 import type { PoolRepository } from "../pools/types.js";
 import type { SpendRepository } from "../spends/types.js";
 import type { ReimbursementRepository } from "../reimbursements/types.js";
+import type { RefundRepository } from "../closure/types.js";
 import { NotAPoolMemberError, type LedgerEntry } from "./types.js";
 
 export interface LedgerServiceOptions {
@@ -12,6 +13,7 @@ export interface LedgerServiceOptions {
   depositRepository: DepositRepository;
   spendRepository: SpendRepository;
   reimbursementRepository: ReimbursementRepository;
+  refundRepository: RefundRepository;
 }
 
 export class LedgerService {
@@ -20,6 +22,7 @@ export class LedgerService {
   private readonly depositRepository: DepositRepository;
   private readonly spendRepository: SpendRepository;
   private readonly reimbursementRepository: ReimbursementRepository;
+  private readonly refundRepository: RefundRepository;
 
   constructor(options: LedgerServiceOptions) {
     this.poolRepository = options.poolRepository;
@@ -27,6 +30,7 @@ export class LedgerService {
     this.depositRepository = options.depositRepository;
     this.spendRepository = options.spendRepository;
     this.reimbursementRepository = options.reimbursementRepository;
+    this.refundRepository = options.refundRepository;
   }
 
   async getLedger(poolId: string, userId: string): Promise<LedgerEntry[]> {
@@ -40,10 +44,11 @@ export class LedgerService {
       throw new NotAPoolMemberError();
     }
 
-    const [deposits, spends, reimbursements] = await Promise.all([
+    const [deposits, spends, reimbursements, refunds] = await Promise.all([
       this.depositRepository.listByPool(poolId),
       this.spendRepository.listByPool(poolId),
       this.reimbursementRepository.listByPool(poolId),
+      this.refundRepository.listByPool(poolId),
     ]);
 
     const entries: LedgerEntry[] = [
@@ -76,6 +81,16 @@ export class LedgerService {
           amountPaise: reimbursement.amountPaise,
           counterparty: reimbursement.memberId,
           createdAt: reimbursement.createdAt,
+        }),
+      ),
+      ...refunds.map(
+        (refund): LedgerEntry => ({
+          id: refund.id,
+          type: "REFUND",
+          poolId,
+          amountPaise: refund.amountPaise,
+          counterparty: refund.memberId,
+          createdAt: refund.createdAt,
         }),
       ),
     ];

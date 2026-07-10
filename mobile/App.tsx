@@ -22,7 +22,10 @@ import { DepositScreen } from './src/screens/DepositScreen';
 import { SpendScreen } from './src/screens/SpendScreen';
 import { ReimburseScreen } from './src/screens/ReimburseScreen';
 import { LedgerScreen } from './src/screens/LedgerScreen';
+import { CloseConfirmScreen } from './src/screens/CloseConfirmScreen';
+import { ClosedScreen } from './src/screens/ClosedScreen';
 import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
+import type { ClosureRefund } from './src/api/closureClient';
 import { loadSession, type StoredSession } from './src/api/session';
 import { lockPool, type Pool } from './src/api/poolsClient';
 import { joinByPoolId } from './src/api/membersClient';
@@ -43,6 +46,8 @@ type AppStackParamList = {
   Spend: { pool: Pool };
   Reimburse: { pool: Pool };
   Ledger: { pool: Pool };
+  CloseConfirm: { pool: Pool };
+  Closed: { pool: Pool; refunds: ClosureRefund[] };
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -112,6 +117,10 @@ function HomeRoute({ navigation }: NativeStackScreenProps<AppStackParamList, 'Ho
           }}
           onReimburse={() => {
             navigation.navigate('Reimburse', { pool: organizerControlsPool });
+            setOrganizerControlsPool(null);
+          }}
+          onClosePool={() => {
+            navigation.navigate('CloseConfirm', { pool: organizerControlsPool });
             setOrganizerControlsPool(null);
           }}
           onClose={() => setOrganizerControlsPool(null)}
@@ -189,6 +198,37 @@ function ReimburseRoute({ route, navigation }: NativeStackScreenProps<AppStackPa
 function LedgerRoute({ route, navigation }: NativeStackScreenProps<AppStackParamList, 'Ledger'>) {
   const { session } = useSessionContext();
   return <LedgerScreen session={session} pool={route.params.pool} onCancel={() => navigation.goBack()} />;
+}
+
+function CloseConfirmRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'CloseConfirm'>) {
+  const { session, setPools } = useSessionContext();
+  const pool = route.params.pool;
+  return (
+    <CloseConfirmScreen
+      session={session}
+      pool={pool}
+      onClosed={(result) => {
+        setPools((prev) => prev.map((p) => (p.id === result.pool.id ? result.pool : p)));
+        navigation.replace('Closed', { pool: result.pool, refunds: result.refunds });
+      }}
+      onCancel={() => navigation.goBack()}
+    />
+  );
+}
+
+function ClosedRoute({ route, navigation }: NativeStackScreenProps<AppStackParamList, 'Closed'>) {
+  const { session } = useSessionContext();
+  return (
+    <ClosedScreen
+      session={session}
+      pool={route.params.pool}
+      refunds={route.params.refunds}
+      onDone={() => navigation.navigate('Home')}
+    />
+  );
 }
 
 export default function App() {
@@ -272,6 +312,12 @@ export default function App() {
               <AppStack.Screen name="Spend" component={SpendRoute} />
               <AppStack.Screen name="Reimburse" component={ReimburseRoute} />
               <AppStack.Screen name="Ledger" component={LedgerRoute} />
+              <AppStack.Screen name="CloseConfirm" component={CloseConfirmRoute} />
+              <AppStack.Screen
+                name="Closed"
+                component={ClosedRoute}
+                options={{ gestureEnabled: false }}
+              />
             </AppStack.Navigator>
           </SessionContext.Provider>
         )}
