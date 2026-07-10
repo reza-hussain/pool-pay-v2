@@ -24,6 +24,7 @@ import { ReimburseScreen } from './src/screens/ReimburseScreen';
 import { LedgerScreen } from './src/screens/LedgerScreen';
 import { CloseConfirmScreen } from './src/screens/CloseConfirmScreen';
 import { ClosedScreen } from './src/screens/ClosedScreen';
+import { VoteScreen } from './src/screens/VoteScreen';
 import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
 import type { ClosureRefund } from './src/api/closureClient';
 import { loadSession, type StoredSession } from './src/api/session';
@@ -48,6 +49,7 @@ type AppStackParamList = {
   Ledger: { pool: Pool };
   CloseConfirm: { pool: Pool };
   Closed: { pool: Pool; refunds: ClosureRefund[] };
+  Vote: { pool: Pool };
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -102,6 +104,7 @@ function HomeRoute({ navigation }: NativeStackScreenProps<AppStackParamList, 'Ho
         onSelectPool={(pool) => navigation.navigate('Deposit', { pool })}
         onOpenOrganizerControls={(pool) => setOrganizerControlsPool(pool)}
         onViewLedger={(pool) => navigation.navigate('Ledger', { pool })}
+        onVoteToRefund={(pool) => navigation.navigate('Vote', { pool })}
       />
       {organizerControlsPool ? (
         <OrganizerControlsSheet
@@ -231,6 +234,22 @@ function ClosedRoute({ route, navigation }: NativeStackScreenProps<AppStackParam
   );
 }
 
+function VoteRoute({ route, navigation }: NativeStackScreenProps<AppStackParamList, 'Vote'>) {
+  const { session, setPools } = useSessionContext();
+  const pool = route.params.pool;
+  return (
+    <VoteScreen
+      session={session}
+      pool={pool}
+      onCancel={() => navigation.goBack()}
+      onPoolClosed={(result) => {
+        setPools((prev) => prev.map((p) => (p.id === result.pool.id ? result.pool : p)));
+        navigation.replace('Closed', { pool: result.pool, refunds: result.refunds });
+      }}
+    />
+  );
+}
+
 export default function App() {
   const [fontsLoaded] = useFonts({
     Onest_400Regular,
@@ -318,6 +337,7 @@ export default function App() {
                 component={ClosedRoute}
                 options={{ gestureEnabled: false }}
               />
+              <AppStack.Screen name="Vote" component={VoteRoute} />
             </AppStack.Navigator>
           </SessionContext.Provider>
         )}

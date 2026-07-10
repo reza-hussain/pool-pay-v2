@@ -11,13 +11,15 @@ import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/
 import { LedgerService } from "../../src/ledger/ledger-service.js";
 import { ClosureService } from "../../src/closure/closure-service.js";
 import { InMemoryRefundRepository } from "../../src/closure/fakes/in-memory-refund-repository.js";
+import { VoteService } from "../../src/votes/vote-service.js";
+import { InMemoryRefundVoteRepository } from "../../src/votes/fakes/in-memory-refund-vote-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 
 // Shared across test files that just need working Pool/Membership/Deposit/Spend/
-// Reimbursement/Ledger/Closure services and don't care about their internals —
-// avoids re-wiring the same fakes everywhere. All services share the same
-// repository instances, since e.g. a Pool created via poolService must be
-// findable by others.
+// Reimbursement/Ledger/Closure/Vote services and don't care about their
+// internals — avoids re-wiring the same fakes everywhere. All services share
+// the same repository instances, since e.g. a Pool created via poolService
+// must be findable by others.
 export function makeTestServices() {
   const poolRepository = new InMemoryPoolRepository();
   const membershipRepository = new InMemoryMembershipRepository();
@@ -25,6 +27,7 @@ export function makeTestServices() {
   const spendRepository = new InMemorySpendRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
   const refundRepository = new InMemoryRefundRepository();
+  const refundVoteRepository = new InMemoryRefundVoteRepository();
   const paymentProvider = new FakePaymentProvider();
 
   const poolService = new PoolService({ poolRepository, membershipRepository });
@@ -71,6 +74,12 @@ export function makeTestServices() {
     refundRepository,
     paymentProvider,
   });
+  const voteService = new VoteService({
+    poolRepository,
+    membershipRepository,
+    refundVoteRepository,
+    closureService,
+  });
 
   return {
     poolService,
@@ -80,12 +89,14 @@ export function makeTestServices() {
     reimbursementService,
     ledgerService,
     closureService,
+    voteService,
     poolRepository,
     membershipRepository,
     depositRepository,
     spendRepository,
     reimbursementRepository,
     refundRepository,
+    refundVoteRepository,
     paymentProvider,
   };
 }

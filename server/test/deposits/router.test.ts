@@ -26,6 +26,7 @@ async function makeApp() {
     reimbursementService,
     ledgerService,
     closureService,
+    voteService,
   } = makeTestServices();
   const app = createApp({
     authService,
@@ -36,6 +37,7 @@ async function makeApp() {
     reimbursementService,
     ledgerService,
     closureService,
+    voteService,
     jwtSecret: JWT_SECRET,
   });
 

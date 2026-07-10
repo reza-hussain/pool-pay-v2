@@ -17,6 +17,7 @@ model User {
   spends         Spend[]
   reimbursements Reimbursement[]
   refunds        Refund[]
+  refundVotes    RefundVote[]
 }
 
 model Pool {
@@ -39,6 +40,7 @@ model Pool {
   spends         Spend[]
   reimbursements Reimbursement[]
   refunds        Refund[]
+  refundVotes    RefundVote[]
 
   @@index([organizerId])
 }
@@ -106,6 +108,20 @@ model Refund {
   amountPaise Int
   createdAt   DateTime @default(now())
 
+  @@index([poolId])
+}
+
+model RefundVote {
+  id     String @id @default(cuid())
+  poolId String
+  pool   Pool   @relation(fields: [poolId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  // One vote per Member per Pool (ADR 0009) — casting again is a no-op, not
+  // an additional vote.
+  @@unique([poolId, userId])
   @@index([poolId])
 }
 

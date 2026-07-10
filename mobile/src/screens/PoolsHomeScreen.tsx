@@ -17,6 +17,7 @@ export function PoolsHomeScreen({
   onSelectPool,
   onOpenOrganizerControls,
   onViewLedger,
+  onVoteToRefund,
 }: {
   session: StoredSession;
   isNewUser: boolean;
@@ -26,6 +27,7 @@ export function PoolsHomeScreen({
   onSelectPool: (pool: Pool) => void;
   onOpenOrganizerControls: (pool: Pool) => void;
   onViewLedger: (pool: Pool) => void;
+  onVoteToRefund: (pool: Pool) => void;
 }) {
   return (
     <Screen backgroundColor={colors.cream}>
@@ -59,6 +61,7 @@ export function PoolsHomeScreen({
                 onPress={() => onSelectPool(item)}
                 onOpenOrganizerControls={() => onOpenOrganizerControls(item)}
                 onViewLedger={() => onViewLedger(item)}
+                onVoteToRefund={() => onVoteToRefund(item)}
               />
             )}
           />
@@ -81,12 +84,14 @@ function PoolCard({
   onPress,
   onOpenOrganizerControls,
   onViewLedger,
+  onVoteToRefund,
 }: {
   pool: Pool;
   isOrganizer: boolean;
   onPress: () => void;
   onOpenOrganizerControls: () => void;
   onViewLedger: () => void;
+  onVoteToRefund: () => void;
 }) {
   return (
     <Pressable style={styles.card} onPress={onPress}>
@@ -117,15 +122,28 @@ function PoolCard({
             ? `Equal Split · ${paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)} / person`
             : "Open Pool"}
         </Text>
-        <Pressable
-          hitSlop={8}
-          onPress={(event) => {
-            event.stopPropagation();
-            onViewLedger();
-          }}
-        >
-          <Text style={styles.activityLink}>Activity</Text>
-        </Pressable>
+        <View style={styles.cardBottomRowRight}>
+          {!isOrganizer && pool.state !== "CLOSED" ? (
+            <Pressable
+              hitSlop={8}
+              onPress={(event) => {
+                event.stopPropagation();
+                onVoteToRefund();
+              }}
+            >
+              <Text style={styles.voteLink}>Vote to refund</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            hitSlop={8}
+            onPress={(event) => {
+              event.stopPropagation();
+              onViewLedger();
+            }}
+          >
+            <Text style={styles.activityLink}>Activity</Text>
+          </Pressable>
+        </View>
       </View>
     </Pressable>
   );
@@ -194,9 +212,18 @@ const styles = StyleSheet.create({
   cardType: {
     ...type.caption,
   },
+  cardBottomRowRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.s3,
+  },
   activityLink: {
     ...type.label,
     color: colors.ink600,
+  },
+  voteLink: {
+    ...type.label,
+    color: colors.danger600,
   },
   lockedPill: {
     backgroundColor: colors.ink100,

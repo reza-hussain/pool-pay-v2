@@ -19,6 +19,8 @@ import { PrismaReimbursementRepository } from "./reimbursements/prisma-reimburse
 import { LedgerService } from "./ledger/ledger-service.js";
 import { ClosureService } from "./closure/closure-service.js";
 import { PrismaRefundRepository } from "./closure/prisma-refund-repository.js";
+import { VoteService } from "./votes/vote-service.js";
+import { PrismaRefundVoteRepository } from "./votes/prisma-refund-vote-repository.js";
 import { FakePaymentProvider } from "./payments/fakes/fake-payment-provider.js";
 
 const authService = new AuthService({
@@ -33,6 +35,7 @@ const depositRepository = new PrismaDepositRepository(prisma);
 const spendRepository = new PrismaSpendRepository(prisma);
 const reimbursementRepository = new PrismaReimbursementRepository(prisma);
 const refundRepository = new PrismaRefundRepository(prisma);
+const refundVoteRepository = new PrismaRefundVoteRepository(prisma);
 // No real BaaS/UPI partner is wired up yet (see ADR 0002, ADR 0005, and
 // docs/spec-mvp.md's Testing Decisions) — every deposit/spend/refund runs
 // through this fake until a later ticket swaps in a real implementation
@@ -83,6 +86,12 @@ const closureService = new ClosureService({
   refundRepository,
   paymentProvider,
 });
+const voteService = new VoteService({
+  poolRepository,
+  membershipRepository,
+  refundVoteRepository,
+  closureService,
+});
 
 const app = createApp({
   authService,
@@ -93,6 +102,7 @@ const app = createApp({
   reimbursementService,
   ledgerService,
   closureService,
+  voteService,
   jwtSecret: env.JWT_SECRET,
 });
 

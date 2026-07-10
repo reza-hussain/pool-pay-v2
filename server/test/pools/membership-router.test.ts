@@ -27,6 +27,7 @@ async function makeApp() {
     reimbursementService,
     ledgerService,
     closureService,
+    voteService,
   } = makeTestServices();
   const app = createApp({
     authService,
@@ -37,6 +38,7 @@ async function makeApp() {
     reimbursementService,
     ledgerService,
     closureService,
+    voteService,
     jwtSecret: JWT_SECRET,
   });
 
@@ -157,6 +159,7 @@ describe("GET /pools/:poolId/members", () => {
       reimbursementService,
       ledgerService,
       closureService,
+      voteService,
       poolRepository,
       membershipRepository,
     } = makeTestServices();
@@ -173,6 +176,7 @@ describe("GET /pools/:poolId/members", () => {
       reimbursementService,
       ledgerService,
       closureService,
+      voteService,
       jwtSecret: JWT_SECRET,
     });
 

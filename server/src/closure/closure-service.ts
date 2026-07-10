@@ -64,38 +64,55 @@ export class ClosureService {
   }
 
   async closePool(poolId: string, userId: string): Promise<ClosureResult> {
-    await this.requireOrganizerOfOpenPool(poolId, userId);
-    const breakdown = await this.computeRefundBreakdown(poolId);
+    const pool = await this.requireOrganizerOfOpenPool(poolId, userId);
+    return this.performClosure(pool);
+  }
+
+  // The vote path (ADR 0009) reuses this exact Closure/refund mechanism but
+  // isn't authorized by the Organizer — it's authorized by VoteService having
+  // already confirmed a majority. No Organizer check here by design.
+  async closePoolViaVote(poolId: string): Promise<ClosureResult> {
+    const pool = await this.requireOpenPool(poolId);
+    return this.performClosure(pool);
+  }
+
+  private async performClosure(pool: Pool): Promise<ClosureResult> {
+    const breakdown = await this.computeRefundBreakdown(pool.id);
 
     const refunds: ClosureRefund[] = [];
     for (const entry of breakdown) {
       // No linked-VPA storage exists yet (no ticket has added one) — synthesized
       // the same way a Deposit's fake intent VPA is, per FakePaymentProvider.
       const vpa = `${entry.memberId}@fakebank`;
-      await this.paymentProvider.initiateTransfer(poolId, vpa, entry.amountPaise);
-      const refund = await this.refundRepository.create(poolId, entry.memberId, vpa, entry.amountPaise);
+      await this.paymentProvider.initiateTransfer(pool.id, vpa, entry.amountPaise);
+      const refund = await this.refundRepository.create(pool.id, entry.memberId, vpa, entry.amountPaise);
       refunds.push({ ...refund, contributedPaise: entry.contributedPaise });
     }
 
-    const pool = await this.poolRepository.updateState(poolId, "CLOSED");
+    const closedPool = await this.poolRepository.updateState(pool.id, "CLOSED");
 
     return {
-      pool,
+      pool: closedPool,
       refundTotalPaise: breakdown.reduce((sum, entry) => sum + entry.amountPaise, 0),
       refunds,
     };
   }
 
-  private async requireOrganizerOfOpenPool(poolId: string, userId: string): Promise<Pool> {
+  private async requireOpenPool(poolId: string): Promise<Pool> {
     const pool = await this.poolRepository.findById(poolId);
     if (!pool) {
       throw new PoolNotFoundError();
     }
-    if (pool.organizerId !== userId) {
-      throw new NotPoolOrganizerError();
-    }
     if (pool.state === "CLOSED") {
       throw new PoolAlreadyClosedError();
+    }
+    return pool;
+  }
+
+  private async requireOrganizerOfOpenPool(poolId: string, userId: string): Promise<Pool> {
+    const pool = await this.requireOpenPool(poolId);
+    if (pool.organizerId !== userId) {
+      throw new NotPoolOrganizerError();
     }
     return pool;
   }

@@ -14,6 +14,8 @@ import type { LedgerService } from "./ledger/ledger-service.js";
 import { createLedgerRouter } from "./ledger/router.js";
 import type { ClosureService } from "./closure/closure-service.js";
 import { createClosureRouter } from "./closure/router.js";
+import type { VoteService } from "./votes/vote-service.js";
+import { createVotesRouter } from "./votes/router.js";
 
 export interface AppDependencies {
   authService: AuthService;
@@ -24,6 +26,7 @@ export interface AppDependencies {
   reimbursementService: ReimbursementService;
   ledgerService: LedgerService;
   closureService: ClosureService;
+  voteService: VoteService;
   jwtSecret: string;
 }
 
@@ -36,6 +39,7 @@ export function createApp({
   reimbursementService,
   ledgerService,
   closureService,
+  voteService,
   jwtSecret,
 }: AppDependencies): Express {
   const app = express();
@@ -47,6 +51,7 @@ export function createApp({
   app.use("/pools", createReimbursementsRouter(reimbursementService, jwtSecret));
   app.use("/pools", createLedgerRouter(ledgerService, jwtSecret));
   app.use("/pools", createClosureRouter(closureService, jwtSecret));
+  app.use("/pools", createVotesRouter(voteService, jwtSecret));
 
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     console.error(error);

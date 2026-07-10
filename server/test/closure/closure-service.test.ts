@@ -153,6 +153,44 @@ describe("ClosureService.closePool", () => {
   });
 });
 
+describe("ClosureService.closePoolViaVote", () => {
+  it("closes the Pool and refunds pro-rata without an Organizer check", async () => {
+    const { closureService, depositRepository, pool } = await makeService();
+    await depositRepository.create(pool.id, MEMBER_A, 60000);
+    await depositRepository.create(pool.id, MEMBER_B, 40000);
+
+    const result = await closureService.closePoolViaVote(pool.id);
+
+    expect(result.pool.state).toBe("CLOSED");
+    expect(result.refundTotalPaise).toBe(100000);
+  });
+
+  it("does not claw back money already Spent or Reimbursed", async () => {
+    const { closureService, depositRepository, spendRepository, pool } = await makeService();
+    await depositRepository.create(pool.id, MEMBER_A, 100000);
+    await spendRepository.create(pool.id, ORGANIZER_ID, "merchant@upi", 40000, 400);
+
+    const result = await closureService.closePoolViaVote(pool.id);
+
+    expect(result.refundTotalPaise).toBe(100000 - 40000 - 400);
+  });
+
+  it("rejects Closure of an already-Closed Pool", async () => {
+    const { closureService, pool } = await makeService();
+    await closureService.closePoolViaVote(pool.id);
+
+    await expect(closureService.closePoolViaVote(pool.id)).rejects.toThrow(PoolAlreadyClosedError);
+  });
+
+  it("rejects Closure of an unknown Pool", async () => {
+    const { closureService } = await makeService();
+
+    await expect(closureService.closePoolViaVote("does-not-exist")).rejects.toThrow(
+      PoolNotFoundError,
+    );
+  });
+});
+
 describe("ClosureService.previewClosure", () => {
   it("returns the same breakdown as closePool would, without paying out or closing", async () => {
     const { closureService, depositRepository, poolRepository, pool } = await makeService();
