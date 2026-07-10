@@ -6,6 +6,7 @@ import { AuthService } from "../../src/auth/auth-service.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { InMemoryOtpStore } from "../../src/auth/fakes/in-memory-otp-store.js";
 import { FakeOtpSender } from "../../src/auth/fakes/fake-otp-sender.js";
+import { FakeIdentityProvider } from "../../src/auth/fakes/fake-identity-provider.js";
 import { makeTestServices } from "../support/make-test-services.js";
 import { MembershipService } from "../../src/memberships/membership-service.js";
 
@@ -20,6 +21,7 @@ async function makeApp() {
     userRepository,
     otpStore: new InMemoryOtpStore(),
     otpSender: new FakeOtpSender(),
+    identityProvider: new FakeIdentityProvider(),
   });
   const {
     poolService,
@@ -157,6 +159,7 @@ describe("GET /pools/:poolId/members", () => {
       userRepository,
       otpStore: new InMemoryOtpStore(),
       otpSender: new FakeOtpSender(),
+      identityProvider: new FakeIdentityProvider(),
     });
     const {
       poolService,

@@ -3,7 +3,9 @@ import { AuthService } from "../../src/auth/auth-service.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { InMemoryOtpStore } from "../../src/auth/fakes/in-memory-otp-store.js";
 import { FakeOtpSender } from "../../src/auth/fakes/fake-otp-sender.js";
+import { FakeIdentityProvider } from "../../src/auth/fakes/fake-identity-provider.js";
 import {
+  IdentityVerificationFailedError,
   InvalidOtpCodeError,
   InvalidPhoneNumberError,
   OtpAlreadyUsedError,
@@ -12,13 +14,15 @@ import {
 } from "../../src/auth/types.js";
 
 const PHONE = "+919876543210";
+const PAN = "ABCDE1234A";
 
 function makeAuthService(now = () => new Date("2026-07-09T00:00:00.000Z")) {
   const userRepository = new InMemoryUserRepository();
   const otpStore = new InMemoryOtpStore();
   const otpSender = new FakeOtpSender();
-  const authService = new AuthService({ userRepository, otpStore, otpSender, now });
-  return { authService, userRepository, otpStore, otpSender };
+  const identityProvider = new FakeIdentityProvider();
+  const authService = new AuthService({ userRepository, otpStore, otpSender, identityProvider, now });
+  return { authService, userRepository, otpStore, otpSender, identityProvider };
 }
 
 describe("AuthService.requestOtp", () => {
@@ -148,9 +152,27 @@ describe("AuthService.verifyIdentity", () => {
     const { user } = await authService.verifyOtp(requestId, code);
     expect(user.isVerified).toBe(false);
 
-    const verified = await authService.verifyIdentity(user.id);
+    const verified = await authService.verifyIdentity(user.id, PAN);
 
     expect(verified.isVerified).toBe(true);
+  });
+
+  it("rejects when the identity provider does not verify the document", async () => {
+    const otpSender = new FakeOtpSender();
+    const authService = new AuthService({
+      userRepository: new InMemoryUserRepository(),
+      otpStore: new InMemoryOtpStore(),
+      otpSender,
+      identityProvider: {
+        verifyFullIdentity: async () => ({ verified: false, providerRef: "rejected" }),
+      },
+    });
+    const { requestId } = await authService.requestOtp(PHONE);
+    const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+
+    await expect(authService.verifyIdentity(user.id, PAN)).rejects.toThrow(
+      IdentityVerificationFailedError,
+    );
   });
 });
 

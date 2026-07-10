@@ -1,10 +1,18 @@
 export interface DepositIntent {
   id: string;
   poolId: string;
-  // Fake UPI VPA the QR/reference encodes.
+  // The Pool Pay account's own UPI VPA — fixed per merchant account, shown as
+  // a fallback "Pay to UPI ID" alongside qrImageUrl (real providers return a
+  // scannable QR; the fake has no image, only this text VPA).
   vpa: string;
   // Locked for Equal Split Pools, null (freely entered) for Open Pools.
   fixedAmountPaise: number | null;
+  // Set only by a real provider (e.g. Decentro's Dynamic QR) — a displayable
+  // QR image URL for the Member to scan. Additive/optional so the existing
+  // fake-provider flow and its consumers are unaffected (ticket #14's real
+  // adapter must implement this same interface with no other ticket's logic
+  // changing).
+  qrImageUrl?: string;
 }
 
 export interface SpendConfirmation {

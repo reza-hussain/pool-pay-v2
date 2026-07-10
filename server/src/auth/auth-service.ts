@@ -1,5 +1,7 @@
 import { randomInt } from "node:crypto";
+import type { IdentityVerificationProvider } from "./identity-provider.js";
 import {
+  IdentityVerificationFailedError,
   InvalidOtpCodeError,
   InvalidPhoneNumberError,
   OtpAlreadyUsedError,
@@ -19,6 +21,7 @@ export interface AuthServiceOptions {
   userRepository: UserRepository;
   otpStore: OtpStore;
   otpSender: OtpSender;
+  identityProvider: IdentityVerificationProvider;
   now?: () => Date;
   generateCode?: () => string;
 }
@@ -32,6 +35,7 @@ export class AuthService {
   private readonly userRepository: UserRepository;
   private readonly otpStore: OtpStore;
   private readonly otpSender: OtpSender;
+  private readonly identityProvider: IdentityVerificationProvider;
   private readonly now: () => Date;
   private readonly generateCode: () => string;
 
@@ -39,6 +43,7 @@ export class AuthService {
     this.userRepository = options.userRepository;
     this.otpStore = options.otpStore;
     this.otpSender = options.otpSender;
+    this.identityProvider = options.identityProvider;
     this.now = options.now ?? (() => new Date());
     this.generateCode = options.generateCode ?? defaultGenerateCode;
   }
@@ -82,10 +87,15 @@ export class AuthService {
     return { user, isNewUser: true };
   }
 
-  // Stubbed full-KYC (ticket #12, ADR 0007) — passes instantly rather than
-  // running a real verification flow, until the real BaaS/UPI partner
-  // integration (ticket #14) wires up an actual KYC check.
-  async verifyIdentity(userId: string): Promise<User> {
+  // Full-KYC (ticket #12, ADR 0007) — delegates to whichever
+  // IdentityVerificationProvider is configured. The fake (used until ticket
+  // #14's real credentials exist) always passes; the real one actually
+  // checks the PAN against Decentro's CKYC registry.
+  async verifyIdentity(userId: string, panNumber: string): Promise<User> {
+    const result = await this.identityProvider.verifyFullIdentity(userId, panNumber);
+    if (!result.verified) {
+      throw new IdentityVerificationFailedError();
+    }
     return this.userRepository.markFullyVerified(userId);
   }
 

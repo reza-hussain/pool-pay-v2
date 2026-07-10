@@ -5,6 +5,7 @@ import { AuthService } from "../../src/auth/auth-service.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { InMemoryOtpStore } from "../../src/auth/fakes/in-memory-otp-store.js";
 import { FakeOtpSender } from "../../src/auth/fakes/fake-otp-sender.js";
+import { FakeIdentityProvider } from "../../src/auth/fakes/fake-identity-provider.js";
 import { makeTestServices } from "../support/make-test-services.js";
 
 const PHONE = "+919876543210";
@@ -16,6 +17,7 @@ function makeApp() {
     userRepository: new InMemoryUserRepository(),
     otpStore: new InMemoryOtpStore(),
     otpSender,
+    identityProvider: new FakeIdentityProvider(),
   });
   const {
     poolService,

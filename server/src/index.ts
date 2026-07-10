@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { env } from "./lib/env.js";
+import { env, hasDecentroCredentials } from "./lib/env.js";
 import { prisma } from "./lib/prisma.js";
 import { createApp } from "./app.js";
 import { AuthService } from "./auth/auth-service.js";
@@ -23,12 +23,28 @@ import { VoteService } from "./votes/vote-service.js";
 import { PrismaRefundVoteRepository } from "./votes/prisma-refund-vote-repository.js";
 import { AnalyticsService } from "./analytics/analytics-service.js";
 import { FakePaymentProvider } from "./payments/fakes/fake-payment-provider.js";
+import { DecentroPaymentProvider } from "./payments/decentro/decentro-payment-provider.js";
+import { FakeIdentityProvider } from "./auth/fakes/fake-identity-provider.js";
+import { DecentroIdentityProvider } from "./auth/decentro-identity-provider.js";
 
 const userRepository = new PrismaUserRepository(prisma);
+
+// Real BaaS/UPI partner (ticket #14, Decentro) — falls back to the fakes
+// used by every other ticket's tests when credentials aren't configured, so
+// the app stays runnable without a live Decentro account. See lib/env.ts.
+const identityProvider = hasDecentroCredentials
+  ? new DecentroIdentityProvider({
+      clientId: env.DECENTRO_CLIENT_ID!,
+      clientSecret: env.DECENTRO_CLIENT_SECRET!,
+      env: env.DECENTRO_ENV,
+    })
+  : new FakeIdentityProvider();
+
 const authService = new AuthService({
   userRepository,
   otpStore: new PrismaOtpStore(prisma),
   otpSender: new ConsoleOtpSender(),
+  identityProvider,
 });
 
 const poolRepository = new PrismaPoolRepository(prisma);
@@ -38,11 +54,15 @@ const spendRepository = new PrismaSpendRepository(prisma);
 const reimbursementRepository = new PrismaReimbursementRepository(prisma);
 const refundRepository = new PrismaRefundRepository(prisma);
 const refundVoteRepository = new PrismaRefundVoteRepository(prisma);
-// No real BaaS/UPI partner is wired up yet (see ADR 0002, ADR 0005, and
-// docs/spec-mvp.md's Testing Decisions) — every deposit/spend/refund runs
-// through this fake until a later ticket swaps in a real implementation
-// behind the same PaymentProvider interface.
-const paymentProvider = new FakePaymentProvider();
+const paymentProvider = hasDecentroCredentials
+  ? new DecentroPaymentProvider({
+      clientId: env.DECENTRO_CLIENT_ID!,
+      clientSecret: env.DECENTRO_CLIENT_SECRET!,
+      env: env.DECENTRO_ENV,
+      consumerUrn: env.DECENTRO_CONSUMER_URN!,
+      virtualVpa: env.DECENTRO_VIRTUAL_VPA!,
+    })
+  : new FakePaymentProvider();
 
 const poolService = new PoolService({ poolRepository, membershipRepository, userRepository });
 const membershipService = new MembershipService({ poolRepository, membershipRepository });

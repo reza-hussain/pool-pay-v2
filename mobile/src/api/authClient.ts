@@ -53,8 +53,8 @@ export function verifyOtp(requestId: string, code: string): Promise<VerifyOtpRes
 }
 
 // Stubbed full-KYC (ticket #12) — passes instantly, no real verification flow yet.
-export function verifyIdentity(token: string): Promise<VerifyIdentityResult> {
-  return postJson("/auth/verify", undefined, token);
+export function verifyIdentity(token: string, panNumber: string): Promise<VerifyIdentityResult> {
+  return postJson("/auth/verify", { panNumber }, token);
 }
 
 // Stubbed freemium subscription (ticket #13) — passes instantly, no real billing flow yet.

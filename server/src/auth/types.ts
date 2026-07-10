@@ -66,3 +66,10 @@ export class InvalidOtpCodeError extends Error {
     this.name = "InvalidOtpCodeError";
   }
 }
+
+export class IdentityVerificationFailedError extends Error {
+  constructor() {
+    super("Identity verification did not succeed");
+    this.name = "IdentityVerificationFailedError";
+  }
+}

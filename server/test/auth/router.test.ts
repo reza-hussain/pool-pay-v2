@@ -5,6 +5,7 @@ import { AuthService } from "../../src/auth/auth-service.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { InMemoryOtpStore } from "../../src/auth/fakes/in-memory-otp-store.js";
 import { FakeOtpSender } from "../../src/auth/fakes/fake-otp-sender.js";
+import { FakeIdentityProvider } from "../../src/auth/fakes/fake-identity-provider.js";
 import { makeTestServices } from "../support/make-test-services.js";
 
 const PHONE = "+919876543210";
@@ -16,6 +17,7 @@ function makeApp() {
     userRepository: new InMemoryUserRepository(),
     otpStore: new InMemoryOtpStore(),
     otpSender,
+    identityProvider: new FakeIdentityProvider(),
   });
   const {
     poolService,
@@ -55,6 +57,7 @@ describe("error handling", () => {
       userRepository: brokenUserRepository,
       otpStore: new InMemoryOtpStore(),
       otpSender,
+      identityProvider: new FakeIdentityProvider(),
     });
     const {
       poolService,
@@ -179,10 +182,25 @@ describe("POST /auth/verify", () => {
 
     const res = await request(app)
       .post("/auth/verify")
-      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`);
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`)
+      .send({ panNumber: "ABCDE1234A" });
 
     expect(res.status).toBe(200);
     expect(res.body.user.isVerified).toBe(true);
+  });
+
+  it("returns 400 for a missing panNumber", async () => {
+    const { app, otpSender } = makeApp();
+    const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyOtpRes = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+
+    const res = await request(app)
+      .post("/auth/verify")
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`);
+
+    expect(res.status).toBe(400);
   });
 
   it("returns 401 without a bearer token", async () => {

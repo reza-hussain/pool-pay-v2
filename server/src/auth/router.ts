@@ -3,6 +3,7 @@ import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import type { AuthService } from "./auth-service.js";
 import {
+  IdentityVerificationFailedError,
   InvalidOtpCodeError,
   InvalidPhoneNumberError,
   OtpAlreadyUsedError,
@@ -10,6 +11,7 @@ import {
   OtpNotFoundError,
   type User,
 } from "./types.js";
+import { InvalidPanNumberError } from "./identity-provider.js";
 import { signSessionToken } from "./session.js";
 import { requireAuth, type AuthenticatedRequest } from "./require-auth.js";
 
@@ -29,6 +31,10 @@ const requestOtpSchema = z.object({
 const verifyOtpSchema = z.object({
   requestId: z.string(),
   code: z.string(),
+});
+
+const verifyIdentitySchema = z.object({
+  panNumber: z.string(),
 });
 
 export function createAuthRouter(authService: AuthService, jwtSecret: string): Router {
@@ -105,17 +111,27 @@ export function createAuthRouter(authService: AuthService, jwtSecret: string): R
     }
   });
 
-  // Stubbed full-KYC (ticket #12) — passes instantly. Only Organizers are
-  // ever gated on this (ADR 0007); Members need nothing beyond the phone
-  // verification already done by OTP signup.
+  // Full-KYC (ticket #12, real check wired up by ticket #14). Only
+  // Organizers are ever gated on this (ADR 0007); Members need nothing
+  // beyond the phone verification already done by OTP signup.
   router.post(
     "/verify",
     requireAuth(jwtSecret),
     async (req: AuthenticatedRequest, res, next) => {
+      const parsed = verifyIdentitySchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "panNumber is required" });
+        return;
+      }
+
       try {
-        const user = await authService.verifyIdentity(req.userId as string);
+        const user = await authService.verifyIdentity(req.userId as string, parsed.data.panNumber);
         res.status(200).json({ user: publicUser(user) });
       } catch (error) {
+        if (error instanceof InvalidPanNumberError || error instanceof IdentityVerificationFailedError) {
+          res.status(400).json({ error: error.message });
+          return;
+        }
         next(error);
       }
     },
