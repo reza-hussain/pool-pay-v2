@@ -51,3 +51,14 @@ export async function listMembers(token: string, poolId: string): Promise<Member
   }
   return data.members as Membership[];
 }
+
+export async function removeMember(token: string, poolId: string, memberId: string): Promise<void> {
+  const res = await fetch(`${API_URL}/pools/${poolId}/members/${memberId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new MembersApiError(data.error ?? `Request failed with status ${res.status}`);
+  }
+}

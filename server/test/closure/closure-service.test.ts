@@ -9,6 +9,8 @@ import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-
 import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/in-memory-reimbursement-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 import { PoolNotFoundError } from "../../src/memberships/types.js";
+import { MembershipService } from "../../src/memberships/membership-service.js";
+import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 
 const ORGANIZER_ID = "user_organizer";
 const MEMBER_A = "user_member_a";
@@ -210,6 +212,27 @@ describe("ClosureService.previewClosure", () => {
     await expect(closureService.previewClosure(pool.id, STRANGER_ID)).rejects.toThrow(
       NotPoolOrganizerError,
     );
+  });
+});
+
+describe("ClosureService + a removed Member (ticket #11)", () => {
+  it("still refunds a removed Member's prior contributions pro-rata", async () => {
+    const { closureService, poolRepository, depositRepository, pool } = await makeService();
+    const membershipRepository = new InMemoryMembershipRepository();
+    const membershipService = new MembershipService({ poolRepository, membershipRepository });
+
+    await membershipService.joinByPoolId(MEMBER_A, pool.id);
+    await depositRepository.create(pool.id, MEMBER_A, 40000);
+    await depositRepository.create(pool.id, MEMBER_B, 60000);
+
+    await membershipService.removeMember(pool.id, ORGANIZER_ID, MEMBER_A);
+    expect(await membershipRepository.find(pool.id, MEMBER_A)).toBeNull();
+
+    const result = await closureService.closePool(pool.id, ORGANIZER_ID);
+
+    const byMember = Object.fromEntries(result.refunds.map((r) => [r.memberId, r.amountPaise]));
+    expect(byMember[MEMBER_A]).toBe(40000);
+    expect(byMember[MEMBER_B]).toBe(60000);
   });
 });
 

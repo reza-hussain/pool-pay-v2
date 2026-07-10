@@ -8,6 +8,7 @@ export function OrganizerControlsSheet({
   onLock,
   onTransferOut,
   onReimburse,
+  onManageMembers,
   onClosePool,
   onClose,
 }: {
@@ -15,6 +16,7 @@ export function OrganizerControlsSheet({
   onLock: () => Promise<void>;
   onTransferOut: () => void;
   onReimburse: () => void;
+  onManageMembers: () => void;
   onClosePool: () => void;
   onClose: () => void;
 }) {
@@ -66,6 +68,13 @@ export function OrganizerControlsSheet({
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>Reimburse a Member</Text>
                 <Text style={styles.rowDescription}>Pay back a Member who spent out of pocket</Text>
+              </View>
+            </Pressable>
+
+            <Pressable style={styles.row} onPress={onManageMembers}>
+              <View style={styles.rowText}>
+                <Text style={styles.rowTitle}>Manage Members</Text>
+                <Text style={styles.rowDescription}>View or remove Members from this Pool</Text>
               </View>
             </Pressable>
 

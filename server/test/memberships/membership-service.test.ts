@@ -3,10 +3,13 @@ import { MembershipService } from "../../src/memberships/membership-service.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 import {
+  CannotRemoveOrganizerError,
   InvalidJoinCodeError,
+  MemberNotFoundError,
   PoolClosedError,
   PoolNotFoundError,
 } from "../../src/memberships/types.js";
+import { NotPoolOrganizerError } from "../../src/pools/types.js";
 
 const ORGANIZER_ID = "user_organizer";
 const MEMBER_ID = "user_member";
@@ -90,5 +93,71 @@ describe("MembershipService.listMembers", () => {
 
     expect(members).toHaveLength(2);
     expect(members.map((m) => m.userId).sort()).toEqual([MEMBER_ID, ORGANIZER_ID].sort());
+  });
+});
+
+describe("MembershipService.removeMember", () => {
+  it("removes a Member so they no longer appear as a Member", async () => {
+    const { membershipService, pool } = await makeService();
+    await membershipService.joinByPoolId(MEMBER_ID, pool.id);
+
+    await membershipService.removeMember(pool.id, ORGANIZER_ID, MEMBER_ID);
+
+    const members = await membershipService.listMembers(pool.id);
+    expect(members.map((m) => m.userId)).not.toContain(MEMBER_ID);
+  });
+
+  it("allows the removed Member to rejoin later", async () => {
+    const { membershipService, pool } = await makeService();
+    await membershipService.joinByPoolId(MEMBER_ID, pool.id);
+    await membershipService.removeMember(pool.id, ORGANIZER_ID, MEMBER_ID);
+
+    const rejoined = await membershipService.joinByPoolId(MEMBER_ID, pool.id);
+
+    expect(rejoined).toMatchObject({ poolId: pool.id, userId: MEMBER_ID });
+    expect(await membershipService.listMembers(pool.id)).toHaveLength(1);
+  });
+
+  it("rejects removal by a non-Organizer", async () => {
+    const { membershipService, pool } = await makeService();
+    await membershipService.joinByPoolId(MEMBER_ID, pool.id);
+
+    await expect(
+      membershipService.removeMember(pool.id, MEMBER_ID, MEMBER_ID),
+    ).rejects.toThrow(NotPoolOrganizerError);
+  });
+
+  it("rejects the Organizer removing themselves", async () => {
+    const { membershipService, pool } = await makeService();
+
+    await expect(
+      membershipService.removeMember(pool.id, ORGANIZER_ID, ORGANIZER_ID),
+    ).rejects.toThrow(CannotRemoveOrganizerError);
+  });
+
+  it("rejects removing someone who isn't a Member", async () => {
+    const { membershipService, pool } = await makeService();
+
+    await expect(
+      membershipService.removeMember(pool.id, ORGANIZER_ID, "user_stranger"),
+    ).rejects.toThrow(MemberNotFoundError);
+  });
+
+  it("rejects removal from an unknown Pool", async () => {
+    const { membershipService } = await makeService();
+
+    await expect(
+      membershipService.removeMember("does-not-exist", ORGANIZER_ID, MEMBER_ID),
+    ).rejects.toThrow(PoolNotFoundError);
+  });
+
+  it("rejects removal from an already-Closed Pool", async () => {
+    const { membershipService, poolRepository, pool } = await makeService();
+    await membershipService.joinByPoolId(MEMBER_ID, pool.id);
+    await poolRepository.updateState(pool.id, "CLOSED");
+
+    await expect(
+      membershipService.removeMember(pool.id, ORGANIZER_ID, MEMBER_ID),
+    ).rejects.toThrow(PoolClosedError);
   });
 });

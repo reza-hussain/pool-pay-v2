@@ -54,10 +54,13 @@ describe("PrismaMembershipRepository", () => {
     await expect(repo.find(poolId, "does-not-exist")).resolves.toBeNull();
   });
 
-  it("enforces one membership per pool per user", async () => {
+  it("is idempotent for a repeat create of the same pool and user", async () => {
     const repo = new PrismaMembershipRepository(prisma);
-    await repo.create(poolId, memberId, "MEMBER");
-    await expect(repo.create(poolId, memberId, "MEMBER")).rejects.toThrow();
+    const first = await repo.create(poolId, memberId, "MEMBER");
+    const second = await repo.create(poolId, memberId, "MEMBER");
+
+    expect(second.id).toBe(first.id);
+    await expect(repo.listByPool(poolId)).resolves.toHaveLength(1);
   });
 
   it("lists every membership for a pool", async () => {
@@ -68,5 +71,26 @@ describe("PrismaMembershipRepository", () => {
     const members = await repo.listByPool(poolId);
     expect(members).toHaveLength(2);
     expect(members.map((m) => m.role).sort()).toEqual(["MEMBER", "ORGANIZER"]);
+  });
+
+  it("excludes a removed Member from find() and listByPool()", async () => {
+    const repo = new PrismaMembershipRepository(prisma);
+    await repo.create(poolId, memberId, "MEMBER");
+
+    await repo.remove(poolId, memberId);
+
+    await expect(repo.find(poolId, memberId)).resolves.toBeNull();
+    await expect(repo.listByPool(poolId)).resolves.toEqual([]);
+  });
+
+  it("reactivates a removed Membership on rejoin", async () => {
+    const repo = new PrismaMembershipRepository(prisma);
+    const original = await repo.create(poolId, memberId, "MEMBER");
+    await repo.remove(poolId, memberId);
+
+    const rejoined = await repo.create(poolId, memberId, "MEMBER");
+
+    expect(rejoined.id).toBe(original.id);
+    await expect(repo.find(poolId, memberId)).resolves.toMatchObject({ id: original.id });
   });
 });

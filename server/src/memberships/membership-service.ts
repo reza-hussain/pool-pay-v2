@@ -1,6 +1,8 @@
-import type { Pool, PoolRepository } from "../pools/types.js";
+import { NotPoolOrganizerError, type Pool, type PoolRepository } from "../pools/types.js";
 import {
+  CannotRemoveOrganizerError,
   InvalidJoinCodeError,
+  MemberNotFoundError,
   PoolClosedError,
   PoolNotFoundError,
   type Membership,
@@ -39,6 +41,29 @@ export class MembershipService {
 
   async listMembers(poolId: string): Promise<Membership[]> {
     return this.membershipRepository.listByPool(poolId);
+  }
+
+  async removeMember(poolId: string, organizerUserId: string, memberId: string): Promise<void> {
+    const pool = await this.poolRepository.findById(poolId);
+    if (!pool) {
+      throw new PoolNotFoundError();
+    }
+    if (pool.organizerId !== organizerUserId) {
+      throw new NotPoolOrganizerError();
+    }
+    if (pool.state === "CLOSED") {
+      throw new PoolClosedError();
+    }
+    if (memberId === organizerUserId) {
+      throw new CannotRemoveOrganizerError();
+    }
+
+    const membership = await this.membershipRepository.find(poolId, memberId);
+    if (!membership) {
+      throw new MemberNotFoundError();
+    }
+
+    await this.membershipRepository.remove(poolId, memberId);
   }
 
   private async join(userId: string, pool: Pool): Promise<Membership> {

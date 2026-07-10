@@ -134,6 +134,12 @@ model Membership {
   // "ORGANIZER" | "MEMBER"
   role      String
   joinedAt  DateTime @default(now())
+  // Set when the Organizer removes this Member (ticket #11). A removed
+  // Membership row is kept (not deleted) purely as an audit trail — access
+  // checks (find/listByPool) treat it as absent. Deposits reference userId
+  // directly, so prior contributions still count at Closure regardless
+  // (ADR 0006).
+  removedAt DateTime?
 
   @@unique([poolId, userId])
 }

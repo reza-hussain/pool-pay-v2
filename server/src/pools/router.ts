@@ -10,7 +10,13 @@ import {
   NotPoolOrganizerError,
   UnexpectedPerPersonAmountError,
 } from "./types.js";
-import { InvalidJoinCodeError, PoolClosedError, PoolNotFoundError } from "../memberships/types.js";
+import {
+  CannotRemoveOrganizerError,
+  InvalidJoinCodeError,
+  MemberNotFoundError,
+  PoolClosedError,
+  PoolNotFoundError,
+} from "../memberships/types.js";
 
 const createPoolSchema = z.object({
   name: z.string(),
@@ -135,6 +141,35 @@ export function createPoolsRouter(
       next(error);
     }
   });
+
+  router.delete(
+    "/:poolId/members/:memberId",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      try {
+        await membershipService.removeMember(
+          req.params.poolId,
+          req.userId as string,
+          req.params.memberId,
+        );
+        res.status(204).send();
+      } catch (error) {
+        if (error instanceof PoolNotFoundError || error instanceof MemberNotFoundError) {
+          res.status(404).json({ error: error.message });
+          return;
+        }
+        if (error instanceof PoolClosedError || error instanceof CannotRemoveOrganizerError) {
+          res.status(400).json({ error: error.message });
+          return;
+        }
+        if (error instanceof NotPoolOrganizerError) {
+          res.status(403).json({ error: error.message });
+          return;
+        }
+        next(error);
+      }
+    },
+  );
 
   return router;
 }

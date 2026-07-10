@@ -192,3 +192,92 @@ describe("GET /pools/:poolId/members", () => {
     expect(res.status).toBe(500);
   });
 });
+
+describe("DELETE /pools/:poolId/members/:memberId", () => {
+  it("removes a Member so they no longer appear in the members list", async () => {
+    const { app, pool } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+
+    const res = await request(app)
+      .delete(`/pools/${pool.id}/members/${MEMBER_ID}`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(res.status).toBe(204);
+
+    const membersRes = await request(app)
+      .get(`/pools/${pool.id}/members`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(membersRes.body.members.map((m: { userId: string }) => m.userId)).not.toContain(
+      MEMBER_ID,
+    );
+  });
+
+  it("blocks a removed Member from depositing", async () => {
+    const { app, pool } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+    await request(app)
+      .delete(`/pools/${pool.id}/members/${MEMBER_ID}`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/deposits`)
+      .set("Authorization", bearerFor(MEMBER_ID))
+      .send({ amountPaise: 1000 });
+    expect(res.status).toBe(403);
+  });
+
+  it("blocks a removed Member from viewing the ledger", async () => {
+    const { app, pool } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+    await request(app)
+      .delete(`/pools/${pool.id}/members/${MEMBER_ID}`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/ledger`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for a non-Organizer", async () => {
+    const { app, pool } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+
+    const res = await request(app)
+      .delete(`/pools/${pool.id}/members/${MEMBER_ID}`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 400 for the Organizer removing themselves", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .delete(`/pools/${pool.id}/members/${ORGANIZER_ID}`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 for someone who isn't a Member", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .delete(`/pools/${pool.id}/members/user_stranger`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for an unknown Pool", async () => {
+    const { app } = await makeApp();
+
+    const res = await request(app)
+      .delete("/pools/pool_missing/members/user_x")
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 401 without a bearer token", async () => {
+    const { app, pool } = await makeApp();
+    const res = await request(app).delete(`/pools/${pool.id}/members/${MEMBER_ID}`);
+    expect(res.status).toBe(401);
+  });
+});

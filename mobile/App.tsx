@@ -25,6 +25,7 @@ import { LedgerScreen } from './src/screens/LedgerScreen';
 import { CloseConfirmScreen } from './src/screens/CloseConfirmScreen';
 import { ClosedScreen } from './src/screens/ClosedScreen';
 import { VoteScreen } from './src/screens/VoteScreen';
+import { MembersScreen } from './src/screens/MembersScreen';
 import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
 import type { ClosureRefund } from './src/api/closureClient';
 import { loadSession, type StoredSession } from './src/api/session';
@@ -50,6 +51,7 @@ type AppStackParamList = {
   CloseConfirm: { pool: Pool };
   Closed: { pool: Pool; refunds: ClosureRefund[] };
   Vote: { pool: Pool };
+  Members: { pool: Pool };
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -120,6 +122,10 @@ function HomeRoute({ navigation }: NativeStackScreenProps<AppStackParamList, 'Ho
           }}
           onReimburse={() => {
             navigation.navigate('Reimburse', { pool: organizerControlsPool });
+            setOrganizerControlsPool(null);
+          }}
+          onManageMembers={() => {
+            navigation.navigate('Members', { pool: organizerControlsPool });
             setOrganizerControlsPool(null);
           }}
           onClosePool={() => {
@@ -250,6 +256,13 @@ function VoteRoute({ route, navigation }: NativeStackScreenProps<AppStackParamLi
   );
 }
 
+function MembersRoute({ route, navigation }: NativeStackScreenProps<AppStackParamList, 'Members'>) {
+  const { session } = useSessionContext();
+  return (
+    <MembersScreen session={session} pool={route.params.pool} onCancel={() => navigation.goBack()} />
+  );
+}
+
 export default function App() {
   const [fontsLoaded] = useFonts({
     Onest_400Regular,
@@ -338,6 +351,7 @@ export default function App() {
                 options={{ gestureEnabled: false }}
               />
               <AppStack.Screen name="Vote" component={VoteRoute} />
+              <AppStack.Screen name="Members" component={MembersRoute} />
             </AppStack.Navigator>
           </SessionContext.Provider>
         )}
