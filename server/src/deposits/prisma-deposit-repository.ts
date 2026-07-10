@@ -8,6 +8,10 @@ export class PrismaDepositRepository implements DepositRepository {
     return this.prisma.deposit.create({ data: { poolId, userId, amountPaise } });
   }
 
+  async findById(id: string): Promise<Deposit | null> {
+    return this.prisma.deposit.findUnique({ where: { id } });
+  }
+
   async sumByPool(poolId: string): Promise<number> {
     const result = await this.prisma.deposit.aggregate({
       where: { poolId },

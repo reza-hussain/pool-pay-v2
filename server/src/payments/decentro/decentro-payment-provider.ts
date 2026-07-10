@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   DepositIntent,
+  DepositWebhookEvent,
   PaymentProvider,
   SpendConfirmation,
   TransferConfirmation,
@@ -21,6 +22,17 @@ interface PayoutResponse {
   decentro_txn_id: string;
 }
 
+// Best-effort shape for Decentro's server-to-server "terminal transaction
+// status" callback (docs.decentro.tech's Collections v3 callback docs) —
+// unverified against a real sandbox; field names follow the same
+// snake_case/decentro_txn_id convention as the rest of payments-v3, but
+// confirm against real traffic once sandbox access is available.
+interface DepositWebhookPayload {
+  decentro_txn_id?: string;
+  status?: string;
+  amount?: string | number;
+}
+
 // Real adapter behind the PaymentProvider seam (ticket #14, ADR 0002/0005),
 // implementing the exact same interface the fake one did. See
 // docs.decentro.tech for the underlying contracts:
@@ -29,18 +41,8 @@ interface PayoutResponse {
 //     (transfer_type: "UPI") — one unified payout endpoint serves both, since
 //     both are "move money out to a UPI VPA" from Decentro's perspective; the
 //     per-Spend fee (ADR 0010) is computed by SpendService, not this adapter.
-//
-// KNOWN GAP, by design — not fixed here: Decentro confirms a Dynamic QR was
-// paid via a server-to-server "terminal transaction status" webhook, not
-// synchronously. DepositService.recordDeposit is currently invoked by the
-// mobile client self-reporting "I paid" (fine against the fake, which has no
-// real money to lose) — that self-report path is NOT trustworthy once real
-// money moves through this adapter. Closing that gap needs a webhook receiver
-// endpoint plus a persisted pending-deposit record (reference_id -> poolId,
-// userId) so the webhook can call recordDeposit server-side instead. That's
-// a real, scoped follow-up (needs a callback URL registered with Decentro
-// support — see docs.decentro.tech's Collections v3 callback docs), not
-// something to guess at without sandbox access to verify against.
+//   - Deposit confirmation:  server-to-server webhook, not synchronous — see
+//     parseDepositWebhook and deposits/webhook-router.ts (ticket #15).
 export class DecentroPaymentProvider implements PaymentProvider {
   private readonly client: DecentroClient;
   private readonly consumerUrn: string;
@@ -99,6 +101,25 @@ export class DecentroPaymentProvider implements PaymentProvider {
       purpose: "Pool Pay reimbursement",
     });
     return { id: response.decentro_txn_id, poolId, vpa, amountPaise };
+  }
+
+  parseDepositWebhook(payload: unknown): DepositWebhookEvent | null {
+    if (typeof payload !== "object" || payload === null) {
+      return null;
+    }
+    const body = payload as DepositWebhookPayload;
+    if (typeof body.decentro_txn_id !== "string") {
+      return null;
+    }
+    const amountRupees = typeof body.amount === "string" ? Number(body.amount) : body.amount;
+    if (typeof amountRupees !== "number" || !Number.isFinite(amountRupees)) {
+      return null;
+    }
+    return {
+      providerRef: body.decentro_txn_id,
+      amountPaise: Math.round(amountRupees * 100),
+      status: body.status === "SUCCESS" ? "SUCCESS" : "FAILED",
+    };
   }
 
   private async payout(args: {

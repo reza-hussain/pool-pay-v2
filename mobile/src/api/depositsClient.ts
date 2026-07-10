@@ -49,11 +49,12 @@ export async function getDepositIntent(token: string, poolId: string): Promise<D
 export async function recordDeposit(
   token: string,
   poolId: string,
+  depositIntentId: string,
   amountPaise: number,
 ): Promise<RecordDepositResult> {
   const data = await authedFetch(`/pools/${poolId}/deposits`, token, {
     method: "POST",
-    body: JSON.stringify({ amountPaise }),
+    body: JSON.stringify({ depositIntentId, amountPaise }),
   });
   return data as RecordDepositResult;
 }

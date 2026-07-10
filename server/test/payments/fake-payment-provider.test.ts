@@ -27,7 +27,12 @@ describe("FakePaymentProvider.simulateDeposit", () => {
 
     const simulated = provider.simulateDeposit(intent.id, 100000);
 
-    expect(simulated).toEqual({ poolId: "pool_1", amountPaise: 100000 });
+    expect(simulated).toEqual({
+      poolId: "pool_1",
+      providerRef: intent.id,
+      amountPaise: 100000,
+      status: "SUCCESS",
+    });
   });
 
   it("simulates a deposit that mismatches the intent's fixed amount", async () => {
@@ -36,12 +41,39 @@ describe("FakePaymentProvider.simulateDeposit", () => {
 
     const simulated = provider.simulateDeposit(intent.id, 75000);
 
-    expect(simulated).toEqual({ poolId: "pool_1", amountPaise: 75000 });
+    expect(simulated).toEqual({
+      poolId: "pool_1",
+      providerRef: intent.id,
+      amountPaise: 75000,
+      status: "SUCCESS",
+    });
   });
 
   it("throws for an unknown intent id", () => {
     const provider = new FakePaymentProvider();
     expect(() => provider.simulateDeposit("does-not-exist", 1000)).toThrow();
+  });
+});
+
+describe("FakePaymentProvider.parseDepositWebhook", () => {
+  it("passes through a well-formed event", async () => {
+    const provider = new FakePaymentProvider();
+    const intent = await provider.createDepositIntent("pool_1", 100000);
+
+    const event = provider.parseDepositWebhook({
+      providerRef: intent.id,
+      amountPaise: 100000,
+      status: "SUCCESS",
+    });
+
+    expect(event).toEqual({ providerRef: intent.id, amountPaise: 100000, status: "SUCCESS" });
+  });
+
+  it("returns null for an unrecognized payload", () => {
+    const provider = new FakePaymentProvider();
+    expect(provider.parseDepositWebhook({ foo: "bar" })).toBeNull();
+    expect(provider.parseDepositWebhook(null)).toBeNull();
+    expect(provider.parseDepositWebhook("not an object")).toBeNull();
   });
 });
 

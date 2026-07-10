@@ -56,10 +56,13 @@ async function makeApp() {
 
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_A));
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_B));
+  const intentRes = await request(app)
+    .get(`/pools/${pool.id}/deposit-intent`)
+    .set("Authorization", bearerFor(MEMBER_A));
   await request(app)
     .post(`/pools/${pool.id}/deposits`)
     .set("Authorization", bearerFor(MEMBER_A))
-    .send({ amountPaise: 100000 });
+    .send({ depositIntentId: intentRes.body.intent.id, amountPaise: 100000 });
 
   return { app, pool };
 }

@@ -8,9 +8,36 @@ export interface Deposit {
 
 export interface DepositRepository {
   create(poolId: string, userId: string, amountPaise: number): Promise<Deposit>;
+  findById(id: string): Promise<Deposit | null>;
   sumByPool(poolId: string): Promise<number>;
   sumByPoolAndUser(poolId: string, userId: string): Promise<number>;
   listByPool(poolId: string): Promise<Deposit[]>;
+}
+
+// See PendingDeposit in schema.prisma for why this exists: attributes a
+// webhook (or self-report) confirmation back to the Member it was for, and
+// guarantees a deposit intent is only ever credited once.
+export interface PendingDeposit {
+  id: string;
+  providerRef: string;
+  poolId: string;
+  userId: string;
+  resultingDepositId: string | null;
+  consumedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface PendingDepositRepository {
+  create(providerRef: string, poolId: string, userId: string): Promise<PendingDeposit>;
+  findByProviderRef(providerRef: string): Promise<PendingDeposit | null>;
+  markConsumed(providerRef: string, resultingDepositId: string): Promise<void>;
+}
+
+export class UnknownDepositReferenceError extends Error {
+  constructor() {
+    super("Unknown deposit reference");
+    this.name = "UnknownDepositReferenceError";
+  }
 }
 
 export interface ContributionSummary {

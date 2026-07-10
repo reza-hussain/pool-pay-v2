@@ -1,5 +1,6 @@
 import type {
   DepositIntent,
+  DepositWebhookEvent,
   PaymentProvider,
   SpendConfirmation,
   TransferConfirmation,
@@ -7,9 +8,8 @@ import type {
 
 let nextId = 1;
 
-export interface SimulatedDeposit {
+export interface SimulatedDeposit extends DepositWebhookEvent {
   poolId: string;
-  amountPaise: number;
 }
 
 export class FakePaymentProvider implements PaymentProvider {
@@ -31,13 +31,32 @@ export class FakePaymentProvider implements PaymentProvider {
 
   // Test-only: simulates the BaaS partner confirming this intent was paid
   // for `amountPaise` — which may differ from the intent's fixedAmountPaise,
-  // since not every UPI app honors a locked amount.
+  // since not every UPI app honors a locked amount. Shaped like a parsed
+  // webhook event so it can feed DepositService.confirmDeposit directly.
   simulateDeposit(intentId: string, amountPaise: number): SimulatedDeposit {
     const intent = this.intents.get(intentId);
     if (!intent) {
       throw new Error(`Unknown deposit intent: ${intentId}`);
     }
-    return { poolId: intent.poolId, amountPaise };
+    return { poolId: intent.poolId, providerRef: intentId, amountPaise, status: "SUCCESS" };
+  }
+
+  // The fake's webhook payload IS a DepositWebhookEvent already — no
+  // provider-specific shape to normalize, unlike the real Decentro adapter.
+  parseDepositWebhook(payload: unknown): DepositWebhookEvent | null {
+    if (
+      typeof payload === "object" &&
+      payload !== null &&
+      "providerRef" in payload &&
+      "amountPaise" in payload &&
+      "status" in payload
+    ) {
+      const { providerRef, amountPaise, status } = payload as DepositWebhookEvent;
+      if (typeof providerRef === "string" && typeof amountPaise === "number") {
+        return { providerRef, amountPaise, status };
+      }
+    }
+    return null;
   }
 
   async initiateSpend(

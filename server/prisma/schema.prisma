@@ -23,6 +23,7 @@ model User {
   organizedPools Pool[]
   memberships    Membership[]
   deposits       Deposit[]
+  pendingDeposits PendingDeposit[]
   spends         Spend[]
   reimbursements Reimbursement[]
   refunds        Refund[]
@@ -46,6 +47,7 @@ model Pool {
   joinCode    String       @unique
   memberships    Membership[]
   deposits       Deposit[]
+  pendingDeposits PendingDeposit[]
   spends         Spend[]
   reimbursements Reimbursement[]
   refunds        Refund[]
@@ -67,6 +69,29 @@ model Deposit {
 
   @@index([poolId])
   @@index([poolId, userId])
+}
+
+// Bookkeeping for confirming a deposit intent server-side, closing the gap
+// where a real Payment Provider (ticket #14, #15) confirms payment via an
+// async webhook rather than synchronously: created when the intent's QR is
+// generated (so we know which Member it was for before any money moves),
+// consumed exactly once — by whichever of self-report or webhook arrives
+// first — so the two paths can't double-credit the same payment.
+model PendingDeposit {
+  id          String    @id @default(cuid())
+  providerRef String    @unique
+  poolId      String
+  pool        Pool      @relation(fields: [poolId], references: [id])
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  // The Deposit row created on first confirmation — kept so a repeat
+  // confirmation (idempotent replay) can return the same result instead of
+  // re-validating or re-crediting.
+  resultingDepositId String?
+  consumedAt         DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([poolId])
 }
 
 model Spend {

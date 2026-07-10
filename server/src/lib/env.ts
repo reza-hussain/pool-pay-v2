@@ -17,6 +17,9 @@ const envSchema = z.object({
   // Decentro's "consumer_urn" — a merchant/consumer identifier Decentro
   // assigns during onboarding, required on every payments-v3 call.
   DECENTRO_CONSUMER_URN: z.string().optional(),
+  // Shared secret for the deposit-confirmation webhook (ticket #15) — see
+  // deposits/webhook-router.ts. Optional; the check is skipped when unset.
+  DECENTRO_WEBHOOK_SECRET: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

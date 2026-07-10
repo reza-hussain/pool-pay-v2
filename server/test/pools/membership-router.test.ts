@@ -229,10 +229,13 @@ describe("DELETE /pools/:poolId/members/:memberId", () => {
       .delete(`/pools/${pool.id}/members/${MEMBER_ID}`)
       .set("Authorization", bearerFor(ORGANIZER_ID));
 
+    const intentRes = await request(app)
+      .get(`/pools/${pool.id}/deposit-intent`)
+      .set("Authorization", bearerFor(MEMBER_ID));
     const res = await request(app)
       .post(`/pools/${pool.id}/deposits`)
       .set("Authorization", bearerFor(MEMBER_ID))
-      .send({ amountPaise: 1000 });
+      .send({ depositIntentId: intentRes.body.intent.id, amountPaise: 1000 });
     expect(res.status).toBe(403);
   });
 

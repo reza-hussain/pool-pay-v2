@@ -54,10 +54,13 @@ async function makeApp() {
   const pool = createRes.body.pool as { id: string };
 
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+  const intentRes = await request(app)
+    .get(`/pools/${pool.id}/deposit-intent`)
+    .set("Authorization", bearerFor(MEMBER_ID));
   await request(app)
     .post(`/pools/${pool.id}/deposits`)
     .set("Authorization", bearerFor(MEMBER_ID))
-    .send({ amountPaise: 100000 });
+    .send({ depositIntentId: intentRes.body.intent.id, amountPaise: 100000 });
 
   return { app, pool };
 }

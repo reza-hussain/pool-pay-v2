@@ -17,6 +17,10 @@ export class InMemoryDepositRepository implements DepositRepository {
     return deposit;
   }
 
+  async findById(id: string): Promise<Deposit | null> {
+    return this.deposits.find((d) => d.id === id) ?? null;
+  }
+
   async sumByPool(poolId: string): Promise<number> {
     return this.deposits
       .filter((d) => d.poolId === poolId)

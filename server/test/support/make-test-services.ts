@@ -4,6 +4,7 @@ import { MembershipService } from "../../src/memberships/membership-service.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { DepositService } from "../../src/deposits/deposit-service.js";
 import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-deposit-repository.js";
+import { InMemoryPendingDepositRepository } from "../../src/deposits/fakes/in-memory-pending-deposit-repository.js";
 import { SpendService } from "../../src/spends/spend-service.js";
 import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-repository.js";
 import { ReimbursementService } from "../../src/reimbursements/reimbursement-service.js";
@@ -33,6 +34,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
   const userRepository = options?.userRepository ?? new InMemoryUserRepository();
   const membershipRepository = new InMemoryMembershipRepository();
   const depositRepository = new InMemoryDepositRepository();
+  const pendingDepositRepository = new InMemoryPendingDepositRepository();
   const spendRepository = new InMemorySpendRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
   const refundRepository = new InMemoryRefundRepository();
@@ -45,6 +47,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     poolRepository,
     membershipRepository,
     depositRepository,
+    pendingDepositRepository,
     spendRepository,
     reimbursementRepository,
     refundRepository,
@@ -106,6 +109,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     membershipRepository,
     userRepository,
     depositRepository,
+    pendingDepositRepository,
     spendRepository,
     reimbursementRepository,
     refundRepository,

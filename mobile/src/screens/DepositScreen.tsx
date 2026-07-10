@@ -39,10 +39,13 @@ export function DepositScreen({
   }, [pool.id, session.token]);
 
   async function confirmDeposit(amountPaise: number) {
+    if (!intent) {
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
-      const res = await recordDeposit(session.token, pool.id, amountPaise);
+      const res = await recordDeposit(session.token, pool.id, intent.id, amountPaise);
       setResult(res);
     } catch (err) {
       setError(err instanceof DepositsApiError ? err.message : "Something went wrong");
@@ -157,7 +160,7 @@ export function DepositScreen({
       <Pressable
         style={styles.primaryButton}
         onPress={() => confirmDeposit(rupeesToPaise(amountRupees))}
-        disabled={loading || !amountRupees}
+        disabled={loading || !amountRupees || !intent}
       >
         {loading ? (
           <ActivityIndicator color={colors.paper} />

@@ -7,9 +7,11 @@ import {
   InvalidDepositAmountError,
   NotAMemberError,
   PoolNotAcceptingDepositsError,
+  UnknownDepositReferenceError,
 } from "./types.js";
 
-const recordDepositSchema = z.object({
+const confirmDepositSchema = z.object({
+  depositIntentId: z.string(),
   amountPaise: z.number(),
 });
 
@@ -21,7 +23,10 @@ export function createDepositsRouter(depositService: DepositService, jwtSecret: 
     requireAuth(jwtSecret),
     async (req: AuthenticatedRequest, res, next) => {
       try {
-        const intent = await depositService.createDepositIntent(req.params.poolId);
+        const intent = await depositService.createDepositIntent(
+          req.params.poolId,
+          req.userId as string,
+        );
         res.status(200).json({ intent });
       } catch (error) {
         if (error instanceof PoolNotFoundError) {
@@ -37,19 +42,19 @@ export function createDepositsRouter(depositService: DepositService, jwtSecret: 
     "/:poolId/deposits",
     requireAuth(jwtSecret),
     async (req: AuthenticatedRequest, res, next) => {
-      const parsed = recordDepositSchema.safeParse(req.body);
+      const parsed = confirmDepositSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: "amountPaise is required" });
+        res.status(400).json({ error: "depositIntentId and amountPaise are required" });
         return;
       }
 
       try {
         const userId = req.userId as string;
         const poolId = req.params.poolId;
-        const deposit = await depositService.recordDeposit(
-          poolId,
-          userId,
+        const deposit = await depositService.confirmDeposit(
+          parsed.data.depositIntentId,
           parsed.data.amountPaise,
+          { poolId, userId },
         );
         const [poolBalancePaise, contributionSummary] = await Promise.all([
           depositService.getPoolBalance(poolId),
@@ -57,7 +62,7 @@ export function createDepositsRouter(depositService: DepositService, jwtSecret: 
         ]);
         res.status(201).json({ deposit, poolBalancePaise, contributionSummary });
       } catch (error) {
-        if (error instanceof PoolNotFoundError) {
+        if (error instanceof PoolNotFoundError || error instanceof UnknownDepositReferenceError) {
           res.status(404).json({ error: error.message });
           return;
         }

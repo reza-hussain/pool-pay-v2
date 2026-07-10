@@ -6,6 +6,8 @@ import type { MembershipService } from "./memberships/membership-service.js";
 import { createPoolsRouter } from "./pools/router.js";
 import type { DepositService } from "./deposits/deposit-service.js";
 import { createDepositsRouter } from "./deposits/router.js";
+import { createDepositWebhookRouter } from "./deposits/webhook-router.js";
+import type { PaymentProvider } from "./payments/types.js";
 import type { SpendService } from "./spends/spend-service.js";
 import { createSpendsRouter } from "./spends/router.js";
 import type { ReimbursementService } from "./reimbursements/reimbursement-service.js";
@@ -31,6 +33,10 @@ export interface AppDependencies {
   voteService: VoteService;
   analyticsService: AnalyticsService;
   jwtSecret: string;
+  // Deposit-confirmation webhook (ticket #15) — optional so every other
+  // test file's createApp call is unaffected; only mounted when provided.
+  paymentProvider?: PaymentProvider;
+  decentroWebhookSecret?: string;
 }
 
 export function createApp({
@@ -45,6 +51,8 @@ export function createApp({
   voteService,
   analyticsService,
   jwtSecret,
+  paymentProvider,
+  decentroWebhookSecret,
 }: AppDependencies): Express {
   const app = express();
   app.use(express.json());
@@ -57,6 +65,9 @@ export function createApp({
   app.use("/pools", createClosureRouter(closureService, jwtSecret));
   app.use("/pools", createVotesRouter(voteService, jwtSecret));
   app.use("/analytics", createAnalyticsRouter(analyticsService, jwtSecret));
+  if (paymentProvider) {
+    app.use("/webhooks", createDepositWebhookRouter(depositService, paymentProvider, decentroWebhookSecret));
+  }
 
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     console.error(error);

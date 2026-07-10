@@ -12,6 +12,7 @@ import { MembershipService } from "./memberships/membership-service.js";
 import { PrismaMembershipRepository } from "./memberships/prisma-membership-repository.js";
 import { DepositService } from "./deposits/deposit-service.js";
 import { PrismaDepositRepository } from "./deposits/prisma-deposit-repository.js";
+import { PrismaPendingDepositRepository } from "./deposits/prisma-pending-deposit-repository.js";
 import { SpendService } from "./spends/spend-service.js";
 import { PrismaSpendRepository } from "./spends/prisma-spend-repository.js";
 import { ReimbursementService } from "./reimbursements/reimbursement-service.js";
@@ -50,6 +51,7 @@ const authService = new AuthService({
 const poolRepository = new PrismaPoolRepository(prisma);
 const membershipRepository = new PrismaMembershipRepository(prisma);
 const depositRepository = new PrismaDepositRepository(prisma);
+const pendingDepositRepository = new PrismaPendingDepositRepository(prisma);
 const spendRepository = new PrismaSpendRepository(prisma);
 const reimbursementRepository = new PrismaReimbursementRepository(prisma);
 const refundRepository = new PrismaRefundRepository(prisma);
@@ -70,6 +72,7 @@ const depositService = new DepositService({
   poolRepository,
   membershipRepository,
   depositRepository,
+  pendingDepositRepository,
   spendRepository,
   reimbursementRepository,
   refundRepository,
@@ -129,6 +132,8 @@ const app = createApp({
   voteService,
   analyticsService,
   jwtSecret: env.JWT_SECRET,
+  paymentProvider,
+  decentroWebhookSecret: env.DECENTRO_WEBHOOK_SECRET,
 });
 
 const port = Number(env.PORT);

@@ -86,4 +86,12 @@ describe("PrismaDepositRepository", () => {
     const deposits = await repo.listByPool(poolId);
     expect(deposits).toHaveLength(2);
   });
+
+  it("finds a deposit by id, or returns null", async () => {
+    const repo = new PrismaDepositRepository(prisma);
+    const deposit = await repo.create(poolId, memberId, 40000);
+
+    await expect(repo.findById(deposit.id)).resolves.toMatchObject({ id: deposit.id });
+    await expect(repo.findById("does-not-exist")).resolves.toBeNull();
+  });
 });
