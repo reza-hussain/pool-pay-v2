@@ -11,6 +11,11 @@ model User {
   id             String       @id @default(cuid())
   phoneNumber    String       @unique
   createdAt      DateTime     @default(now())
+  // Full KYC (ticket #12, ADR 0007) — required to become an Organizer, never
+  // required just to join/deposit as a Member. Stubbed here: set instantly by
+  // POST /auth/verify rather than a real verification flow, until the real
+  // BaaS/UPI partner integration (ticket #14) wires up an actual KYC check.
+  isVerified     Boolean      @default(false)
   organizedPools Pool[]
   memberships    Membership[]
   deposits       Deposit[]

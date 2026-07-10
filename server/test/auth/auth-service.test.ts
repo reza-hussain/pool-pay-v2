@@ -128,4 +128,28 @@ describe("AuthService.verifyOtp", () => {
 
     await expect(authService.verifyOtp(requestId, code)).rejects.toThrow(OtpExpiredError);
   });
+
+  it("signs up a new user as not yet fully verified (ticket #12)", async () => {
+    const { authService, otpSender } = makeAuthService();
+    const { requestId } = await authService.requestOtp(PHONE);
+    const code = otpSender.lastCodeSentTo(PHONE)!;
+
+    const result = await authService.verifyOtp(requestId, code);
+
+    expect(result.user.isVerified).toBe(false);
+  });
+});
+
+describe("AuthService.verifyIdentity", () => {
+  it("marks the user as fully verified (stubbed full-KYC, ticket #12)", async () => {
+    const { authService, otpSender } = makeAuthService();
+    const { requestId } = await authService.requestOtp(PHONE);
+    const code = otpSender.lastCodeSentTo(PHONE)!;
+    const { user } = await authService.verifyOtp(requestId, code);
+    expect(user.isVerified).toBe(false);
+
+    const verified = await authService.verifyIdentity(user.id);
+
+    expect(verified.isVerified).toBe(true);
+  });
 });

@@ -12,8 +12,10 @@ const JWT_SECRET = "test-secret";
 const ORGANIZER_ID = "user_organizer";
 
 function makeApp() {
+  const userRepository = new InMemoryUserRepository();
+  userRepository.seedVerifiedUser(ORGANIZER_ID);
   const authService = new AuthService({
-    userRepository: new InMemoryUserRepository(),
+    userRepository,
     otpStore: new InMemoryOtpStore(),
     otpSender: new FakeOtpSender(),
   });
@@ -27,7 +29,7 @@ function makeApp() {
     closureService,
     voteService,
     poolRepository,
-  } = makeTestServices();
+  } = makeTestServices({ userRepository });
   const app = createApp({
     authService,
     poolService,
@@ -103,6 +105,15 @@ describe("POST /pools", () => {
       .set("Authorization", bearerFor(ORGANIZER_ID))
       .send({ type: "OPEN" });
     expect(res.status).toBe(400);
+  });
+
+  it("returns 403 for an unverified user (ticket #12)", async () => {
+    const { app } = makeApp();
+    const res = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor("user_not_yet_verified"))
+      .send({ name: "Goa Trip", type: "OPEN" });
+    expect(res.status).toBe(403);
   });
 });
 

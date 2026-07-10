@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import { PoolService } from "../../src/pools/pool-service.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
+import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import {
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
   MissingPerPersonAmountError,
   NotPoolOrganizerError,
+  OrganizerNotVerifiedError,
   UnexpectedPerPersonAmountError,
 } from "../../src/pools/types.js";
 import { PoolNotFoundError } from "../../src/memberships/types.js";
@@ -16,8 +18,10 @@ const ORGANIZER_ID = "user_1";
 function makePoolService() {
   const poolRepository = new InMemoryPoolRepository();
   const membershipRepository = new InMemoryMembershipRepository();
-  const poolService = new PoolService({ poolRepository, membershipRepository });
-  return { poolService, poolRepository, membershipRepository };
+  const userRepository = new InMemoryUserRepository();
+  userRepository.seedVerifiedUser(ORGANIZER_ID);
+  const poolService = new PoolService({ poolRepository, membershipRepository, userRepository });
+  return { poolService, poolRepository, membershipRepository, userRepository };
 }
 
 describe("PoolService.createPool", () => {
@@ -125,6 +129,26 @@ describe("PoolService.createPool", () => {
         perPersonAmountPaise: 5000,
       }),
     ).rejects.toThrow(UnexpectedPerPersonAmountError);
+  });
+
+  it("rejects an unverified user (ticket #12)", async () => {
+    const poolRepository = new InMemoryPoolRepository();
+    const membershipRepository = new InMemoryMembershipRepository();
+    const userRepository = new InMemoryUserRepository();
+    // Not seeded as verified.
+    const poolService = new PoolService({ poolRepository, membershipRepository, userRepository });
+
+    await expect(
+      poolService.createPool(ORGANIZER_ID, { name: "Goa Trip", type: "OPEN" }),
+    ).rejects.toThrow(OrganizerNotVerifiedError);
+  });
+
+  it("rejects a user who was never created at all", async () => {
+    const { poolService } = makePoolService();
+
+    await expect(
+      poolService.createPool("user_never_signed_up", { name: "Goa Trip", type: "OPEN" }),
+    ).rejects.toThrow(OrganizerNotVerifiedError);
   });
 });
 

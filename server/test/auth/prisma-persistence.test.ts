@@ -50,6 +50,32 @@ describe("PrismaUserRepository", () => {
     await repo.create("+919876543210");
     await expect(repo.create("+919876543210")).rejects.toThrow();
   });
+
+  it("creates a new user as not fully verified", async () => {
+    const repo = new PrismaUserRepository(prisma);
+    const created = await repo.create("+919876543210");
+    expect(created.isVerified).toBe(false);
+  });
+
+  it("finds a user by id", async () => {
+    const repo = new PrismaUserRepository(prisma);
+    const created = await repo.create("+919876543210");
+
+    const found = await repo.findById(created.id);
+    expect(found?.id).toBe(created.id);
+    await expect(repo.findById("does-not-exist")).resolves.toBeNull();
+  });
+
+  it("marks a user as fully verified", async () => {
+    const repo = new PrismaUserRepository(prisma);
+    const created = await repo.create("+919876543210");
+
+    const verified = await repo.markFullyVerified(created.id);
+    expect(verified.isVerified).toBe(true);
+
+    const found = await repo.findById(created.id);
+    expect(found?.isVerified).toBe(true);
+  });
 });
 
 describe("PrismaOtpStore", () => {

@@ -14,8 +14,10 @@ const MEMBER_A = "user_member_a";
 const MEMBER_B = "user_member_b";
 
 async function makeApp() {
+  const userRepository = new InMemoryUserRepository();
+  userRepository.seedVerifiedUser(ORGANIZER_ID);
   const authService = new AuthService({
-    userRepository: new InMemoryUserRepository(),
+    userRepository,
     otpStore: new InMemoryOtpStore(),
     otpSender: new FakeOtpSender(),
   });
@@ -28,7 +30,7 @@ async function makeApp() {
     ledgerService,
     closureService,
     voteService,
-  } = makeTestServices();
+  } = makeTestServices({ userRepository });
   const app = createApp({
     authService,
     poolService,

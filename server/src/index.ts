@@ -23,8 +23,9 @@ import { VoteService } from "./votes/vote-service.js";
 import { PrismaRefundVoteRepository } from "./votes/prisma-refund-vote-repository.js";
 import { FakePaymentProvider } from "./payments/fakes/fake-payment-provider.js";
 
+const userRepository = new PrismaUserRepository(prisma);
 const authService = new AuthService({
-  userRepository: new PrismaUserRepository(prisma),
+  userRepository,
   otpStore: new PrismaOtpStore(prisma),
   otpSender: new ConsoleOtpSender(),
 });
@@ -42,7 +43,7 @@ const refundVoteRepository = new PrismaRefundVoteRepository(prisma);
 // behind the same PaymentProvider interface.
 const paymentProvider = new FakePaymentProvider();
 
-const poolService = new PoolService({ poolRepository, membershipRepository });
+const poolService = new PoolService({ poolRepository, membershipRepository, userRepository });
 const membershipService = new MembershipService({ poolRepository, membershipRepository });
 const depositService = new DepositService({
   poolRepository,

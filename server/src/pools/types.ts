@@ -71,3 +71,10 @@ export class NotPoolOrganizerError extends Error {
     this.name = "NotPoolOrganizerError";
   }
 }
+
+export class OrganizerNotVerifiedError extends Error {
+  constructor() {
+    super("Verify your identity before creating a Pool");
+    this.name = "OrganizerNotVerifiedError";
+  }
+}

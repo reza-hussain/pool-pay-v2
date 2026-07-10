@@ -1,11 +1,13 @@
 import { randomInt } from "node:crypto";
 import type { MembershipRepository } from "../memberships/types.js";
 import { PoolNotFoundError } from "../memberships/types.js";
+import type { UserRepository } from "../auth/types.js";
 import {
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
   MissingPerPersonAmountError,
   NotPoolOrganizerError,
+  OrganizerNotVerifiedError,
   UnexpectedPerPersonAmountError,
   type CreatePoolInput,
   type Pool,
@@ -16,21 +18,29 @@ import {
 export interface PoolServiceOptions {
   poolRepository: PoolRepository;
   membershipRepository: MembershipRepository;
+  userRepository: UserRepository;
   generateJoinCode?: () => string;
 }
 
 export class PoolService {
   private readonly poolRepository: PoolRepository;
   private readonly membershipRepository: MembershipRepository;
+  private readonly userRepository: UserRepository;
   private readonly generateJoinCode: () => string;
 
   constructor(options: PoolServiceOptions) {
     this.poolRepository = options.poolRepository;
     this.membershipRepository = options.membershipRepository;
+    this.userRepository = options.userRepository;
     this.generateJoinCode = options.generateJoinCode ?? defaultGenerateJoinCode;
   }
 
   async createPool(organizerId: string, input: CreatePoolInput): Promise<Pool> {
+    const organizer = await this.userRepository.findById(organizerId);
+    if (!organizer?.isVerified) {
+      throw new OrganizerNotVerifiedError();
+    }
+
     const name = input.name.trim();
     if (!name) {
       throw new InvalidPoolNameError();

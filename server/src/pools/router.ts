@@ -8,6 +8,7 @@ import {
   InvalidPoolNameError,
   MissingPerPersonAmountError,
   NotPoolOrganizerError,
+  OrganizerNotVerifiedError,
   UnexpectedPerPersonAmountError,
 } from "./types.js";
 import {
@@ -53,6 +54,10 @@ export function createPoolsRouter(
         error instanceof InvalidPerPersonAmountError
       ) {
         res.status(400).json({ error: error.message });
+        return;
+      }
+      if (error instanceof OrganizerNotVerifiedError) {
+        res.status(403).json({ error: error.message });
         return;
       }
       next(error);

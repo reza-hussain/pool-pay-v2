@@ -2,11 +2,14 @@ export interface User {
   id: string;
   phoneNumber: string;
   createdAt: Date;
+  isVerified: boolean;
 }
 
 export interface UserRepository {
   findByPhoneNumber(phoneNumber: string): Promise<User | null>;
+  findById(id: string): Promise<User | null>;
   create(phoneNumber: string): Promise<User>;
+  markFullyVerified(id: string): Promise<User>;
 }
 
 export interface OtpChallenge {

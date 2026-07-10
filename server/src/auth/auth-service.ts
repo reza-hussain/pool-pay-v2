@@ -81,6 +81,13 @@ export class AuthService {
     const user = await this.userRepository.create(challenge.phoneNumber);
     return { user, isNewUser: true };
   }
+
+  // Stubbed full-KYC (ticket #12, ADR 0007) — passes instantly rather than
+  // running a real verification flow, until the real BaaS/UPI partner
+  // integration (ticket #14) wires up an actual KYC check.
+  async verifyIdentity(userId: string): Promise<User> {
+    return this.userRepository.markFullyVerified(userId);
+  }
 }
 
 function defaultGenerateCode(): string {

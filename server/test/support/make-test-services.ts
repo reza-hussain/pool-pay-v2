@@ -13,6 +13,8 @@ import { ClosureService } from "../../src/closure/closure-service.js";
 import { InMemoryRefundRepository } from "../../src/closure/fakes/in-memory-refund-repository.js";
 import { VoteService } from "../../src/votes/vote-service.js";
 import { InMemoryRefundVoteRepository } from "../../src/votes/fakes/in-memory-refund-vote-repository.js";
+import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
+import type { UserRepository } from "../../src/auth/types.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 
 // Shared across test files that just need working Pool/Membership/Deposit/Spend/
@@ -20,8 +22,14 @@ import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provi
 // internals — avoids re-wiring the same fakes everywhere. All services share
 // the same repository instances, since e.g. a Pool created via poolService
 // must be findable by others.
-export function makeTestServices() {
+//
+// Pass the same userRepository your AuthService uses if the test creates a
+// Pool — PoolService.createPool now looks up the organizer's isVerified flag
+// there (ticket #12), so a fabricated bearer-token userId needs a matching
+// seeded User (see InMemoryUserRepository.seedVerifiedUser).
+export function makeTestServices(options?: { userRepository?: UserRepository }) {
   const poolRepository = new InMemoryPoolRepository();
+  const userRepository = options?.userRepository ?? new InMemoryUserRepository();
   const membershipRepository = new InMemoryMembershipRepository();
   const depositRepository = new InMemoryDepositRepository();
   const spendRepository = new InMemorySpendRepository();
@@ -30,7 +38,7 @@ export function makeTestServices() {
   const refundVoteRepository = new InMemoryRefundVoteRepository();
   const paymentProvider = new FakePaymentProvider();
 
-  const poolService = new PoolService({ poolRepository, membershipRepository });
+  const poolService = new PoolService({ poolRepository, membershipRepository, userRepository });
   const membershipService = new MembershipService({ poolRepository, membershipRepository });
   const depositService = new DepositService({
     poolRepository,
@@ -92,6 +100,7 @@ export function makeTestServices() {
     voteService,
     poolRepository,
     membershipRepository,
+    userRepository,
     depositRepository,
     spendRepository,
     reimbursementRepository,

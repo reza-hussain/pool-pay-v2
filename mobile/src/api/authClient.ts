@@ -9,13 +9,20 @@ export interface RequestOtpResult {
 export interface VerifyOtpResult {
   token: string;
   isNewUser: boolean;
-  user: { id: string; phoneNumber: string };
+  user: { id: string; phoneNumber: string; isVerified: boolean };
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
+export interface VerifyIdentityResult {
+  user: { id: string; phoneNumber: string; isVerified: boolean };
+}
+
+async function postJson<T>(path: string, body: unknown, token?: string): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(body),
   });
 
@@ -32,4 +39,9 @@ export function requestOtp(phoneNumber: string): Promise<RequestOtpResult> {
 
 export function verifyOtp(requestId: string, code: string): Promise<VerifyOtpResult> {
   return postJson("/auth/otp/verify", { requestId, code });
+}
+
+// Stubbed full-KYC (ticket #12) — passes instantly, no real verification flow yet.
+export function verifyIdentity(token: string): Promise<VerifyIdentityResult> {
+  return postJson("/auth/verify", undefined, token);
 }

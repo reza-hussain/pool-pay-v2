@@ -163,3 +163,27 @@ describe("POST /auth/otp/verify", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("POST /auth/verify", () => {
+  it("marks the signed-up user as fully verified (stubbed full-KYC, ticket #12)", async () => {
+    const { app, otpSender } = makeApp();
+    const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyOtpRes = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+    expect(verifyOtpRes.body.user.isVerified).toBe(false);
+
+    const res = await request(app)
+      .post("/auth/verify")
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.isVerified).toBe(true);
+  });
+
+  it("returns 401 without a bearer token", async () => {
+    const { app } = makeApp();
+    const res = await request(app).post("/auth/verify");
+    expect(res.status).toBe(401);
+  });
+});

@@ -26,9 +26,10 @@ import { CloseConfirmScreen } from './src/screens/CloseConfirmScreen';
 import { ClosedScreen } from './src/screens/ClosedScreen';
 import { VoteScreen } from './src/screens/VoteScreen';
 import { MembersScreen } from './src/screens/MembersScreen';
+import { VerifyIdentityScreen } from './src/screens/VerifyIdentityScreen';
 import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
 import type { ClosureRefund } from './src/api/closureClient';
-import { loadSession, type StoredSession } from './src/api/session';
+import { loadSession, saveSession, type StoredSession } from './src/api/session';
 import { lockPool, type Pool } from './src/api/poolsClient';
 import { joinByPoolId } from './src/api/membersClient';
 import { parseJoinPoolId } from './src/lib/inviteLink';
@@ -41,6 +42,7 @@ type AuthStackParamList = {
 
 type AppStackParamList = {
   Home: undefined;
+  VerifyIdentity: undefined;
   CreatePool: undefined;
   Invite: { pool: Pool };
   JoinPool: undefined;
@@ -72,6 +74,7 @@ const SessionContext = createContext<{
   isNewUser: boolean;
   pools: Pool[];
   setPools: Dispatch<SetStateAction<Pool[]>>;
+  setSession: (session: StoredSession) => void;
 } | null>(null);
 
 function useAuthContext() {
@@ -101,7 +104,9 @@ function HomeRoute({ navigation }: NativeStackScreenProps<AppStackParamList, 'Ho
         session={session}
         isNewUser={isNewUser}
         pools={pools}
-        onCreatePool={() => navigation.navigate('CreatePool')}
+        onCreatePool={() =>
+          navigation.navigate(session.user.isVerified ? 'CreatePool' : 'VerifyIdentity')
+        }
         onJoinPool={() => navigation.navigate('JoinPool')}
         onSelectPool={(pool) => navigation.navigate('Deposit', { pool })}
         onOpenOrganizerControls={(pool) => setOrganizerControlsPool(pool)}
@@ -136,6 +141,22 @@ function HomeRoute({ navigation }: NativeStackScreenProps<AppStackParamList, 'Ho
         />
       ) : null}
     </>
+  );
+}
+
+function VerifyIdentityRoute({
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'VerifyIdentity'>) {
+  const { session, setSession } = useSessionContext();
+  return (
+    <VerifyIdentityScreen
+      session={session}
+      onVerified={(updated) => {
+        setSession(updated);
+        navigation.replace('CreatePool');
+      }}
+      onCancel={() => navigation.goBack()}
+    />
   );
 }
 
@@ -284,6 +305,11 @@ export default function App() {
       .finally(() => setBootstrapping(false));
   }, []);
 
+  const updateSession = useCallback((updated: StoredSession) => {
+    setSession(updated);
+    void saveSession(updated);
+  }, []);
+
   // Invite links (poolpay://join/<poolId>) auto-join while logged in. If the
   // app is opened by a link before login, the link is dropped — completing a
   // deferred join after signup is out of scope for this ticket.
@@ -334,9 +360,10 @@ export default function App() {
             </AuthStack.Navigator>
           </AuthContext.Provider>
         ) : (
-          <SessionContext.Provider value={{ session, isNewUser, pools, setPools }}>
+          <SessionContext.Provider value={{ session, isNewUser, pools, setPools, setSession: updateSession }}>
             <AppStack.Navigator screenOptions={{ headerShown: false }}>
               <AppStack.Screen name="Home" component={HomeRoute} />
+              <AppStack.Screen name="VerifyIdentity" component={VerifyIdentityRoute} />
               <AppStack.Screen name="CreatePool" component={CreatePoolRoute} />
               <AppStack.Screen name="Invite" component={InviteRoute} options={{ gestureEnabled: false }} />
               <AppStack.Screen name="JoinPool" component={JoinPoolRoute} />

@@ -10,6 +10,7 @@ import {
   OtpNotFoundError,
 } from "./types.js";
 import { signSessionToken } from "./session.js";
+import { requireAuth, type AuthenticatedRequest } from "./require-auth.js";
 
 const requestOtpSchema = z.object({
   phoneNumber: z.string(),
@@ -75,7 +76,7 @@ export function createAuthRouter(authService: AuthService, jwtSecret: string): R
       res.status(200).json({
         token,
         isNewUser,
-        user: { id: user.id, phoneNumber: user.phoneNumber },
+        user: { id: user.id, phoneNumber: user.phoneNumber, isVerified: user.isVerified },
       });
     } catch (error) {
       if (error instanceof OtpNotFoundError) {
@@ -93,6 +94,22 @@ export function createAuthRouter(authService: AuthService, jwtSecret: string): R
       next(error);
     }
   });
+
+  // Stubbed full-KYC (ticket #12) — passes instantly. Only Organizers are
+  // ever gated on this (ADR 0007); Members need nothing beyond the phone
+  // verification already done by OTP signup.
+  router.post(
+    "/verify",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      try {
+        const user = await authService.verifyIdentity(req.userId as string);
+        res.status(200).json({ user: { id: user.id, phoneNumber: user.phoneNumber, isVerified: user.isVerified } });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   return router;
 }

@@ -14,8 +14,10 @@ const ORGANIZER_ID = "user_organizer";
 const MEMBER_ID = "user_member";
 
 async function makeApp() {
+  const userRepository = new InMemoryUserRepository();
+  userRepository.seedVerifiedUser(ORGANIZER_ID);
   const authService = new AuthService({
-    userRepository: new InMemoryUserRepository(),
+    userRepository,
     otpStore: new InMemoryOtpStore(),
     otpSender: new FakeOtpSender(),
   });
@@ -28,7 +30,7 @@ async function makeApp() {
     ledgerService,
     closureService,
     voteService,
-  } = makeTestServices();
+  } = makeTestServices({ userRepository });
   const app = createApp({
     authService,
     poolService,
@@ -147,8 +149,10 @@ describe("GET /pools/:poolId/members", () => {
   });
 
   it("returns 500 instead of hanging when a dependency throws unexpectedly", async () => {
+    const userRepository = new InMemoryUserRepository();
+    userRepository.seedVerifiedUser(ORGANIZER_ID);
     const authService = new AuthService({
-      userRepository: new InMemoryUserRepository(),
+      userRepository,
       otpStore: new InMemoryOtpStore(),
       otpSender: new FakeOtpSender(),
     });
@@ -162,7 +166,7 @@ describe("GET /pools/:poolId/members", () => {
       voteService,
       poolRepository,
       membershipRepository,
-    } = makeTestServices();
+    } = makeTestServices({ userRepository });
     membershipRepository.listByPool = async () => {
       throw new Error("database is on fire");
     };
