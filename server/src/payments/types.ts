@@ -75,4 +75,10 @@ export interface PaymentProvider {
   // providerRef, so the provider itself doesn't need to know about Pools,
   // Members, or the pending-deposit ledger.
   parseDepositWebhook(payload: unknown): DepositWebhookEvent | null;
+  // Authenticates a deposit webhook call before parseDepositWebhook touches
+  // it — vendor-specific (Cashfree: HMAC-SHA256 over the raw body), so it
+  // lives behind this same seam rather than the generic webhook router
+  // knowing how any particular provider signs its callbacks. rawBody must be
+  // the exact bytes the provider signed, not the parsed/re-serialized JSON.
+  verifyWebhookSignature(rawBody: Buffer, headers: Record<string, string | undefined>): boolean;
 }

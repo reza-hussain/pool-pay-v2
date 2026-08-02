@@ -47,7 +47,7 @@ export class FakePaymentProvider implements PaymentProvider {
   }
 
   // The fake's webhook payload IS a DepositWebhookEvent already — no
-  // provider-specific shape to normalize, unlike the real Decentro adapter.
+  // provider-specific shape to normalize, unlike the real Cashfree adapter.
   parseDepositWebhook(payload: unknown): DepositWebhookEvent | null {
     if (
       typeof payload === "object" &&
@@ -91,5 +91,12 @@ export class FakePaymentProvider implements PaymentProvider {
       .map((word) => word[0].toUpperCase() + word.slice(1))
       .join(" ");
     return { verified: true, accountHolderName: accountHolderName || null };
+  }
+
+  // No real signature to check — every other ticket's tests call the webhook
+  // route directly without signing anything, same as this fake never having
+  // a real webhook secret to compare against.
+  verifyWebhookSignature(): boolean {
+    return true;
   }
 }

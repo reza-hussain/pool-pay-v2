@@ -28,7 +28,7 @@ export interface AuthServiceOptions {
   identityProvider: IdentityVerificationProvider;
   // Optional (defaults to the fake) so the many existing callers that don't
   // care about UPI ID verification don't all need updating — only
-  // src/index.ts needs to pass the real Decentro-backed one explicitly.
+  // src/index.ts needs to pass the real Cashfree-backed one explicitly.
   paymentProvider?: PaymentProvider;
   now?: () => Date;
   generateCode?: () => string;
@@ -98,9 +98,9 @@ export class AuthService {
   }
 
   // Full-KYC (ticket #12, ADR 0007) — delegates to whichever
-  // IdentityVerificationProvider is configured. The fake (used until ticket
-  // #14's real credentials exist) always passes; the real one actually
-  // checks the PAN against Decentro's CKYC registry.
+  // IdentityVerificationProvider is configured. The fake (used until real
+  // credentials exist) always passes; the real one actually checks the PAN
+  // against Cashfree's PAN-registry verification (ADR 0013).
   async verifyIdentity(userId: string, panNumber: string): Promise<User> {
     const result = await this.identityProvider.verifyFullIdentity(userId, panNumber);
     if (!result.verified) {
