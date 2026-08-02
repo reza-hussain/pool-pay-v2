@@ -32,7 +32,6 @@ export function ReimburseScreen({
 }) {
   const [members, setMembers] = useState<Membership[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
-  const [vpa, setVpa] = useState("");
   const [amountRupees, setAmountRupees] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +54,6 @@ export function ReimburseScreen({
         session.token,
         pool.id,
         selectedMemberId,
-        vpa,
         rupeesToPaise(amountRupees),
       );
       setResult(res);
@@ -120,18 +118,6 @@ export function ReimburseScreen({
       </View>
 
       <View style={styles.field}>
-        <Text style={styles.fieldLabel}>Member's UPI ID</Text>
-        <TextInput
-          style={styles.fieldValueSmall}
-          placeholder="member@upi"
-          placeholderTextColor={colors.ink400}
-          autoCapitalize="none"
-          value={vpa}
-          onChangeText={setVpa}
-        />
-      </View>
-
-      <View style={styles.field}>
         <Text style={styles.fieldLabel}>Amount (₹)</Text>
         <TextInput
           style={styles.fieldValue}
@@ -148,7 +134,7 @@ export function ReimburseScreen({
       <Pressable
         style={styles.primaryButton}
         onPress={confirmReimbursement}
-        disabled={loading || !amountRupees || !vpa.trim() || !selectedMemberId}
+        disabled={loading || !amountRupees || !selectedMemberId}
       >
         {loading ? (
           <ActivityIndicator color={colors.paper} />
@@ -227,13 +213,6 @@ const styles = StyleSheet.create({
   fieldValue: {
     fontSize: 24,
     fontFamily: type.title.fontFamily,
-    color: colors.ink900,
-    marginTop: 5,
-    padding: 0,
-  },
-  fieldValueSmall: {
-    ...type.bodyBold,
-    fontSize: 15,
     color: colors.ink900,
     marginTop: 5,
     padding: 0,

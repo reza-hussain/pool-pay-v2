@@ -38,7 +38,7 @@ The kit's 21 screens map closely to our tickets — use them as the target, not 
 
 | Kit section | Screens | Maps to |
 |---|---|---|
-| 02 Entry | Onboarding, empty Home, Home (pools by role) | Ticket #1 (account) surrounding context, Home dashboard (not yet ticketed) |
+| 02 Entry | Onboarding, empty Home, Home (pools by role) | Ticket #1 (account) surrounding context; welcome carousel/phone-OTP/profile-setup built (see Known drift); Home dashboard (not yet ticketed) |
 | 03 Create | Name + type (Equal Split/Open), set share & goal | Ticket #2 (Create a Pool) |
 | 04 Contributing | Pool detail, deposit QR (locked amount), keypad contribute (Open), success, transaction detail | Ticket #4 (Deposit) |
 | 05 Ongoing | Open Pool detail, Members list | Ticket #4 (Open Pool variant), general Pool detail |
@@ -46,8 +46,10 @@ The kit's 21 screens map closely to our tickets — use them as the target, not 
 | 07 Wind-down | Closed receipt, Activity feed, Alerts | Ticket #8 (Ledger), #9 (Closure) |
 | 08 Profile | Account & settings | Not yet ticketed |
 
-**Gaps — not designed yet, will need new screens when these tickets are built:** the phone/OTP signup-login flow (ticket #1's actual screens), merchant QR-scan-to-pay (ticket #6 — the kit's "Transfer out" is a menu entry, not the scan flow itself), Reimburse-a-Member (ticket #7), the majority-vote emergency refund (ticket #10), Remove-a-Member (ticket #11), tiered KYC/identity verification (ticket #12), and the subscription tier (ticket #13). Design these in the kit's established visual language when their tickets come up, rather than improvising a different style.
+**Gaps — not designed yet, will need new screens when these tickets are built:** merchant QR-scan-to-pay (ticket #6 — the kit's "Transfer out" is a menu entry, not the scan flow itself), a bottom nav bar and its Activity/Alerts/Profile tabs (deferred, not yet built), and a full app-wide design system overhaul (deferred, not yet built). Design these in the kit's established visual language when they're picked up, rather than improvising a different style.
 
 ## Known drift
 
-None currently. Ticket #1's login screen was re-skinned to the kit's tokens as part of ticket #2 (with explicit permission to touch ticket #1's UI). If a screen drifts from the kit again, note it here with which screen and why, rather than leaving it undocumented.
+Ticket #1's login screen was re-skinned to the kit's tokens as part of ticket #2 (with explicit permission to touch ticket #1's UI).
+
+**Onboarding (welcome carousel, phone/OTP, profile setup — 2026-07-10):** built via Stitch rather than added directly to `poolpay-ui-kit.html`. The Stitch design system was derived from this README (same hex ramps, radii, spacing, and the one-pumpkin rule), so the tokens match — but Stitch's own font enum doesn't include Onest, so its preview canvas rendered these screens in Hanken Grotesk. The shipped React Native screens (`WelcomeCarouselScreen`, `SignupLoginScreen`, `ProfileSetupScreen`) use the real `mobile/src/theme/tokens.ts` (true Onest, exact hex values), not the Stitch preview — but `poolpay-ui-kit.html` itself still doesn't include these 3 screens in its rendered set. For exact layout/spacing questions about this flow, treat the shipped RN code as the source of truth, not the HTML kit. If someone adds these to the HTML kit later, this note can be removed.

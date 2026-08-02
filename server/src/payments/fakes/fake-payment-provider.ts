@@ -4,7 +4,12 @@ import type {
   PaymentProvider,
   SpendConfirmation,
   TransferConfirmation,
+  VpaVerificationResult,
 } from "../types.js";
+
+// A real UPI ID always has the form <handle>@<bank/PSP name> — good enough
+// for the fake to decide "verified" without a real bank lookup.
+const VPA_PATTERN = /^[\w.\-]+@[\w.\-]+$/;
 
 let nextId = 1;
 
@@ -73,5 +78,18 @@ export class FakePaymentProvider implements PaymentProvider {
     amountPaise: number,
   ): Promise<TransferConfirmation> {
     return { id: `transfer_confirmation_${nextId++}`, poolId, vpa, amountPaise };
+  }
+
+  async verifyVpa(vpa: string): Promise<VpaVerificationResult> {
+    if (!VPA_PATTERN.test(vpa)) {
+      return { verified: false, accountHolderName: null };
+    }
+    const localPart = vpa.split("@")[0].replace(/[._-]+/g, " ").trim();
+    const accountHolderName = localPart
+      .split(" ")
+      .filter(Boolean)
+      .map((word) => word[0].toUpperCase() + word.slice(1))
+      .join(" ");
+    return { verified: true, accountHolderName: accountHolderName || null };
   }
 }

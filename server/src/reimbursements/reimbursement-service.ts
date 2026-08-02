@@ -6,10 +6,11 @@ import { NotPoolOrganizerError, type PoolRepository } from "../pools/types.js";
 import type { PaymentProvider } from "../payments/types.js";
 import type { SpendRepository } from "../spends/types.js";
 import type { RefundRepository } from "../closure/types.js";
+import type { UserRepository } from "../auth/types.js";
 import {
   InsufficientPoolBalanceError,
   InvalidReimbursementAmountError,
-  InvalidVpaError,
+  MemberHasNoRegisteredUpiIdError,
   RecipientNotAMemberError,
   type Reimbursement,
   type ReimbursementRepository,
@@ -22,6 +23,7 @@ export interface ReimbursementServiceOptions {
   spendRepository: SpendRepository;
   reimbursementRepository: ReimbursementRepository;
   refundRepository: RefundRepository;
+  userRepository: UserRepository;
   paymentProvider: PaymentProvider;
 }
 
@@ -32,6 +34,7 @@ export class ReimbursementService {
   private readonly spendRepository: SpendRepository;
   private readonly reimbursementRepository: ReimbursementRepository;
   private readonly refundRepository: RefundRepository;
+  private readonly userRepository: UserRepository;
   private readonly paymentProvider: PaymentProvider;
 
   constructor(options: ReimbursementServiceOptions) {
@@ -41,21 +44,21 @@ export class ReimbursementService {
     this.spendRepository = options.spendRepository;
     this.reimbursementRepository = options.reimbursementRepository;
     this.refundRepository = options.refundRepository;
+    this.userRepository = options.userRepository;
     this.paymentProvider = options.paymentProvider;
   }
 
+  // vpa is no longer a caller-supplied argument (ADR 0012) — the destination
+  // is always the recipient's own Registered UPI ID from Onboarding, not
+  // something the Organizer types in by hand each time.
   async recordReimbursement(
     poolId: string,
     userId: string,
     memberId: string,
-    vpa: string,
     amountPaise: number,
   ): Promise<Reimbursement> {
     if (!Number.isInteger(amountPaise) || amountPaise <= 0) {
       throw new InvalidReimbursementAmountError();
-    }
-    if (!vpa.trim()) {
-      throw new InvalidVpaError();
     }
 
     const pool = await this.poolRepository.findById(poolId);
@@ -70,6 +73,12 @@ export class ReimbursementService {
     if (!membership) {
       throw new RecipientNotAMemberError();
     }
+
+    const recipient = await this.userRepository.findById(memberId);
+    if (!recipient?.upiId) {
+      throw new MemberHasNoRegisteredUpiIdError();
+    }
+    const vpa = recipient.upiId;
 
     const balance = await this.getPoolBalance(poolId);
     if (amountPaise > balance) {

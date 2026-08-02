@@ -11,6 +11,7 @@ import {
   OtpAlreadyUsedError,
   OtpExpiredError,
   OtpNotFoundError,
+  UnderageError,
 } from "../../src/auth/types.js";
 
 const PHONE = "+919876543210";
@@ -173,6 +174,74 @@ describe("AuthService.verifyIdentity", () => {
     await expect(authService.verifyIdentity(user.id, PAN)).rejects.toThrow(
       IdentityVerificationFailedError,
     );
+  });
+});
+
+describe("AuthService.verifyUpiId", () => {
+  it("delegates to the configured PaymentProvider's VPA verification", async () => {
+    const { authService } = makeAuthService();
+
+    const result = await authService.verifyUpiId("asha.rao@upi");
+
+    expect(result).toEqual({ verified: true, accountHolderName: "Asha Rao" });
+  });
+
+  it("reports an invalid VPA as not verified", async () => {
+    const { authService } = makeAuthService();
+
+    const result = await authService.verifyUpiId("not-a-vpa");
+
+    expect(result).toEqual({ verified: false, accountHolderName: null });
+  });
+});
+
+describe("AuthService.completeProfile", () => {
+  const PROFILE = {
+    name: "Asha Rao",
+    email: "asha@example.com",
+    upiId: "asha@upi",
+    avatarUrl: null,
+  };
+
+  it("stores the profile and marks the user onboarded (ADR 0012)", async () => {
+    const { authService, otpSender } = makeAuthService(() => new Date("2026-07-09T00:00:00.000Z"));
+    const { requestId } = await authService.requestOtp(PHONE);
+    const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+    expect(user.isOnboarded).toBe(false);
+
+    const onboarded = await authService.completeProfile(user.id, {
+      ...PROFILE,
+      dateOfBirth: new Date("2000-01-01T00:00:00.000Z"),
+    });
+
+    expect(onboarded).toMatchObject({ ...PROFILE, isOnboarded: true });
+  });
+
+  it("rejects someone under 18 (universal age gate, ADR 0012)", async () => {
+    const now = () => new Date("2026-07-09T00:00:00.000Z");
+    const { authService, otpSender } = makeAuthService(now);
+    const { requestId } = await authService.requestOtp(PHONE);
+    const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+
+    // Turns 18 the day after "now" — still 17.
+    const dateOfBirth = new Date("2008-07-10T00:00:00.000Z");
+
+    await expect(
+      authService.completeProfile(user.id, { ...PROFILE, dateOfBirth }),
+    ).rejects.toThrow(UnderageError);
+  });
+
+  it("accepts someone who turns 18 exactly on the current date", async () => {
+    const now = () => new Date("2026-07-09T00:00:00.000Z");
+    const { authService, otpSender } = makeAuthService(now);
+    const { requestId } = await authService.requestOtp(PHONE);
+    const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+
+    const dateOfBirth = new Date("2008-07-09T00:00:00.000Z");
+
+    const onboarded = await authService.completeProfile(user.id, { ...PROFILE, dateOfBirth });
+
+    expect(onboarded.isOnboarded).toBe(true);
   });
 });
 

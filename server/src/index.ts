@@ -41,11 +41,22 @@ const identityProvider = hasDecentroCredentials
     })
   : new FakeIdentityProvider();
 
+const paymentProvider = hasDecentroCredentials
+  ? new DecentroPaymentProvider({
+      clientId: env.DECENTRO_CLIENT_ID!,
+      clientSecret: env.DECENTRO_CLIENT_SECRET!,
+      env: env.DECENTRO_ENV,
+      consumerUrn: env.DECENTRO_CONSUMER_URN!,
+      virtualVpa: env.DECENTRO_VIRTUAL_VPA!,
+    })
+  : new FakePaymentProvider();
+
 const authService = new AuthService({
   userRepository,
   otpStore: new PrismaOtpStore(prisma),
   otpSender: new ConsoleOtpSender(),
   identityProvider,
+  paymentProvider,
 });
 
 const poolRepository = new PrismaPoolRepository(prisma);
@@ -56,15 +67,6 @@ const spendRepository = new PrismaSpendRepository(prisma);
 const reimbursementRepository = new PrismaReimbursementRepository(prisma);
 const refundRepository = new PrismaRefundRepository(prisma);
 const refundVoteRepository = new PrismaRefundVoteRepository(prisma);
-const paymentProvider = hasDecentroCredentials
-  ? new DecentroPaymentProvider({
-      clientId: env.DECENTRO_CLIENT_ID!,
-      clientSecret: env.DECENTRO_CLIENT_SECRET!,
-      env: env.DECENTRO_ENV,
-      consumerUrn: env.DECENTRO_CONSUMER_URN!,
-      virtualVpa: env.DECENTRO_VIRTUAL_VPA!,
-    })
-  : new FakePaymentProvider();
 
 const poolService = new PoolService({ poolRepository, membershipRepository, userRepository });
 const membershipService = new MembershipService({ poolRepository, membershipRepository });
@@ -94,6 +96,7 @@ const reimbursementService = new ReimbursementService({
   spendRepository,
   reimbursementRepository,
   refundRepository,
+  userRepository,
   paymentProvider,
 });
 const ledgerService = new LedgerService({
@@ -110,6 +113,7 @@ const closureService = new ClosureService({
   spendRepository,
   reimbursementRepository,
   refundRepository,
+  userRepository,
   paymentProvider,
 });
 const voteService = new VoteService({

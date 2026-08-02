@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import type { User, UserRepository } from "./types.js";
+import type { CompleteProfileInput, User, UserRepository } from "./types.js";
 
 export class PrismaUserRepository implements UserRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -22,5 +22,9 @@ export class PrismaUserRepository implements UserRepository {
 
   async subscribe(id: string): Promise<User> {
     return this.prisma.user.update({ where: { id }, data: { isSubscribed: true } });
+  }
+
+  async completeProfile(id: string, profile: CompleteProfileInput): Promise<User> {
+    return this.prisma.user.update({ where: { id }, data: { ...profile, isOnboarded: true } });
   }
 }

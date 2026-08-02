@@ -88,6 +88,24 @@ describe("PrismaUserRepository", () => {
     const found = await repo.findById(created.id);
     expect(found?.isSubscribed).toBe(true);
   });
+
+  it("creates a new user with no profile, and can complete Onboarding (ADR 0012)", async () => {
+    const repo = new PrismaUserRepository(prisma);
+    const created = await repo.create("+919876543210");
+    expect(created).toMatchObject({ isOnboarded: false, name: null, upiId: null });
+
+    const onboarded = await repo.completeProfile(created.id, {
+      name: "Asha Rao",
+      email: "asha@example.com",
+      dateOfBirth: new Date("2000-01-01T00:00:00.000Z"),
+      upiId: "asha@upi",
+      avatarUrl: null,
+    });
+    expect(onboarded).toMatchObject({ isOnboarded: true, name: "Asha Rao", upiId: "asha@upi" });
+
+    const found = await repo.findById(created.id);
+    expect(found).toMatchObject({ isOnboarded: true, upiId: "asha@upi" });
+  });
 });
 
 describe("PrismaOtpStore", () => {

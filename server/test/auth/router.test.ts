@@ -210,6 +210,129 @@ describe("POST /auth/verify", () => {
   });
 });
 
+describe("POST /auth/verify-upi-id", () => {
+  it("returns verified with the account holder name for a well-formed VPA", async () => {
+    const { app, otpSender } = makeApp();
+    const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyOtpRes = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+
+    const res = await request(app)
+      .post("/auth/verify-upi-id")
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`)
+      .send({ upiId: "asha.rao@upi" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ verified: true, accountHolderName: "Asha Rao" });
+  });
+
+  it("returns not verified for an invalid VPA, without erroring", async () => {
+    const { app, otpSender } = makeApp();
+    const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyOtpRes = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+
+    const res = await request(app)
+      .post("/auth/verify-upi-id")
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`)
+      .send({ upiId: "not-a-vpa" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ verified: false, accountHolderName: null });
+  });
+
+  it("returns 400 for a missing upiId", async () => {
+    const { app, otpSender } = makeApp();
+    const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyOtpRes = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+
+    const res = await request(app)
+      .post("/auth/verify-upi-id")
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`)
+      .send({});
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 401 without a bearer token", async () => {
+    const { app } = makeApp();
+    const res = await request(app).post("/auth/verify-upi-id").send({ upiId: "asha.rao@upi" });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("POST /auth/complete-profile", () => {
+  const PROFILE = {
+    name: "Asha Rao",
+    email: "asha@example.com",
+    dateOfBirth: "2000-01-01",
+    upiId: "asha@upi",
+  };
+
+  it("stores the profile and marks the user onboarded (ADR 0012)", async () => {
+    const { app, otpSender } = makeApp();
+    const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyOtpRes = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+    expect(verifyOtpRes.body.user.isOnboarded).toBe(false);
+
+    const res = await request(app)
+      .post("/auth/complete-profile")
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`)
+      .send(PROFILE);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user).toMatchObject({
+      name: PROFILE.name,
+      email: PROFILE.email,
+      dateOfBirth: PROFILE.dateOfBirth,
+      upiId: PROFILE.upiId,
+      isOnboarded: true,
+    });
+  });
+
+  it("returns 400 for someone under 18", async () => {
+    const { app, otpSender } = makeApp();
+    const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyOtpRes = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+
+    const res = await request(app)
+      .post("/auth/complete-profile")
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`)
+      .send({ ...PROFILE, dateOfBirth: "2015-01-01" });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for a missing required field", async () => {
+    const { app, otpSender } = makeApp();
+    const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyOtpRes = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+
+    const res = await request(app)
+      .post("/auth/complete-profile")
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`)
+      .send({ ...PROFILE, upiId: undefined });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 401 without a bearer token", async () => {
+    const { app } = makeApp();
+    const res = await request(app).post("/auth/complete-profile").send(PROFILE);
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("POST /auth/subscribe", () => {
   it("marks the signed-up user as subscribed (stubbed billing, ticket #13)", async () => {
     const { app, otpSender } = makeApp();

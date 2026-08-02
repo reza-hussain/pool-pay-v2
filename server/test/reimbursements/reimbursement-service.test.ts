@@ -7,10 +7,11 @@ import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-rep
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { InMemoryRefundRepository } from "../../src/closure/fakes/in-memory-refund-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
+import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import {
   InsufficientPoolBalanceError,
   InvalidReimbursementAmountError,
-  InvalidVpaError,
+  MemberHasNoRegisteredUpiIdError,
   RecipientNotAMemberError,
 } from "../../src/reimbursements/types.js";
 import { PoolNotFoundError } from "../../src/memberships/types.js";
@@ -18,6 +19,7 @@ import { NotPoolOrganizerError } from "../../src/pools/types.js";
 
 const ORGANIZER_ID = "user_organizer";
 const MEMBER_ID = "user_member";
+const MEMBER_UPI_ID = "member@upi";
 const STRANGER_ID = "user_stranger";
 
 async function makeService() {
@@ -27,6 +29,7 @@ async function makeService() {
   const spendRepository = new InMemorySpendRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
   const refundRepository = new InMemoryRefundRepository();
+  const userRepository = new InMemoryUserRepository();
   const paymentProvider = new FakePaymentProvider();
   const reimbursementService = new ReimbursementService({
     poolRepository,
@@ -35,6 +38,7 @@ async function makeService() {
     spendRepository,
     reimbursementRepository,
     refundRepository,
+    userRepository,
     paymentProvider,
   });
 
@@ -46,14 +50,17 @@ async function makeService() {
   });
   await membershipRepository.create(pool.id, MEMBER_ID, "MEMBER");
   await depositRepository.create(pool.id, MEMBER_ID, 100000);
+  userRepository.seedVerifiedUser(MEMBER_ID, "+91member", { upiId: MEMBER_UPI_ID });
 
   return {
     reimbursementService,
     poolRepository,
+    membershipRepository,
     depositRepository,
     spendRepository,
     reimbursementRepository,
     refundRepository,
+    userRepository,
     paymentProvider,
     pool,
   };
@@ -67,14 +74,13 @@ describe("ReimbursementService.recordReimbursement", () => {
       pool.id,
       ORGANIZER_ID,
       MEMBER_ID,
-      "member@upi",
       30000,
     );
 
     expect(reimbursement).toMatchObject({
       poolId: pool.id,
       memberId: MEMBER_ID,
-      vpa: "member@upi",
+      vpa: MEMBER_UPI_ID,
       amountPaise: 30000,
     });
     expect(await reimbursementService.getPoolBalance(pool.id)).toBe(100000 - 30000);
@@ -84,7 +90,7 @@ describe("ReimbursementService.recordReimbursement", () => {
     const { reimbursementService, pool } = await makeService();
 
     await expect(
-      reimbursementService.recordReimbursement(pool.id, ORGANIZER_ID, MEMBER_ID, "member@upi", 100001),
+      reimbursementService.recordReimbursement(pool.id, ORGANIZER_ID, MEMBER_ID, 100001),
     ).rejects.toThrow(InsufficientPoolBalanceError);
   });
 
@@ -92,7 +98,7 @@ describe("ReimbursementService.recordReimbursement", () => {
     const { reimbursementService, pool } = await makeService();
 
     await expect(
-      reimbursementService.recordReimbursement(pool.id, MEMBER_ID, MEMBER_ID, "member@upi", 1000),
+      reimbursementService.recordReimbursement(pool.id, MEMBER_ID, MEMBER_ID, 1000),
     ).rejects.toThrow(NotPoolOrganizerError);
   });
 
@@ -100,7 +106,7 @@ describe("ReimbursementService.recordReimbursement", () => {
     const { reimbursementService, pool } = await makeService();
 
     await expect(
-      reimbursementService.recordReimbursement(pool.id, ORGANIZER_ID, STRANGER_ID, "stranger@upi", 1000),
+      reimbursementService.recordReimbursement(pool.id, ORGANIZER_ID, STRANGER_ID, 1000),
     ).rejects.toThrow(RecipientNotAMemberError);
   });
 
@@ -108,7 +114,7 @@ describe("ReimbursementService.recordReimbursement", () => {
     const { reimbursementService } = await makeService();
 
     await expect(
-      reimbursementService.recordReimbursement("does-not-exist", ORGANIZER_ID, MEMBER_ID, "member@upi", 1000),
+      reimbursementService.recordReimbursement("does-not-exist", ORGANIZER_ID, MEMBER_ID, 1000),
     ).rejects.toThrow(PoolNotFoundError);
   });
 
@@ -116,7 +122,7 @@ describe("ReimbursementService.recordReimbursement", () => {
     const { reimbursementService, pool } = await makeService();
 
     await expect(
-      reimbursementService.recordReimbursement(pool.id, ORGANIZER_ID, MEMBER_ID, "member@upi", 0),
+      reimbursementService.recordReimbursement(pool.id, ORGANIZER_ID, MEMBER_ID, 0),
     ).rejects.toThrow(InvalidReimbursementAmountError);
   });
 
@@ -124,16 +130,17 @@ describe("ReimbursementService.recordReimbursement", () => {
     const { reimbursementService, pool } = await makeService();
 
     await expect(
-      reimbursementService.recordReimbursement(pool.id, ORGANIZER_ID, MEMBER_ID, "member@upi", 100.5),
+      reimbursementService.recordReimbursement(pool.id, ORGANIZER_ID, MEMBER_ID, 100.5),
     ).rejects.toThrow(InvalidReimbursementAmountError);
   });
 
-  it("rejects a blank UPI ID", async () => {
-    const { reimbursementService, pool } = await makeService();
+  it("rejects a Member with no Registered UPI ID on file (ADR 0012)", async () => {
+    const { reimbursementService, membershipRepository, pool } = await makeService();
+    await membershipRepository.create(pool.id, "user_no_upi", "MEMBER");
 
     await expect(
-      reimbursementService.recordReimbursement(pool.id, ORGANIZER_ID, MEMBER_ID, "  ", 1000),
-    ).rejects.toThrow(InvalidVpaError);
+      reimbursementService.recordReimbursement(pool.id, ORGANIZER_ID, "user_no_upi", 1000),
+    ).rejects.toThrow(MemberHasNoRegisteredUpiIdError);
   });
 
   it("accounts for prior Spends and Reimbursements when checking balance", async () => {
@@ -141,7 +148,7 @@ describe("ReimbursementService.recordReimbursement", () => {
     await spendRepository.create(pool.id, ORGANIZER_ID, "merchant@upi", 60000, 600);
     // Balance is 100000 - 60000 - 600 = 39400.
     await expect(
-      reimbursementService.recordReimbursement(pool.id, ORGANIZER_ID, MEMBER_ID, "member@upi", 40000),
+      reimbursementService.recordReimbursement(pool.id, ORGANIZER_ID, MEMBER_ID, 40000),
     ).rejects.toThrow(InsufficientPoolBalanceError);
   });
 });

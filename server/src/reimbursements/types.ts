@@ -22,10 +22,12 @@ export class InvalidReimbursementAmountError extends Error {
   }
 }
 
-export class InvalidVpaError extends Error {
+// Replaces the old client-supplied VPA (ADR 0012) — the destination is now
+// always the recipient's own Registered UPI ID from Onboarding.
+export class MemberHasNoRegisteredUpiIdError extends Error {
   constructor() {
-    super("A UPI ID is required to reimburse a Member");
-    this.name = "InvalidVpaError";
+    super("This Member hasn't completed Onboarding and has no Registered UPI ID on file");
+    this.name = "MemberHasNoRegisteredUpiIdError";
   }
 }
 

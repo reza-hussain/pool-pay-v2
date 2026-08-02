@@ -37,6 +37,17 @@ export interface DepositWebhookEvent {
   status: "SUCCESS" | "FAILED";
 }
 
+// Onboarding's Registered UPI ID (CONTEXT.md, ADR 0012) — verified via a real
+// bank-account lookup (Decentro's VerifyPay) rather than trusted as free
+// text. accountHolderName is shown back to the person to visually confirm
+// ("Paying refunds to: Asha R.") — the same trust model UPI apps themselves
+// use, not an automated exact-name match (bank records and casual self-entry
+// often differ in nickname/spelling even for the account's rightful owner).
+export interface VpaVerificationResult {
+  verified: boolean;
+  accountHolderName: string | null;
+}
+
 // The one boundary between Pool Pay's own logic and the external UPI/BaaS
 // partner (see docs/spec-mvp.md's Implementation Decisions — "Payment
 // Provider interface"). DecentroPaymentProvider is the real implementation
@@ -55,6 +66,9 @@ export interface PaymentProvider {
   // Member (this ticket) and, later, pro-rata refunds on Closure (ticket #9).
   // Never fee-bearing (ADR 0010).
   initiateTransfer(poolId: string, vpa: string, amountPaise: number): Promise<TransferConfirmation>;
+  // Checks whether a UPI ID is real and belongs to a live bank account,
+  // returning the bank's registered account-holder name for display.
+  verifyVpa(vpa: string): Promise<VpaVerificationResult>;
   // Normalizes a provider-specific deposit-confirmation callback into a
   // common shape, or null if the payload isn't a recognized event (ticket
   // #15) — DepositService.confirmDeposit takes it from there, keyed by

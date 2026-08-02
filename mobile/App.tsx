@@ -13,7 +13,9 @@ import {
 import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator, type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { WelcomeCarouselScreen } from './src/screens/WelcomeCarouselScreen';
 import { SignupLoginScreen } from './src/screens/SignupLoginScreen';
+import { ProfileSetupScreen } from './src/screens/ProfileSetupScreen';
 import { PoolsHomeScreen } from './src/screens/PoolsHomeScreen';
 import { CreatePoolScreen } from './src/screens/CreatePoolScreen';
 import { InviteScreen } from './src/screens/InviteScreen';
@@ -30,7 +32,14 @@ import { VerifyIdentityScreen } from './src/screens/VerifyIdentityScreen';
 import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
 import type { ClosureRefund } from './src/api/closureClient';
-import { loadSession, saveSession, type StoredSession } from './src/api/session';
+import {
+  clearStaleDataFromPriorInstall,
+  hasSeenWelcome,
+  loadSession,
+  markWelcomeSeen,
+  saveSession,
+  type StoredSession,
+} from './src/api/session';
 import { lockPool, type Pool } from './src/api/poolsClient';
 import { joinByPoolId } from './src/api/membersClient';
 import { parseJoinPoolId } from './src/lib/inviteLink';
@@ -311,11 +320,16 @@ export default function App() {
   // A rehydrated session (app relaunch) is never a fresh signup.
   const [isNewUser, setIsNewUser] = useState(false);
   const [pools, setPools] = useState<Pool[]>([]);
+  const [welcomeSeen, setWelcomeSeen] = useState(false);
   const navigationRef = useNavigationContainerRef<AppStackParamList>();
 
   useEffect(() => {
-    loadSession()
-      .then(setSession)
+    clearStaleDataFromPriorInstall()
+      .then(() => Promise.all([loadSession(), hasSeenWelcome()]))
+      .then(([storedSession, seenWelcome]) => {
+        setSession(storedSession);
+        setWelcomeSeen(seenWelcome);
+      })
       .finally(() => setBootstrapping(false));
   }, []);
 
@@ -361,18 +375,29 @@ export default function App() {
     <SafeAreaProvider onLayout={onLayout}>
       <NavigationContainer ref={navigationRef}>
         {!session ? (
-          <AuthContext.Provider
-            value={{
-              onAuthenticated: (newSession, newUser) => {
-                setSession(newSession);
-                setIsNewUser(newUser);
-              },
-            }}
-          >
-            <AuthStack.Navigator screenOptions={{ headerShown: false }}>
-              <AuthStack.Screen name="SignupLogin" component={SignupLoginRoute} />
-            </AuthStack.Navigator>
-          </AuthContext.Provider>
+          !welcomeSeen ? (
+            <WelcomeCarouselScreen
+              onGetStarted={() => {
+                void markWelcomeSeen();
+                setWelcomeSeen(true);
+              }}
+            />
+          ) : (
+            <AuthContext.Provider
+              value={{
+                onAuthenticated: (newSession, newUser) => {
+                  setSession(newSession);
+                  setIsNewUser(newUser);
+                },
+              }}
+            >
+              <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+                <AuthStack.Screen name="SignupLogin" component={SignupLoginRoute} />
+              </AuthStack.Navigator>
+            </AuthContext.Provider>
+          )
+        ) : !session.user.isOnboarded ? (
+          <ProfileSetupScreen session={session} onCompleted={setSession} />
         ) : (
           <SessionContext.Provider value={{ session, isNewUser, pools, setPools, setSession: updateSession }}>
             <AppStack.Navigator screenOptions={{ headerShown: false }}>

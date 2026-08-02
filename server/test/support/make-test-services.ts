@@ -69,6 +69,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     spendRepository,
     reimbursementRepository,
     refundRepository,
+    userRepository,
     paymentProvider,
   });
   const ledgerService = new LedgerService({
@@ -85,6 +86,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     spendRepository,
     reimbursementRepository,
     refundRepository,
+    userRepository,
     paymentProvider,
   });
   const voteService = new VoteService({

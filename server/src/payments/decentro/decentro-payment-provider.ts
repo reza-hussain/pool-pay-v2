@@ -5,8 +5,9 @@ import type {
   PaymentProvider,
   SpendConfirmation,
   TransferConfirmation,
+  VpaVerificationResult,
 } from "../types.js";
-import { DecentroClient, type DecentroClientConfig } from "./client.js";
+import { DecentroApiError, DecentroClient, type DecentroClientConfig } from "./client.js";
 
 export interface DecentroPaymentProviderConfig extends DecentroClientConfig {
   consumerUrn: string;
@@ -20,6 +21,17 @@ interface DynamicQrResponse {
 
 interface PayoutResponse {
   decentro_txn_id: string;
+}
+
+// docs.decentro.tech's VerifyPay (V3) — POST /v3/banking/verify_pay does a
+// real penny-drop and can come back PENDING while the drop settles; the
+// terminal result then has to be fetched from a separate status endpoint.
+interface VerifyPayResponse {
+  decentro_txn_id?: string;
+  reference_id?: string;
+  api_status: "SUCCESS" | "FAILURE" | "PENDING";
+  response_key?: string;
+  name_as_per_bank?: string;
 }
 
 // Best-effort shape for Decentro's server-to-server "terminal transaction
@@ -36,11 +48,17 @@ interface DepositWebhookPayload {
 // Real adapter behind the PaymentProvider seam (ticket #14, ADR 0002/0005),
 // implementing the exact same interface the fake one did. See
 // docs.decentro.tech for the underlying contracts:
-//   - Deposits:              POST /v3/payments/upi/qr (Dynamic QR)
+//   - Deposits:              POST /v3/payments/upi/qr (Dynamic QR) — payments
+//     module host (staging.api.decentro.tech).
 //   - Spends & Reimbursements/Refunds: POST /v3/core_banking/money_transfer/initiate
 //     (transfer_type: "UPI") — one unified payout endpoint serves both, since
 //     both are "move money out to a UPI VPA" from Decentro's perspective; the
 //     per-Spend fee (ADR 0010) is computed by SpendService, not this adapter.
+//     Despite the v3 path, this lives on the "core-banking" module host
+//     (in.staging.decentro.tech, same as KYC v2) — confirmed via Decentro's
+//     own reference page, not assumed from the path prefix.
+//   - UPI ID verification:   POST /v3/banking/verify_pay — payments module
+//     host, see verifyVpa.
 //   - Deposit confirmation:  server-to-server webhook, not synchronous — see
 //     parseDepositWebhook and deposits/webhook-router.ts (ticket #15).
 export class DecentroPaymentProvider implements PaymentProvider {
@@ -103,6 +121,58 @@ export class DecentroPaymentProvider implements PaymentProvider {
     return { id: response.decentro_txn_id, poolId, vpa, amountPaise };
   }
 
+  // Real bank-account lookup behind Onboarding's Registered UPI ID (ADR
+  // 0012) — a penny-drop that resolves the account holder's real name, shown
+  // back to the person for confirmation rather than trusted as free text.
+  // Treats every non-success outcome (invalid VPA, a still-PENDING drop
+  // after retrying the status check, or a Decentro-side error) the same
+  // way — "couldn't verify" — since the person can't act differently on any
+  // of those distinctions; they'd just retry or fix the VPA either way.
+  async verifyVpa(vpa: string): Promise<VpaVerificationResult> {
+    const referenceId = `vpa_${randomUUID().replace(/-/g, "").slice(0, 24)}`;
+    try {
+      const response = await this.client.post<VerifyPayResponse>("payments", "/v3/banking/verify_pay", {
+        consumer_urn: this.consumerUrn,
+        is_consent_granted: true,
+        reference_id: referenceId,
+        upi_vpa: vpa,
+        purpose_message: "Pool Pay UPI ID verification",
+      });
+
+      const resolved =
+        response.api_status === "PENDING" ? await this.pollVerificationStatus(referenceId) : response;
+
+      if (resolved?.api_status === "SUCCESS" && resolved.response_key === "success_account_details_retrieved") {
+        return { verified: true, accountHolderName: resolved.name_as_per_bank ?? null };
+      }
+      return { verified: false, accountHolderName: null };
+    } catch (error) {
+      if (error instanceof DecentroApiError) {
+        return { verified: false, accountHolderName: null };
+      }
+      throw error;
+    }
+  }
+
+  // Best-effort polling — unverified against a real sandbox exactly how long
+  // a penny-drop typically takes to settle, so these numbers (3 attempts,
+  // 1.5s apart) are a starting guess to revisit once sandbox access confirms
+  // real-world timing, same as this file's other Decentro-timing caveats.
+  private async pollVerificationStatus(referenceId: string): Promise<VerifyPayResponse | null> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const status = await this.client.get<VerifyPayResponse>(
+        "payments",
+        "/v3/banking/account_validation/status",
+        { reference_id: referenceId },
+      );
+      if (status.api_status !== "PENDING") {
+        return status;
+      }
+    }
+    return null;
+  }
+
   parseDepositWebhook(payload: unknown): DepositWebhookEvent | null {
     if (typeof payload !== "object" || payload === null) {
       return null;
@@ -130,7 +200,7 @@ export class DecentroPaymentProvider implements PaymentProvider {
     purpose: string;
   }): Promise<PayoutResponse> {
     const referenceId = `txn_${randomUUID().replace(/-/g, "").slice(0, 24)}`;
-    return this.client.post<PayoutResponse>("payments", "/v3/core_banking/money_transfer/initiate", {
+    return this.client.post<PayoutResponse>("core-banking", "/v3/core_banking/money_transfer/initiate", {
       reference_id: referenceId,
       consumer_urn: this.consumerUrn,
       purpose_message: args.purpose,

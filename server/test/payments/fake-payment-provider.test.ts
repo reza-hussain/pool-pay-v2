@@ -106,3 +106,21 @@ describe("FakePaymentProvider.initiateTransfer", () => {
     expect(confirmation.id).toBeTruthy();
   });
 });
+
+describe("FakePaymentProvider.verifyVpa", () => {
+  it("verifies a well-formed VPA and derives an account holder name from it", async () => {
+    const provider = new FakePaymentProvider();
+
+    const result = await provider.verifyVpa("asha.rao@upi");
+
+    expect(result).toEqual({ verified: true, accountHolderName: "Asha Rao" });
+  });
+
+  it("rejects a VPA with no @ handle", async () => {
+    const provider = new FakePaymentProvider();
+
+    const result = await provider.verifyVpa("not-a-vpa");
+
+    expect(result).toEqual({ verified: false, accountHolderName: null });
+  });
+});

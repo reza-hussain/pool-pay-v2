@@ -20,6 +20,16 @@ model User {
   // lifts the concurrent-Active-Pool cap, and unlocks cross-Pool analytics.
   // Stubbed: set instantly by POST /auth/subscribe, no real billing yet.
   isSubscribed   Boolean      @default(false)
+  // Onboarding (CONTEXT.md, ADR 0012) — collected once, right after OTP
+  // signup, before the person ever reaches Home. Null/false until then.
+  name           String?
+  email          String?
+  dateOfBirth    DateTime?
+  // Registered UPI ID (CONTEXT.md, ADR 0012) — the real refund/reimbursement
+  // destination, replacing the old fake `${memberId}@fakebank` placeholder.
+  upiId          String?
+  avatarUrl      String?
+  isOnboarded    Boolean      @default(false)
   organizedPools Pool[]
   memberships    Membership[]
   deposits       Deposit[]
