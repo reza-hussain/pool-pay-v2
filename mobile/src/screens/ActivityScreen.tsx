@@ -50,10 +50,11 @@ function groupEntries(entries: ActivityEntry[]): { group: DateGroup; entries: Ac
 }
 
 function EntryRow({ entry }: { entry: ActivityEntry }) {
+  const isDeposit = entry.type === "DEPOSIT";
   return (
     <View style={styles.row}>
-      <View style={styles.iconCircle}>
-        <Text style={styles.iconGlyph}>{"↓"}</Text>
+      <View style={[styles.iconCircle, isDeposit ? styles.iconCircleGreen : styles.iconCircleInk]}>
+        <Text style={styles.iconGlyph}>{isDeposit ? "↑" : "↓"}</Text>
       </View>
       <View style={styles.rowText}>
         <Text style={styles.rowTitle}>{entryTitle(entry)}</Text>
@@ -147,7 +148,7 @@ const styles = StyleSheet.create({
   },
   segment: {
     flexDirection: "row",
-    backgroundColor: "rgba(23,20,12,0.06)",
+    backgroundColor: colors.segmentFill,
     borderRadius: radii.md,
     padding: 4,
     gap: 4,
@@ -203,7 +204,12 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
+  },
+  iconCircleGreen: {
     backgroundColor: colors.green100,
+  },
+  iconCircleInk: {
+    backgroundColor: colors.ink100,
   },
   iconGlyph: {
     ...type.bodyBold,
