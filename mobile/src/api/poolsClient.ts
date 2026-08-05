@@ -19,6 +19,18 @@ export interface CreatePoolInput {
   perPersonAmountPaise?: number;
 }
 
+export async function listPools(token: string): Promise<Pool[]> {
+  const res = await fetch(`${API_URL}/pools`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new PoolsApiError(data.error ?? `Request failed with status ${res.status}`);
+  }
+  return data.pools as Pool[];
+}
+
 export async function createPool(token: string, input: CreatePoolInput): Promise<Pool> {
   const res = await fetch(`${API_URL}/pools`, {
     method: "POST",

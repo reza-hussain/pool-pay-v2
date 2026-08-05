@@ -40,7 +40,7 @@ import {
   saveSession,
   type StoredSession,
 } from './src/api/session';
-import { lockPool, type Pool } from './src/api/poolsClient';
+import { listPools, lockPool, type Pool } from './src/api/poolsClient';
 import { joinByPoolId } from './src/api/membersClient';
 import { parseJoinPoolId } from './src/lib/inviteLink';
 
@@ -329,6 +329,11 @@ export default function App() {
       .then(([storedSession, seenWelcome]) => {
         setSession(storedSession);
         setWelcomeSeen(seenWelcome);
+        if (storedSession) {
+          // Populates Home from real membership state on every app restart —
+          // previously `pools` only ever grew via in-session create/join calls.
+          listPools(storedSession.token).then(setPools).catch(() => {});
+        }
       })
       .finally(() => setBootstrapping(false));
   }, []);
@@ -388,6 +393,7 @@ export default function App() {
                 onAuthenticated: (newSession, newUser) => {
                   setSession(newSession);
                   setIsNewUser(newUser);
+                  listPools(newSession.token).then(setPools).catch(() => {});
                 },
               }}
             >

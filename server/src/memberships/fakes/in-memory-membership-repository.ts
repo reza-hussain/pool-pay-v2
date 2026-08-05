@@ -36,6 +36,10 @@ export class InMemoryMembershipRepository implements MembershipRepository {
     return this.memberships.filter((m) => m.poolId === poolId && m.removedAt === null);
   }
 
+  async listByUser(userId: string): Promise<Membership[]> {
+    return this.memberships.filter((m) => m.userId === userId && m.removedAt === null);
+  }
+
   async remove(poolId: string, userId: string): Promise<void> {
     const membership = this.memberships.find((m) => m.poolId === poolId && m.userId === userId);
     if (membership) {

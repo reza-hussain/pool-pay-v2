@@ -13,9 +13,10 @@ export interface MembershipRepository {
   // Reactivates (clears removedAt on) an existing row for this poolId+userId
   // rather than erroring, so a removed Member can be re-invited later.
   create(poolId: string, userId: string, role: MembershipRole): Promise<Membership>;
-  // Both find() and listByPool() treat a removed Membership as absent.
+  // find(), listByPool(), and listByUser() all treat a removed Membership as absent.
   find(poolId: string, userId: string): Promise<Membership | null>;
   listByPool(poolId: string): Promise<Membership[]>;
+  listByUser(userId: string): Promise<Membership[]>;
   remove(poolId: string, userId: string): Promise<void>;
 }
 

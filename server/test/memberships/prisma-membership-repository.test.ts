@@ -93,4 +93,22 @@ describe("PrismaMembershipRepository", () => {
     expect(rejoined.id).toBe(original.id);
     await expect(repo.find(poolId, memberId)).resolves.toMatchObject({ id: original.id });
   });
+
+  it("lists every Pool a user belongs to, excluding removed Memberships", async () => {
+    const repo = new PrismaMembershipRepository(prisma);
+    const otherPool = await prisma.pool.create({
+      data: { name: "Flat 3B Rent", type: "OPEN", organizerId, joinCode: "111111" },
+    });
+    await repo.create(poolId, memberId, "MEMBER");
+    await repo.create(otherPool.id, memberId, "MEMBER");
+    const removedPool = await prisma.pool.create({
+      data: { name: "Old Pool", type: "OPEN", organizerId, joinCode: "222222" },
+    });
+    await repo.create(removedPool.id, memberId, "MEMBER");
+    await repo.remove(removedPool.id, memberId);
+
+    const memberships = await repo.listByUser(memberId);
+
+    expect(memberships.map((m) => m.poolId).sort()).toEqual([poolId, otherPool.id].sort());
+  });
 });
