@@ -4,7 +4,7 @@ import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provi
 describe("FakePaymentProvider.createDepositIntent", () => {
   it("returns an intent with the given fixed amount for an Equal Split Pool", async () => {
     const provider = new FakePaymentProvider();
-    const intent = await provider.createDepositIntent("pool_1", 100000);
+    const intent = await provider.createDepositIntent("pool_1", 100000, "+919876543210");
 
     expect(intent.poolId).toBe("pool_1");
     expect(intent.fixedAmountPaise).toBe(100000);
@@ -14,7 +14,7 @@ describe("FakePaymentProvider.createDepositIntent", () => {
 
   it("returns an intent with no fixed amount for an Open Pool", async () => {
     const provider = new FakePaymentProvider();
-    const intent = await provider.createDepositIntent("pool_1", null);
+    const intent = await provider.createDepositIntent("pool_1", null, "+919876543210");
 
     expect(intent.fixedAmountPaise).toBeNull();
   });
@@ -23,7 +23,7 @@ describe("FakePaymentProvider.createDepositIntent", () => {
 describe("FakePaymentProvider.simulateDeposit", () => {
   it("simulates a deposit matching the intent's fixed amount", async () => {
     const provider = new FakePaymentProvider();
-    const intent = await provider.createDepositIntent("pool_1", 100000);
+    const intent = await provider.createDepositIntent("pool_1", 100000, "+919876543210");
 
     const simulated = provider.simulateDeposit(intent.id, 100000);
 
@@ -37,7 +37,7 @@ describe("FakePaymentProvider.simulateDeposit", () => {
 
   it("simulates a deposit that mismatches the intent's fixed amount", async () => {
     const provider = new FakePaymentProvider();
-    const intent = await provider.createDepositIntent("pool_1", 100000);
+    const intent = await provider.createDepositIntent("pool_1", 100000, "+919876543210");
 
     const simulated = provider.simulateDeposit(intent.id, 75000);
 
@@ -58,7 +58,7 @@ describe("FakePaymentProvider.simulateDeposit", () => {
 describe("FakePaymentProvider.parseDepositWebhook", () => {
   it("passes through a well-formed event", async () => {
     const provider = new FakePaymentProvider();
-    const intent = await provider.createDepositIntent("pool_1", 100000);
+    const intent = await provider.createDepositIntent("pool_1", 100000, "+919876543210");
 
     const event = provider.parseDepositWebhook({
       providerRef: intent.id,

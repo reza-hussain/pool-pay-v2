@@ -52,6 +52,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     reimbursementRepository,
     refundRepository,
     paymentProvider,
+    userRepository,
   });
   const spendService = new SpendService({
     poolRepository,

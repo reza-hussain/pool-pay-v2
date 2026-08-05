@@ -7,11 +7,10 @@ export interface DepositIntent {
   vpa: string;
   // Locked for Equal Split Pools, null (freely entered) for Open Pools.
   fixedAmountPaise: number | null;
-  // Set only by a real provider (e.g. Decentro's Dynamic QR) — a displayable
-  // QR image URL for the Member to scan. Additive/optional so the existing
-  // fake-provider flow and its consumers are unaffected (ticket #14's real
-  // adapter must implement this same interface with no other ticket's logic
-  // changing).
+  // Set only by a real provider (e.g. Cashfree's headless UPI QR session) —
+  // a displayable QR image for the Member to scan (a base64 data: URI, not a
+  // hosted https:// URL — see CashfreePaymentProvider). Additive/optional so
+  // the fake-provider flow and its consumers are unaffected.
   qrImageUrl?: string;
 }
 
@@ -50,10 +49,17 @@ export interface VpaVerificationResult {
 
 // The one boundary between Pool Pay's own logic and the external UPI/BaaS
 // partner (see docs/spec-mvp.md's Implementation Decisions — "Payment
-// Provider interface"). DecentroPaymentProvider is the real implementation
-// (ticket #14); FakePaymentProvider backs every other ticket's tests.
+// Provider interface"). CashfreePaymentProvider is the real implementation
+// (ADR 0013); FakePaymentProvider backs every other ticket's tests.
 export interface PaymentProvider {
-  createDepositIntent(poolId: string, fixedAmountPaise: number | null): Promise<DepositIntent>;
+  // customerPhone is the requesting Member's own phone number (Pool Pay
+  // accounts are phone/OTP-based, so this is always available) — Cashfree's
+  // Orders API requires a real customer phone per order.
+  createDepositIntent(
+    poolId: string,
+    fixedAmountPaise: number | null,
+    customerPhone: string,
+  ): Promise<DepositIntent>;
   // Moves money from the Pool out to a merchant. The per-Spend fee (ADR 0010)
   // is Pool Pay's own monetization, not a payment-rail cost, so it's computed
   // and recorded by SpendService, not part of this confirmation.

@@ -9,6 +9,7 @@ import {
   OtpAlreadyUsedError,
   OtpExpiredError,
   OtpNotFoundError,
+  ProfileIncompleteError,
   UnderageError,
   type CompleteProfileInput,
   type OtpSender,
@@ -100,9 +101,17 @@ export class AuthService {
   // Full-KYC (ticket #12, ADR 0007) — delegates to whichever
   // IdentityVerificationProvider is configured. The fake (used until real
   // credentials exist) always passes; the real one actually checks the PAN
-  // against Cashfree's PAN-registry verification (ADR 0013).
+  // against Cashfree's PAN-registry verification, including a name-match
+  // against the person's own on-file profile name (ADR 0013). Requires
+  // Onboarding's profile step (ADR 0012) to have already run — otherwise
+  // there's no name on file to check the PAN against, which would silently
+  // make the name-match check meaningless.
   async verifyIdentity(userId: string, panNumber: string): Promise<User> {
-    const result = await this.identityProvider.verifyFullIdentity(userId, panNumber);
+    const user = await this.userRepository.findById(userId);
+    if (!user?.name) {
+      throw new ProfileIncompleteError();
+    }
+    const result = await this.identityProvider.verifyFullIdentity(userId, panNumber, user.name);
     if (!result.verified) {
       throw new IdentityVerificationFailedError();
     }

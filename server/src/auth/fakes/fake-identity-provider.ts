@@ -6,7 +6,7 @@ let nextId = 1;
 // hasCashfreeIdentityCredentials in lib/env.ts) — passes instantly, no real
 // document check, matching ticket #12's original stub behavior exactly.
 export class FakeIdentityProvider implements IdentityVerificationProvider {
-  async verifyFullIdentity(_userId: string, _panNumber: string): Promise<IdentityVerificationResult> {
+  async verifyFullIdentity(_userId: string, _panNumber: string, _name: string): Promise<IdentityVerificationResult> {
     return { verified: true, providerRef: `fake_kyc_${nextId++}` };
   }
 }

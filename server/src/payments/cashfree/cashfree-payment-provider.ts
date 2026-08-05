@@ -92,9 +92,13 @@ export class CashfreePaymentProvider implements PaymentProvider {
     this.virtualVpa = config.virtualVpa;
   }
 
-  async createDepositIntent(poolId: string, fixedAmountPaise: number | null): Promise<DepositIntent> {
-    // Same ₹5-minimum placeholder rationale as the Decentro adapter carried
-    // for Open Pools (no fixed amount): Cashfree's Orders API requires a
+  async createDepositIntent(
+    poolId: string,
+    fixedAmountPaise: number | null,
+    customerPhone: string,
+  ): Promise<DepositIntent> {
+    // Same ₹5-minimum placeholder rationale the original adapter carried for
+    // Open Pools (no fixed amount): Cashfree's Orders API requires a
     // positive order_amount, there's no "any amount" order mode.
     const amountPaise = fixedAmountPaise ?? 500;
     const orderId = `dep_${randomUUID().replace(/-/g, "").slice(0, 24)}`;
@@ -104,13 +108,10 @@ export class CashfreePaymentProvider implements PaymentProvider {
       order_amount: amountPaise / 100,
       order_currency: "INR",
       // Cashfree's Orders API is customer-centric and requires a phone
-      // number per order; Pool Pay's QR is scanned by whichever Member pays,
-      // not one identified customer at creation time. Using a fixed
-      // placeholder here is an assumption to revisit once sandbox access
-      // confirms whether Cashfree accepts/ignores it for a shared-QR flow
-      // like this — flagging it the same way the Decentro adapter flagged
-      // its own unverified assumptions.
-      customer_details: { customer_id: poolId, customer_phone: "9999999999" },
+      // number per order — customerPhone is the requesting Member's own
+      // phone (Pool Pay accounts are phone/OTP-based), not a Pool-level
+      // identity, since the order itself is created per deposit attempt.
+      customer_details: { customer_id: poolId, customer_phone: customerPhone },
       order_meta: { payment_methods: "upi" },
     });
 
@@ -226,14 +227,13 @@ export class CashfreePaymentProvider implements PaymentProvider {
     return { id: response.transfer_id ?? transferId };
   }
 
-  // Swallows an "already registered" failure so repeat payouts to the same
-  // VPA don't error — the exact error code Cashfree returns for a duplicate
-  // beneficiary_id wasn't confirmed against a live sandbox call, so this
-  // treats any CashfreeApiError from this call as "already exists, proceed";
-  // a real create failure would then surface from the transfer call itself
-  // instead (it'll fail against a beneficiary that was never actually
-  // created), which is an acceptable fallback for now but worth tightening
-  // once sandbox access confirms the real duplicate-beneficiary error code.
+  // Only swallows the specific "already registered" failure so repeat
+  // payouts to the same VPA don't error — per docs.cashfree.com's
+  // beneficiary-v2 create reference, a duplicate beneficiary_id comes back
+  // as HTTP 409 with code "beneficiary_id_already_exists". Any other failure
+  // (bad VPA, suspended account, etc.) is a real problem and should stop the
+  // payout here with a clear error, rather than silently proceeding to a
+  // transfer call against a beneficiary that was never actually created.
   private async ensureBeneficiary(beneficiaryId: string, name: string, vpa: string): Promise<void> {
     try {
       await this.payoutClient.post("/beneficiary", {
@@ -242,7 +242,7 @@ export class CashfreePaymentProvider implements PaymentProvider {
         beneficiary_instrument_details: { vpa },
       });
     } catch (error) {
-      if (error instanceof CashfreeApiError) {
+      if (error instanceof CashfreeApiError && error.code === "beneficiary_id_already_exists") {
         return;
       }
       throw error;

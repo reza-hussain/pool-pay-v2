@@ -23,6 +23,7 @@ export class FakePaymentProvider implements PaymentProvider {
   async createDepositIntent(
     poolId: string,
     fixedAmountPaise: number | null,
+    _customerPhone: string,
   ): Promise<DepositIntent> {
     const intent: DepositIntent = {
       id: `intent_${nextId++}`,

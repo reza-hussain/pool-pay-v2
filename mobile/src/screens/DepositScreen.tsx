@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
 import {
@@ -85,13 +85,22 @@ export function DepositScreen({
         <Text style={styles.darkEyebrow}>Depositing into</Text>
         <Text style={styles.darkTitle}>{pool.name}</Text>
 
-        <View style={styles.vpaBox}>
-          <Text style={styles.vpaLabel}>Pay to UPI ID</Text>
-          <Text style={styles.vpaValue}>{intent?.vpa ?? "…"}</Text>
+        <View style={styles.qrBox}>
+          {intent?.qrImageUrl ? (
+            <Image source={{ uri: intent.qrImageUrl }} style={styles.qrImage} resizeMode="contain" />
+          ) : (
+            <ActivityIndicator color={colors.ink900} />
+          )}
         </View>
 
-        <Text style={styles.lockedCaption}>Amount locked for this Pool</Text>
-        <Text style={styles.lockedAmount}>{paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)}</Text>
+        <Text style={styles.vpaCaption}>
+          or pay to UPI ID <Text style={styles.vpaValue}>{intent?.vpa ?? "…"}</Text>
+        </Text>
+
+        <View style={styles.lockedBlock}>
+          <Text style={styles.lockedCaption}>Amount locked for this Pool</Text>
+          <Text style={styles.lockedAmount}>{paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)}</Text>
+        </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -278,20 +287,35 @@ const styles = StyleSheet.create({
     ...type.title,
     color: colors.cream,
     marginTop: spacing.s1,
-    marginBottom: spacing.s6,
   },
-  vpaBox: {
+  qrBox: {
+    width: 168,
+    height: 168,
+    marginTop: spacing.s6,
+    backgroundColor: colors.paper,
+    borderRadius: radii.lg,
+    padding: spacing.s4,
     alignItems: "center",
-    marginBottom: spacing.s5,
+    justifyContent: "center",
   },
-  vpaLabel: {
+  qrImage: {
+    width: "100%",
+    height: "100%",
+  },
+  vpaCaption: {
     ...type.caption,
     color: colors.ink200,
+    marginTop: spacing.s4,
+    textAlign: "center",
   },
   vpaValue: {
     ...type.bodyBold,
     color: colors.cream,
-    marginTop: spacing.s1,
+  },
+  lockedBlock: {
+    alignItems: "center",
+    marginTop: spacing.s5,
+    marginBottom: spacing.s6,
   },
   lockedCaption: {
     ...type.caption,
@@ -301,7 +325,6 @@ const styles = StyleSheet.create({
     ...type.figure,
     color: colors.cream,
     marginTop: spacing.s2,
-    marginBottom: spacing.s6,
   },
 
   successContainer: {

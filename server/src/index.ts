@@ -83,6 +83,7 @@ const depositService = new DepositService({
   reimbursementRepository,
   refundRepository,
   paymentProvider,
+  userRepository,
 });
 const spendService = new SpendService({
   poolRepository,

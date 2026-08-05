@@ -33,6 +33,7 @@ class SignatureTogglePaymentProvider extends FakePaymentProvider {
 async function makeApp(webhookPaymentProvider?: PaymentProvider) {
   const userRepository = new InMemoryUserRepository();
   userRepository.seedVerifiedUser(ORGANIZER_ID);
+  userRepository.seedVerifiedUser(MEMBER_ID);
   const authService = new AuthService({
     userRepository,
     otpStore: new InMemoryOtpStore(),

@@ -11,6 +11,7 @@ import {
   OtpAlreadyUsedError,
   OtpExpiredError,
   OtpNotFoundError,
+  ProfileIncompleteError,
   UnderageError,
 } from "../../src/auth/types.js";
 
@@ -145,6 +146,14 @@ describe("AuthService.verifyOtp", () => {
   });
 });
 
+const COMPLETE_PROFILE_INPUT = {
+  name: "Asha Rao",
+  email: "asha@example.com",
+  dateOfBirth: new Date("1990-01-01"),
+  upiId: "asha.rao@upi",
+  avatarUrl: null,
+};
+
 describe("AuthService.verifyIdentity", () => {
   it("marks the user as fully verified (stubbed full-KYC, ticket #12)", async () => {
     const { authService, otpSender } = makeAuthService();
@@ -152,10 +161,19 @@ describe("AuthService.verifyIdentity", () => {
     const code = otpSender.lastCodeSentTo(PHONE)!;
     const { user } = await authService.verifyOtp(requestId, code);
     expect(user.isVerified).toBe(false);
+    await authService.completeProfile(user.id, COMPLETE_PROFILE_INPUT);
 
     const verified = await authService.verifyIdentity(user.id, PAN);
 
     expect(verified.isVerified).toBe(true);
+  });
+
+  it("rejects before Onboarding's profile step has run (nothing on file to check the PAN's name against)", async () => {
+    const { authService, otpSender } = makeAuthService();
+    const { requestId } = await authService.requestOtp(PHONE);
+    const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+
+    await expect(authService.verifyIdentity(user.id, PAN)).rejects.toThrow(ProfileIncompleteError);
   });
 
   it("rejects when the identity provider does not verify the document", async () => {
@@ -170,6 +188,7 @@ describe("AuthService.verifyIdentity", () => {
     });
     const { requestId } = await authService.requestOtp(PHONE);
     const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+    await authService.completeProfile(user.id, COMPLETE_PROFILE_INPUT);
 
     await expect(authService.verifyIdentity(user.id, PAN)).rejects.toThrow(
       IdentityVerificationFailedError,

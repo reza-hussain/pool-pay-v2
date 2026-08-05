@@ -179,6 +179,15 @@ describe("POST /auth/verify", () => {
       .post("/auth/otp/verify")
       .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
     expect(verifyOtpRes.body.user.isVerified).toBe(false);
+    await request(app)
+      .post("/auth/complete-profile")
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`)
+      .send({
+        name: "Asha Rao",
+        email: "asha@example.com",
+        dateOfBirth: "1990-01-01",
+        upiId: "asha.rao@upi",
+      });
 
     const res = await request(app)
       .post("/auth/verify")
@@ -199,6 +208,21 @@ describe("POST /auth/verify", () => {
     const res = await request(app)
       .post("/auth/verify")
       .set("Authorization", `Bearer ${verifyOtpRes.body.token}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 before Onboarding's profile step has run", async () => {
+    const { app, otpSender } = makeApp();
+    const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyOtpRes = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+
+    const res = await request(app)
+      .post("/auth/verify")
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`)
+      .send({ panNumber: "ABCDE1234A" });
 
     expect(res.status).toBe(400);
   });

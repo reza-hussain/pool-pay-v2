@@ -91,6 +91,16 @@ export class IdentityVerificationFailedError extends Error {
   }
 }
 
+// Full-KYC (ADR 0007) now checks the PAN's registered name against the
+// person's on-file profile name (ADR 0012's Onboarding), so there's nothing
+// to check it against until Onboarding's profile step has run.
+export class ProfileIncompleteError extends Error {
+  constructor() {
+    super("Complete your profile before verifying your identity");
+    this.name = "ProfileIncompleteError";
+  }
+}
+
 // Universal 18+ age gate at Onboarding (ADR 0012) — applies to every person
 // regardless of role, separate from the Organizer-only full KYC tier (ADR 0007).
 export class UnderageError extends Error {

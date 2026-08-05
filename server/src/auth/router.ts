@@ -9,6 +9,7 @@ import {
   OtpAlreadyUsedError,
   OtpExpiredError,
   OtpNotFoundError,
+  ProfileIncompleteError,
   UnderageError,
   type User,
 } from "./types.js";
@@ -159,7 +160,11 @@ export function createAuthRouter(authService: AuthService, jwtSecret: string): R
         const user = await authService.verifyIdentity(req.userId as string, parsed.data.panNumber);
         res.status(200).json({ user: publicUser(user) });
       } catch (error) {
-        if (error instanceof InvalidPanNumberError || error instanceof IdentityVerificationFailedError) {
+        if (
+          error instanceof InvalidPanNumberError ||
+          error instanceof IdentityVerificationFailedError ||
+          error instanceof ProfileIncompleteError
+        ) {
           res.status(400).json({ error: error.message });
           return;
         }
