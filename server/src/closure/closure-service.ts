@@ -6,6 +6,7 @@ import type { SpendRepository } from "../spends/types.js";
 import type { ReimbursementRepository } from "../reimbursements/types.js";
 import type { PaymentProvider } from "../payments/types.js";
 import type { UserRepository } from "../auth/types.js";
+import { MemberHasNoRegisteredUpiIdError } from "../reimbursements/types.js";
 import { PoolAlreadyClosedError, type Refund, type RefundRepository } from "./types.js";
 
 export interface RefundBreakdownEntry {
@@ -83,13 +84,22 @@ export class ClosureService {
   private async performClosure(pool: Pool): Promise<ClosureResult> {
     const breakdown = await this.computeRefundBreakdown(pool.id);
 
+    // Registered UPI ID from Onboarding (ADR 0012) is the real refund
+    // destination, and every Member is expected to have one — Onboarding
+    // gates all Pool interaction (see CONTEXT.md), so a Member with none is
+    // an error condition, not a case to degrade around. Checked for every
+    // Member up front so Closure fails atomically before any transfer goes
+    // out, rather than mid-batch after some refunds already landed.
+    const members = await Promise.all(
+      breakdown.map((entry) => this.userRepository.findById(entry.memberId)),
+    );
+    if (members.some((member) => !member?.upiId)) {
+      throw new MemberHasNoRegisteredUpiIdError();
+    }
+
     const refunds: ClosureRefund[] = [];
-    for (const entry of breakdown) {
-      // Registered UPI ID from Onboarding (ADR 0012) is the real refund
-      // destination. Falls back to the old fake VPA for a Member who somehow
-      // has no Registered UPI ID on file, rather than blocking Closure.
-      const member = await this.userRepository.findById(entry.memberId);
-      const vpa = member?.upiId ?? `${entry.memberId}@fakebank`;
+    for (const [index, entry] of breakdown.entries()) {
+      const vpa = members[index]!.upiId as string;
       await this.paymentProvider.initiateTransfer(pool.id, vpa, entry.amountPaise);
       const refund = await this.refundRepository.create(pool.id, entry.memberId, vpa, entry.amountPaise);
       refunds.push({ ...refund, contributedPaise: entry.contributedPaise });

@@ -17,7 +17,7 @@ A person who has joined a Pool and can contribute to it. Distinct from the Organ
 _Avoid_: User (too generic — "Member" is scoped to a specific Pool)
 
 **Onboarding**:
-The one-time, mandatory flow a person completes before reaching Home: phone/OTP verification, then profile setup (name, email, date of birth, Registered UPI ID, optional photo). Someone who already has a session never sees it again.
+The one-time, mandatory flow a person completes before reaching Home: phone/OTP verification, then profile setup (name, email, date of birth, Registered UPI ID, optional photo). Someone who already has a session never sees it again. The mobile client blocks every Pool-related screen (joining, depositing, etc.) until Onboarding — including the Registered UPI ID — is complete, so a Member the server processes is expected to always have a Registered UPI ID on file. Code should treat a Member missing one as an error condition, not a case to silently degrade around.
 _Avoid_: Signup (too narrow — Signup is only the phone/OTP step within Onboarding)
 
 **Invite Link / Pool Code**:

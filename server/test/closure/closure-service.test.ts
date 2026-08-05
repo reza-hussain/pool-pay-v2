@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ClosureService, computeRefunds } from "../../src/closure/closure-service.js";
 import { InMemoryRefundRepository } from "../../src/closure/fakes/in-memory-refund-repository.js";
 import { PoolAlreadyClosedError } from "../../src/closure/types.js";
+import { MemberHasNoRegisteredUpiIdError } from "../../src/reimbursements/types.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 import { NotPoolOrganizerError } from "../../src/pools/types.js";
 import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-deposit-repository.js";
@@ -56,9 +57,19 @@ async function makeService() {
   };
 }
 
+// Onboarding (ADR 0012) is mandatory before a person can join or deposit
+// into any Pool, so every Member Closure processes is expected to have a
+// Registered UPI ID — seed one here the same way a real Member would have
+// one by the time they've joined a Pool.
+function seedUpi(userRepository: InMemoryUserRepository, memberId: string) {
+  userRepository.seedVerifiedUser(memberId, undefined, { upiId: `${memberId}@upi` });
+}
+
 describe("ClosureService.closePool", () => {
   it("refunds each Member pro-rata against their total contributions", async () => {
-    const { closureService, depositRepository, pool } = await makeService();
+    const { closureService, depositRepository, userRepository, pool } = await makeService();
+    seedUpi(userRepository, MEMBER_A);
+    seedUpi(userRepository, MEMBER_B);
     await depositRepository.create(pool.id, MEMBER_A, 60000);
     await depositRepository.create(pool.id, MEMBER_B, 40000);
 
@@ -71,8 +82,16 @@ describe("ClosureService.closePool", () => {
   });
 
   it("accounts for Spends and Reimbursements already taken out", async () => {
-    const { closureService, depositRepository, spendRepository, reimbursementRepository, pool } =
-      await makeService();
+    const {
+      closureService,
+      depositRepository,
+      spendRepository,
+      reimbursementRepository,
+      userRepository,
+      pool,
+    } = await makeService();
+    seedUpi(userRepository, MEMBER_A);
+    seedUpi(userRepository, MEMBER_B);
     await depositRepository.create(pool.id, MEMBER_A, 60000);
     await depositRepository.create(pool.id, MEMBER_B, 40000);
     await spendRepository.create(pool.id, ORGANIZER_ID, "merchant@upi", 20000, 200);
@@ -96,7 +115,8 @@ describe("ClosureService.closePool", () => {
   });
 
   it("excludes a Member with zero deposits from the refund", async () => {
-    const { closureService, depositRepository, pool } = await makeService();
+    const { closureService, depositRepository, userRepository, pool } = await makeService();
+    seedUpi(userRepository, MEMBER_A);
     await depositRepository.create(pool.id, MEMBER_A, 50000);
 
     const result = await closureService.closePool(pool.id, ORGANIZER_ID);
@@ -114,7 +134,8 @@ describe("ClosureService.closePool", () => {
   });
 
   it("records each Refund with a VPA and no fee", async () => {
-    const { closureService, depositRepository, pool } = await makeService();
+    const { closureService, depositRepository, userRepository, pool } = await makeService();
+    seedUpi(userRepository, MEMBER_A);
     await depositRepository.create(pool.id, MEMBER_A, 50000);
 
     const result = await closureService.closePool(pool.id, ORGANIZER_ID);
@@ -133,13 +154,28 @@ describe("ClosureService.closePool", () => {
     expect(result.refunds[0].vpa).toBe("member-a@upi");
   });
 
-  it("falls back to a synthesized VPA for a Member with no Registered UPI ID on file", async () => {
+  it("rejects Closure if any Member has no Registered UPI ID on file", async () => {
     const { closureService, depositRepository, pool } = await makeService();
+    // Deliberately not seeded — Onboarding is supposed to guarantee every
+    // Member has a upiId, so this simulates that guarantee somehow failing.
     await depositRepository.create(pool.id, MEMBER_A, 50000);
 
-    const result = await closureService.closePool(pool.id, ORGANIZER_ID);
+    await expect(closureService.closePool(pool.id, ORGANIZER_ID)).rejects.toThrow(
+      MemberHasNoRegisteredUpiIdError,
+    );
+  });
 
-    expect(result.refunds[0].vpa).toBe(`${MEMBER_A}@fakebank`);
+  it("refunds no one if one Member has no Registered UPI ID (fails atomically)", async () => {
+    const { closureService, depositRepository, refundRepository, userRepository, pool } =
+      await makeService();
+    seedUpi(userRepository, MEMBER_A);
+    await depositRepository.create(pool.id, MEMBER_A, 60000);
+    await depositRepository.create(pool.id, MEMBER_B, 40000); // MEMBER_B not seeded
+
+    await expect(closureService.closePool(pool.id, ORGANIZER_ID)).rejects.toThrow(
+      MemberHasNoRegisteredUpiIdError,
+    );
+    expect(await refundRepository.listByPool(pool.id)).toEqual([]);
   });
 
   it("rejects Closure by a non-Organizer", async () => {
@@ -168,7 +204,9 @@ describe("ClosureService.closePool", () => {
   });
 
   it("allows Closing a Locked Pool", async () => {
-    const { closureService, poolRepository, depositRepository, pool } = await makeService();
+    const { closureService, poolRepository, depositRepository, userRepository, pool } =
+      await makeService();
+    seedUpi(userRepository, MEMBER_A);
     await depositRepository.create(pool.id, MEMBER_A, 50000);
     await poolRepository.updateState(pool.id, "LOCKED");
 
@@ -180,7 +218,9 @@ describe("ClosureService.closePool", () => {
 
 describe("ClosureService.closePoolViaVote", () => {
   it("closes the Pool and refunds pro-rata without an Organizer check", async () => {
-    const { closureService, depositRepository, pool } = await makeService();
+    const { closureService, depositRepository, userRepository, pool } = await makeService();
+    seedUpi(userRepository, MEMBER_A);
+    seedUpi(userRepository, MEMBER_B);
     await depositRepository.create(pool.id, MEMBER_A, 60000);
     await depositRepository.create(pool.id, MEMBER_B, 40000);
 
@@ -191,7 +231,9 @@ describe("ClosureService.closePoolViaVote", () => {
   });
 
   it("does not claw back money already Spent or Reimbursed", async () => {
-    const { closureService, depositRepository, spendRepository, pool } = await makeService();
+    const { closureService, depositRepository, spendRepository, userRepository, pool } =
+      await makeService();
+    seedUpi(userRepository, MEMBER_A);
     await depositRepository.create(pool.id, MEMBER_A, 100000);
     await spendRepository.create(pool.id, ORGANIZER_ID, "merchant@upi", 40000, 400);
 
@@ -240,9 +282,12 @@ describe("ClosureService.previewClosure", () => {
 
 describe("ClosureService + a removed Member (ticket #11)", () => {
   it("still refunds a removed Member's prior contributions pro-rata", async () => {
-    const { closureService, poolRepository, depositRepository, pool } = await makeService();
+    const { closureService, poolRepository, depositRepository, userRepository, pool } =
+      await makeService();
     const membershipRepository = new InMemoryMembershipRepository();
     const membershipService = new MembershipService({ poolRepository, membershipRepository });
+    seedUpi(userRepository, MEMBER_A);
+    seedUpi(userRepository, MEMBER_B);
 
     await membershipService.joinByPoolId(MEMBER_A, pool.id);
     await depositRepository.create(pool.id, MEMBER_A, 40000);
