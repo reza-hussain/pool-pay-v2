@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
@@ -21,6 +22,7 @@ import { PoolsHomeScreen } from './src/screens/PoolsHomeScreen';
 import { ActivityScreen } from './src/screens/ActivityScreen';
 import { AlertsScreen } from './src/screens/AlertsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { LockScreen } from './src/screens/LockScreen';
 import { CreatePoolScreen } from './src/screens/CreatePoolScreen';
 import { InviteScreen } from './src/screens/InviteScreen';
 import { JoinPoolScreen } from './src/screens/JoinPoolScreen';
@@ -39,8 +41,10 @@ import { HomeTabIcon, ActivityTabIcon, AlertsTabIcon, ProfileTabIcon } from './s
 import { colors, fontFamily } from './src/theme/tokens';
 import type { ClosureRefund } from './src/api/closureClient';
 import {
+  clearSession,
   clearStaleDataFromPriorInstall,
   hasSeenWelcome,
+  isAppLockEnabled,
   loadSession,
   markWelcomeSeen,
   saveSession,
@@ -109,6 +113,9 @@ const SessionContext = createContext<{
   pools: Pool[];
   setPools: Dispatch<SetStateAction<Pool[]>>;
   setSession: (session: StoredSession) => void;
+  onLogout: () => void;
+  appLockEnabled: boolean;
+  setAppLockEnabled: Dispatch<SetStateAction<boolean>>;
 } | null>(null);
 
 function useAuthContext() {
@@ -179,6 +186,18 @@ function HomeRoute({ navigation }: HomeRouteProps) {
   );
 }
 
+function ProfileRoute() {
+  const { session, onLogout, appLockEnabled, setAppLockEnabled } = useSessionContext();
+  return (
+    <ProfileScreen
+      session={session}
+      onLogout={onLogout}
+      appLockEnabled={appLockEnabled}
+      onAppLockEnabledChange={setAppLockEnabled}
+    />
+  );
+}
+
 // Unread count wiring lands with the Alerts ticket (#23) — this stays 0 (no
 // badge shown) until that ticket fetches a real count from GET /notifications.
 const unreadAlertsCount = 0;
@@ -235,7 +254,7 @@ function AppTabs() {
       />
       <AppTab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={ProfileRoute}
         options={{ tabBarIcon: ({ color }) => <ProfileTabIcon color={color} /> }}
       />
     </AppTab.Navigator>
@@ -407,14 +426,25 @@ export default function App() {
   const [isNewUser, setIsNewUser] = useState(false);
   const [pools, setPools] = useState<Pool[]>([]);
   const [welcomeSeen, setWelcomeSeen] = useState(false);
+  // Device-level security preference (ticket #24) — survives Log out on
+  // purpose (see session.ts), so it's read once at bootstrap regardless of
+  // which account ends up signed in.
+  const [appLockEnabled, setAppLockEnabled] = useState(false);
+  // Gates the entire authenticated tree behind LockScreen. Derived directly
+  // in the bootstrap/foreground handlers below (never via a reactive effect
+  // keyed off appLockEnabled) so there's never a frame where protected
+  // content renders before the lock state is known.
+  const [locked, setLocked] = useState(false);
   const navigationRef = useNavigationContainerRef<AppStackParamList>();
 
   useEffect(() => {
     clearStaleDataFromPriorInstall()
-      .then(() => Promise.all([loadSession(), hasSeenWelcome()]))
-      .then(([storedSession, seenWelcome]) => {
+      .then(() => Promise.all([loadSession(), hasSeenWelcome(), isAppLockEnabled()]))
+      .then(([storedSession, seenWelcome, appLockOn]) => {
         setSession(storedSession);
         setWelcomeSeen(seenWelcome);
+        setAppLockEnabled(appLockOn);
+        setLocked(Boolean(storedSession) && appLockOn);
         if (storedSession) {
           // Populates Home from real membership state on every app restart —
           // previously `pools` only ever grew via in-session create/join calls.
@@ -424,9 +454,29 @@ export default function App() {
       .finally(() => setBootstrapping(false));
   }, []);
 
+  // Re-locks every time the app comes back to the foreground, per ticket
+  // #24 ("authenticateAsync() is required on every app foreground/launch").
+  // The initial launch case is covered by the bootstrap effect above, not
+  // here — this only fires on a background→active transition.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && session && appLockEnabled) {
+        setLocked(true);
+      }
+    });
+    return () => subscription.remove();
+  }, [session, appLockEnabled]);
+
   const updateSession = useCallback((updated: StoredSession) => {
     setSession(updated);
     void saveSession(updated);
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    void clearSession();
+    setSession(null);
+    setPools([]);
+    setLocked(false);
   }, []);
 
   // Invite links (poolpay://join/<poolId>) auto-join while logged in. If the
@@ -490,8 +540,21 @@ export default function App() {
           )
         ) : !session.user.isOnboarded ? (
           <ProfileSetupScreen session={session} onCompleted={setSession} />
+        ) : appLockEnabled && locked ? (
+          <LockScreen onUnlocked={() => setLocked(false)} />
         ) : (
-          <SessionContext.Provider value={{ session, isNewUser, pools, setPools, setSession: updateSession }}>
+          <SessionContext.Provider
+            value={{
+              session,
+              isNewUser,
+              pools,
+              setPools,
+              setSession: updateSession,
+              onLogout: handleLogout,
+              appLockEnabled,
+              setAppLockEnabled,
+            }}
+          >
             <AppStack.Navigator screenOptions={{ headerShown: false }}>
               <AppStack.Screen name="Home" component={AppTabs} />
               <AppStack.Screen name="VerifyIdentity" component={VerifyIdentityRoute} />

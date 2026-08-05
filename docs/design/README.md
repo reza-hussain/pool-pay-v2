@@ -43,10 +43,10 @@ The kit's 21 screens map closely to our tickets — use them as the target, not 
 | 04 Contributing | Pool detail, deposit QR (locked amount), keypad contribute (Open), success, transaction detail | Ticket #4 (Deposit) |
 | 05 Ongoing | Open Pool detail, Members list | Ticket #4 (Open Pool variant), general Pool detail |
 | 06 Organizer | Invite/Pool Code, organizer action sheet (Lock/Transfer out/Close), destructive confirm | Ticket #3 (Join), #5 (Lock), #6 (Spend, as "Transfer out"), #9 (Closure) |
-| 07 Wind-down | Closed receipt, Activity feed, Alerts | Ticket #8 (Ledger), #9 (Closure) |
-| 08 Profile | Account & settings | Not yet ticketed |
+| 07 Wind-down | Closed receipt, Activity feed, Alerts | Ticket #8 (Ledger), #9 (Closure), #22 (Activity tab), #23 (Alerts tab) |
+| 08 Profile | Account & settings | Ticket #24 (Profile tab) |
 
-**Gaps — not designed yet, will need new screens when these tickets are built:** merchant QR-scan-to-pay (ticket #6 — the kit's "Transfer out" is a menu entry, not the scan flow itself), a bottom nav bar and its Activity/Alerts/Profile tabs (deferred, not yet built), and a full app-wide design system overhaul (deferred, not yet built). Design these in the kit's established visual language when they're picked up, rather than improvising a different style.
+**Gaps — not designed yet, will need new screens when these tickets are built:** merchant QR-scan-to-pay (ticket #6 — the kit's "Transfer out" is a menu entry, not the scan flow itself), and a full app-wide design system overhaul (deferred, not yet built). Design these in the kit's established visual language when they're picked up, rather than improvising a different style. (The bottom nav bar and its Activity/Alerts/Profile tabs are no longer a gap — the kit's tab bar and all four tab screens are fully mocked in sections 02/07/08, and tickets #21–#24 have since built them.)
 
 ## Known drift
 
