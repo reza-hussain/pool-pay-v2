@@ -195,6 +195,11 @@ function AppTabs() {
           borderTopColor: colors.line,
           borderTopWidth: 1,
           paddingTop: 9,
+          paddingHorizontal: 8,
+          // No paddingBottom here — the kit's mockup hardcodes 24px for one
+          // fixed phone frame; @react-navigation/bottom-tabs already adds the
+          // real device's bottom safe-area inset by default, which is the
+          // correct generalization of that same value across devices.
         },
         tabBarLabelStyle: { fontSize: 10, fontFamily: fontFamily.bold },
       }}
@@ -215,6 +220,17 @@ function AppTabs() {
         options={{
           tabBarIcon: ({ color }) => <AlertsTabIcon color={color} />,
           tabBarBadge: unreadAlertsCount > 0 ? unreadAlertsCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: colors.pumpkin500,
+            color: colors.paper,
+            fontFamily: fontFamily.extrabold,
+            fontSize: 9,
+            minWidth: 15,
+            height: 15,
+            borderRadius: 999,
+            borderWidth: 1.5,
+            borderColor: colors.cream,
+          },
         }}
       />
       <AppTab.Screen
