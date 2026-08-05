@@ -225,3 +225,50 @@ describe("PoolService.lockPool", () => {
     );
   });
 });
+
+describe("PoolService.listPoolsForUser", () => {
+  const OTHER_ORGANIZER_ID = "user_other_organizer";
+
+  function makePoolServiceWithTwoOrganizers() {
+    const { poolService, membershipRepository, userRepository } = makePoolService();
+    userRepository.seedVerifiedUser(OTHER_ORGANIZER_ID);
+    return { poolService, membershipRepository, userRepository };
+  }
+
+  it("returns every Pool the user organizes or is a Member of", async () => {
+    const { poolService, membershipRepository } = makePoolServiceWithTwoOrganizers();
+    const organized = await poolService.createPool(ORGANIZER_ID, { name: "Goa Trip", type: "OPEN" });
+    const joined = await poolService.createPool(OTHER_ORGANIZER_ID, {
+      name: "Flat 3B Rent",
+      type: "OPEN",
+    });
+    await membershipRepository.create(joined.id, ORGANIZER_ID, "MEMBER");
+
+    const pools = await poolService.listPoolsForUser(ORGANIZER_ID);
+
+    expect(pools.map((p) => p.id).sort()).toEqual([organized.id, joined.id].sort());
+  });
+
+  it("excludes Pools the user has no Membership in", async () => {
+    const { poolService } = makePoolServiceWithTwoOrganizers();
+    await poolService.createPool(OTHER_ORGANIZER_ID, { name: "Someone Else's Pool", type: "OPEN" });
+
+    const pools = await poolService.listPoolsForUser(ORGANIZER_ID);
+
+    expect(pools).toEqual([]);
+  });
+
+  it("excludes a Pool the user was removed from", async () => {
+    const { poolService, membershipRepository } = makePoolServiceWithTwoOrganizers();
+    const pool = await poolService.createPool(OTHER_ORGANIZER_ID, {
+      name: "Flat 3B Rent",
+      type: "OPEN",
+    });
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "MEMBER");
+    await membershipRepository.remove(pool.id, ORGANIZER_ID);
+
+    const pools = await poolService.listPoolsForUser(ORGANIZER_ID);
+
+    expect(pools).toEqual([]);
+  });
+});

@@ -104,6 +104,14 @@ export class PoolService {
 
     return this.poolRepository.updateState(poolId, "LOCKED");
   }
+
+  async listPoolsForUser(userId: string): Promise<Pool[]> {
+    const memberships = await this.membershipRepository.listByUser(userId);
+    const pools = await Promise.all(
+      memberships.map((membership) => this.poolRepository.findById(membership.poolId)),
+    );
+    return pools.filter((pool): pool is Pool => pool !== null);
+  }
 }
 
 function defaultGenerateJoinCode(): string {

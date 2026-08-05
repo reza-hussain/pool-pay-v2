@@ -61,6 +61,52 @@ function bearerFor(userId: string) {
   return `Bearer ${jwt.sign({ sub: userId }, JWT_SECRET)}`;
 }
 
+describe("GET /pools", () => {
+  it("lists Pools the caller organizes immediately after creation", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app).get("/pools").set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.pools).toEqual([expect.objectContaining({ id: pool.id })]);
+  });
+
+  it("includes a Pool the caller joined as a Member", async () => {
+    const { app, pool } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+
+    const res = await request(app).get("/pools").set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.body.pools).toEqual([expect.objectContaining({ id: pool.id })]);
+  });
+
+  it("excludes Pools the caller has no Membership in", async () => {
+    const { app } = await makeApp();
+
+    const res = await request(app).get("/pools").set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.body.pools).toEqual([]);
+  });
+
+  it("excludes a Pool the caller was removed from", async () => {
+    const { app, pool } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+    await request(app)
+      .delete(`/pools/${pool.id}/members/${MEMBER_ID}`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    const res = await request(app).get("/pools").set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.body.pools).toEqual([]);
+  });
+
+  it("returns 401 without a bearer token", async () => {
+    const { app } = await makeApp();
+    const res = await request(app).get("/pools");
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("POST /pools/:poolId/join", () => {
   it("joins the authenticated user to the Pool as a Member", async () => {
     const { app, pool } = await makeApp();

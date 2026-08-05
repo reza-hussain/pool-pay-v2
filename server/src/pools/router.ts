@@ -37,6 +37,15 @@ export function createPoolsRouter(
 ): Router {
   const router = Router();
 
+  router.get("/", requireAuth(jwtSecret), async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const pools = await poolService.listPoolsForUser(req.userId as string);
+      res.status(200).json({ pools });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/", requireAuth(jwtSecret), async (req: AuthenticatedRequest, res, next) => {
     const parsed = createPoolSchema.safeParse(req.body);
     if (!parsed.success) {

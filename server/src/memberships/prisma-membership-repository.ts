@@ -25,6 +25,11 @@ export class PrismaMembershipRepository implements MembershipRepository {
     return rows.map(toMembership);
   }
 
+  async listByUser(userId: string): Promise<Membership[]> {
+    const rows = await this.prisma.membership.findMany({ where: { userId, removedAt: null } });
+    return rows.map(toMembership);
+  }
+
   async remove(poolId: string, userId: string): Promise<void> {
     await this.prisma.membership.update({
       where: { poolId_userId: { poolId, userId } },
