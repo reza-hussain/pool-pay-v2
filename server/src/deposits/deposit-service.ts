@@ -6,7 +6,7 @@ import type { DepositIntent, PaymentProvider } from "../payments/types.js";
 import type { SpendRepository } from "../spends/types.js";
 import type { ReimbursementRepository } from "../reimbursements/types.js";
 import type { RefundRepository } from "../closure/types.js";
-import type { UserRepository } from "../auth/types.js";
+import { UserNotFoundError, type UserRepository } from "../auth/types.js";
 import {
   InvalidDepositAmountError,
   NotAMemberError,
@@ -65,11 +65,11 @@ export class DepositService {
       throw new PoolNotFoundError();
     }
     const fixedAmountPaise = pool.type === "EQUAL_SPLIT" ? pool.perPersonAmountPaise : null;
-    // Trusts the authenticated userId resolves to a real User, same as
-    // every other service that looks up the caller by id (e.g.
-    // SpendService.recordSpend's organizer lookup).
     const user = await this.userRepository.findById(userId);
-    const intent = await this.paymentProvider.createDepositIntent(pool.id, fixedAmountPaise, user!.phoneNumber);
+    if (!user) {
+      throw new UserNotFoundError();
+    }
+    const intent = await this.paymentProvider.createDepositIntent(pool.id, fixedAmountPaise, user.phoneNumber);
     // Recorded before any money moves, so a later confirmation — self-report
     // or webhook, whichever arrives first (see confirmDeposit) — can be
     // attributed back to this Member without trusting the confirming party.

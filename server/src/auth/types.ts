@@ -56,6 +56,13 @@ export class InvalidPhoneNumberError extends Error {
   }
 }
 
+export class UserNotFoundError extends Error {
+  constructor() {
+    super("User not found");
+    this.name = "UserNotFoundError";
+  }
+}
+
 export class OtpNotFoundError extends Error {
   constructor() {
     super("OTP request not found");

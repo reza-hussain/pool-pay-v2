@@ -3,6 +3,7 @@ import type { ClosureService } from "./closure-service.js";
 import { requireAuth, type AuthenticatedRequest } from "../auth/require-auth.js";
 import { PoolNotFoundError } from "../memberships/types.js";
 import { NotPoolOrganizerError } from "../pools/types.js";
+import { MemberHasNoRegisteredUpiIdError } from "../reimbursements/types.js";
 import { PoolAlreadyClosedError } from "./types.js";
 
 export function createClosureRouter(closureService: ClosureService, jwtSecret: string): Router {
@@ -42,7 +43,7 @@ function handleClosureError(error: unknown, res: Response, next: (err: unknown) 
     res.status(404).json({ error: error.message });
     return;
   }
-  if (error instanceof PoolAlreadyClosedError) {
+  if (error instanceof PoolAlreadyClosedError || error instanceof MemberHasNoRegisteredUpiIdError) {
     res.status(400).json({ error: error.message });
     return;
   }

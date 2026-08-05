@@ -15,8 +15,10 @@ const MEMBER_ID = "user_member";
 
 async function makeApp() {
   const userRepository = new InMemoryUserRepository();
-  userRepository.seedVerifiedUser(ORGANIZER_ID);
-  userRepository.seedVerifiedUser(MEMBER_ID);
+  userRepository.seedVerifiedUser(ORGANIZER_ID, undefined, { upiId: `${ORGANIZER_ID}@upi` });
+  // Onboarding (ADR 0012) guarantees every Member has a Registered UPI ID by
+  // the time they can join/deposit into a Pool — Closure now requires one.
+  userRepository.seedVerifiedUser(MEMBER_ID, undefined, { upiId: `${MEMBER_ID}@upi` });
   const authService = new AuthService({
     userRepository,
     otpStore: new InMemoryOtpStore(),

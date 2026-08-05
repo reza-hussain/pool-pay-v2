@@ -56,8 +56,21 @@ async function makeService() {
   await membershipRepository.create(pool.id, MEMBER_B, "MEMBER");
   await membershipRepository.create(pool.id, MEMBER_C, "MEMBER");
   await depositRepository.create(pool.id, MEMBER_A, 30000);
+  // Onboarding (ADR 0012) guarantees every Member has a Registered UPI ID by
+  // the time they can join/deposit into a Pool — Closure (which a
+  // successful vote triggers) now requires one.
+  userRepository.seedVerifiedUser(MEMBER_A, undefined, { upiId: `${MEMBER_A}@upi` });
+  userRepository.seedVerifiedUser(MEMBER_B, undefined, { upiId: `${MEMBER_B}@upi` });
 
-  return { voteService, poolRepository, membershipRepository, depositRepository, spendRepository, pool };
+  return {
+    voteService,
+    poolRepository,
+    membershipRepository,
+    depositRepository,
+    spendRepository,
+    userRepository,
+    pool,
+  };
 }
 
 describe("VoteService.castVote", () => {
