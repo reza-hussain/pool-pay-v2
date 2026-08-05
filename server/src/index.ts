@@ -23,6 +23,8 @@ import { PrismaRefundRepository } from "./closure/prisma-refund-repository.js";
 import { VoteService } from "./votes/vote-service.js";
 import { PrismaRefundVoteRepository } from "./votes/prisma-refund-vote-repository.js";
 import { AnalyticsService } from "./analytics/analytics-service.js";
+import { NotificationService } from "./notifications/notification-service.js";
+import { PrismaNotificationRepository } from "./notifications/prisma-notification-repository.js";
 import { FakePaymentProvider } from "./payments/fakes/fake-payment-provider.js";
 import { CashfreePaymentProvider } from "./payments/cashfree/cashfree-payment-provider.js";
 import { FakeIdentityProvider } from "./auth/fakes/fake-identity-provider.js";
@@ -71,8 +73,15 @@ const spendRepository = new PrismaSpendRepository(prisma);
 const reimbursementRepository = new PrismaReimbursementRepository(prisma);
 const refundRepository = new PrismaRefundRepository(prisma);
 const refundVoteRepository = new PrismaRefundVoteRepository(prisma);
+const notificationRepository = new PrismaNotificationRepository(prisma);
 
-const poolService = new PoolService({ poolRepository, membershipRepository, userRepository });
+const notificationService = new NotificationService({ notificationRepository });
+const poolService = new PoolService({
+  poolRepository,
+  membershipRepository,
+  userRepository,
+  notificationService,
+});
 const membershipService = new MembershipService({ poolRepository, membershipRepository });
 const depositService = new DepositService({
   poolRepository,
@@ -84,6 +93,7 @@ const depositService = new DepositService({
   refundRepository,
   paymentProvider,
   userRepository,
+  notificationService,
 });
 const spendService = new SpendService({
   poolRepository,
@@ -120,6 +130,7 @@ const closureService = new ClosureService({
   refundRepository,
   userRepository,
   paymentProvider,
+  notificationService,
 });
 const voteService = new VoteService({
   poolRepository,
@@ -140,6 +151,7 @@ const app = createApp({
   closureService,
   voteService,
   analyticsService,
+  notificationService,
   jwtSecret: env.JWT_SECRET,
   paymentProvider,
 });

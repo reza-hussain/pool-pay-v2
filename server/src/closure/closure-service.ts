@@ -7,6 +7,8 @@ import type { ReimbursementRepository } from "../reimbursements/types.js";
 import type { PaymentProvider } from "../payments/types.js";
 import type { UserRepository } from "../auth/types.js";
 import { MemberHasNoRegisteredUpiIdError } from "../reimbursements/types.js";
+import { formatRupees } from "../lib/format-money.js";
+import type { NotificationService } from "../notifications/notification-service.js";
 import { PoolAlreadyClosedError, type Refund, type RefundRepository } from "./types.js";
 
 export interface RefundBreakdownEntry {
@@ -38,6 +40,7 @@ export interface ClosureServiceOptions {
   refundRepository: RefundRepository;
   userRepository: UserRepository;
   paymentProvider: PaymentProvider;
+  notificationService: NotificationService;
 }
 
 export class ClosureService {
@@ -48,6 +51,7 @@ export class ClosureService {
   private readonly refundRepository: RefundRepository;
   private readonly userRepository: UserRepository;
   private readonly paymentProvider: PaymentProvider;
+  private readonly notificationService: NotificationService;
 
   constructor(options: ClosureServiceOptions) {
     this.poolRepository = options.poolRepository;
@@ -57,6 +61,7 @@ export class ClosureService {
     this.refundRepository = options.refundRepository;
     this.userRepository = options.userRepository;
     this.paymentProvider = options.paymentProvider;
+    this.notificationService = options.notificationService;
   }
 
   async previewClosure(poolId: string, userId: string): Promise<ClosurePreview> {
@@ -103,6 +108,14 @@ export class ClosureService {
       await this.paymentProvider.initiateTransfer(pool.id, vpa, entry.amountPaise);
       const refund = await this.refundRepository.create(pool.id, entry.memberId, vpa, entry.amountPaise);
       refunds.push({ ...refund, contributedPaise: entry.contributedPaise });
+      // Refund goes to the specific recipient only — unlike Deposit/Lock,
+      // this isn't a Pool-wide event other Members need to hear about.
+      await this.notificationService.notify({
+        recipientUserIds: [entry.memberId],
+        poolId: pool.id,
+        type: "REFUND_PROCESSED",
+        message: `Refund of ${formatRupees(entry.amountPaise)} processed for ${pool.name}`,
+      });
     }
 
     const closedPool = await this.poolRepository.updateState(pool.id, "CLOSED");

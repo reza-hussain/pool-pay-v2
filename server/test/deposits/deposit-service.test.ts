@@ -9,6 +9,8 @@ import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-rep
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
+import { NotificationService } from "../../src/notifications/notification-service.js";
+import { InMemoryNotificationRepository } from "../../src/notifications/fakes/in-memory-notification-repository.js";
 import {
   InvalidDepositAmountError,
   NotAMemberError,
@@ -38,6 +40,8 @@ async function makeService() {
   // record before NotAMemberError would ever get a chance to fire (that
   // check only happens later, in confirmDeposit).
   userRepository.seedVerifiedUser("user_stranger");
+  const notificationRepository = new InMemoryNotificationRepository();
+  const notificationService = new NotificationService({ notificationRepository });
   const depositService = new DepositService({
     poolRepository,
     membershipRepository,
@@ -48,6 +52,7 @@ async function makeService() {
     refundRepository,
     paymentProvider,
     userRepository,
+    notificationService,
   });
 
   const equalSplitPool = await poolRepository.create(ORGANIZER_ID, {
@@ -75,6 +80,8 @@ async function makeService() {
     reimbursementRepository,
     refundRepository,
     paymentProvider,
+    userRepository,
+    notificationRepository,
     equalSplitPool,
     openPool,
   };
@@ -218,6 +225,64 @@ describe("DepositService.confirmDeposit", () => {
     await expect(
       depositService.confirmDeposit(intent.id, 100000, { userId: "user_stranger" }),
     ).rejects.toThrow(UnknownDepositReferenceError);
+  });
+});
+
+describe("DepositService.confirmDeposit notifications", () => {
+  it("notifies every other current Member, but not the depositor", async () => {
+    const { depositService, membershipRepository, userRepository, notificationRepository, openPool } =
+      await makeService();
+    userRepository.seedVerifiedUser(MEMBER_ID, undefined, { name: "Kabir" });
+    await membershipRepository.create(openPool.id, ORGANIZER_ID, "ORGANIZER");
+
+    await deposit(depositService, openPool.id, MEMBER_ID, 25000);
+
+    const organizerNotifications = await notificationRepository.listByUser(ORGANIZER_ID);
+    expect(organizerNotifications).toHaveLength(1);
+    expect(organizerNotifications[0]).toMatchObject({
+      poolId: openPool.id,
+      type: "DEPOSIT_RECEIVED",
+      message: "Kabir deposited ₹250 into Flat 3B Rent",
+    });
+    expect(await notificationRepository.listByUser(MEMBER_ID)).toHaveLength(0);
+  });
+
+  it("also sends POOL_FULLY_FUNDED when a deposit brings an Equal Split Pool's balance to its target", async () => {
+    const { depositService, membershipRepository, notificationRepository, equalSplitPool } =
+      await makeService();
+    await membershipRepository.create(equalSplitPool.id, ORGANIZER_ID, "ORGANIZER");
+    // 2 Members × ₹1,000 perPersonAmountPaise = ₹2,000 target.
+
+    await deposit(depositService, equalSplitPool.id, MEMBER_ID, 200000);
+
+    const organizerNotifications = await notificationRepository.listByUser(ORGANIZER_ID);
+    const types = organizerNotifications.map((n) => n.type);
+    expect(types).toContain("DEPOSIT_RECEIVED");
+    expect(types).toContain("POOL_FULLY_FUNDED");
+  });
+
+  it("does not re-send POOL_FULLY_FUNDED on a later deposit once already funded", async () => {
+    const { depositService, membershipRepository, notificationRepository, equalSplitPool } =
+      await makeService();
+    await membershipRepository.create(equalSplitPool.id, ORGANIZER_ID, "ORGANIZER");
+    // 2 Members × ₹1,000 perPersonAmountPaise = ₹2,000 target; MEMBER_ID alone
+    // reaches it in one deposit, so a second deposit shouldn't cross it again.
+    await deposit(depositService, equalSplitPool.id, MEMBER_ID, 200000);
+    await deposit(depositService, equalSplitPool.id, MEMBER_ID, 50000);
+
+    const organizerNotifications = await notificationRepository.listByUser(ORGANIZER_ID);
+    const fullyFundedCount = organizerNotifications.filter((n) => n.type === "POOL_FULLY_FUNDED").length;
+    expect(fullyFundedCount).toBe(1);
+  });
+
+  it("does not send POOL_FULLY_FUNDED for an Open Pool", async () => {
+    const { depositService, membershipRepository, notificationRepository, openPool } = await makeService();
+    await membershipRepository.create(openPool.id, ORGANIZER_ID, "ORGANIZER");
+
+    await deposit(depositService, openPool.id, MEMBER_ID, 999999999);
+
+    const organizerNotifications = await notificationRepository.listByUser(ORGANIZER_ID);
+    expect(organizerNotifications.some((n) => n.type === "POOL_FULLY_FUNDED")).toBe(false);
   });
 });
 
