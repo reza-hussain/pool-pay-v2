@@ -10,13 +10,17 @@ import {
   Onest_700Bold,
   Onest_800ExtraBold,
 } from '@expo-google-fonts/onest';
-import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, useNavigationContainerRef, type CompositeScreenProps } from '@react-navigation/native';
 import { createNativeStackNavigator, type NativeStackScreenProps } from '@react-navigation/native-stack';
+import { createBottomTabNavigator, type BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { WelcomeCarouselScreen } from './src/screens/WelcomeCarouselScreen';
 import { SignupLoginScreen } from './src/screens/SignupLoginScreen';
 import { ProfileSetupScreen } from './src/screens/ProfileSetupScreen';
 import { PoolsHomeScreen } from './src/screens/PoolsHomeScreen';
+import { ActivityScreen } from './src/screens/ActivityScreen';
+import { AlertsScreen } from './src/screens/AlertsScreen';
+import { ProfileScreen } from './src/screens/ProfileScreen';
 import { CreatePoolScreen } from './src/screens/CreatePoolScreen';
 import { InviteScreen } from './src/screens/InviteScreen';
 import { JoinPoolScreen } from './src/screens/JoinPoolScreen';
@@ -31,6 +35,8 @@ import { MembersScreen } from './src/screens/MembersScreen';
 import { VerifyIdentityScreen } from './src/screens/VerifyIdentityScreen';
 import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
+import { HomeTabIcon, ActivityTabIcon, AlertsTabIcon, ProfileTabIcon } from './src/components/TabBarIcons';
+import { colors, fontFamily } from './src/theme/tokens';
 import type { ClosureRefund } from './src/api/closureClient';
 import {
   clearStaleDataFromPriorInstall,
@@ -67,8 +73,25 @@ type AppStackParamList = {
   Analytics: undefined;
 };
 
+type AppTabParamList = {
+  HomeTab: undefined;
+  Activity: undefined;
+  Alerts: undefined;
+  Profile: undefined;
+};
+
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const AppStack = createNativeStackNavigator<AppStackParamList>();
+const AppTab = createBottomTabNavigator<AppTabParamList>();
+
+// HomeRoute lives inside AppTab but still navigates to AppStack siblings
+// (Deposit, Ledger, ...) — React Navigation bubbles those route names up to
+// the parent Stack at runtime; this composite type is what lets `navigation`
+// type-check both the Tab's own routes and the Stack's.
+type HomeRouteProps = CompositeScreenProps<
+  BottomTabScreenProps<AppTabParamList, 'HomeTab'>,
+  NativeStackScreenProps<AppStackParamList>
+>;
 
 // Route wrapper components below are declared at module scope (not inside
 // App()) so React Navigation sees a stable component identity per screen —
@@ -105,7 +128,7 @@ function SignupLoginRoute() {
   return <SignupLoginScreen onAuthenticated={onAuthenticated} />;
 }
 
-function HomeRoute({ navigation }: NativeStackScreenProps<AppStackParamList, 'Home'>) {
+function HomeRoute({ navigation }: HomeRouteProps) {
   const { session, isNewUser, pools, setPools } = useSessionContext();
   const [organizerControlsPool, setOrganizerControlsPool] = useState<Pool | null>(null);
 
@@ -153,6 +176,53 @@ function HomeRoute({ navigation }: NativeStackScreenProps<AppStackParamList, 'Ho
         />
       ) : null}
     </>
+  );
+}
+
+// Unread count wiring lands with the Alerts ticket (#23) — this stays 0 (no
+// badge shown) until that ticket fetches a real count from GET /notifications.
+const unreadAlertsCount = 0;
+
+function AppTabs() {
+  return (
+    <AppTab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.pumpkin600,
+        tabBarInactiveTintColor: colors.ink400,
+        tabBarStyle: {
+          backgroundColor: colors.cream,
+          borderTopColor: colors.line,
+          borderTopWidth: 1,
+          paddingTop: 9,
+        },
+        tabBarLabelStyle: { fontSize: 10, fontFamily: fontFamily.bold },
+      }}
+    >
+      <AppTab.Screen
+        name="HomeTab"
+        component={HomeRoute}
+        options={{ tabBarLabel: 'Home', tabBarIcon: ({ color }) => <HomeTabIcon color={color} /> }}
+      />
+      <AppTab.Screen
+        name="Activity"
+        component={ActivityScreen}
+        options={{ tabBarIcon: ({ color }) => <ActivityTabIcon color={color} /> }}
+      />
+      <AppTab.Screen
+        name="Alerts"
+        component={AlertsScreen}
+        options={{
+          tabBarIcon: ({ color }) => <AlertsTabIcon color={color} />,
+          tabBarBadge: unreadAlertsCount > 0 ? unreadAlertsCount : undefined,
+        }}
+      />
+      <AppTab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ tabBarIcon: ({ color }) => <ProfileTabIcon color={color} /> }}
+      />
+    </AppTab.Navigator>
   );
 }
 
@@ -407,7 +477,7 @@ export default function App() {
         ) : (
           <SessionContext.Provider value={{ session, isNewUser, pools, setPools, setSession: updateSession }}>
             <AppStack.Navigator screenOptions={{ headerShown: false }}>
-              <AppStack.Screen name="Home" component={HomeRoute} />
+              <AppStack.Screen name="Home" component={AppTabs} />
               <AppStack.Screen name="VerifyIdentity" component={VerifyIdentityRoute} />
               <AppStack.Screen name="CreatePool" component={CreatePoolRoute} />
               <AppStack.Screen name="Invite" component={InviteRoute} options={{ gestureEnabled: false }} />
