@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { env, hasDecentroCredentials } from "./lib/env.js";
+import { env, hasCashfreeIdentityCredentials, hasCashfreePaymentCredentials } from "./lib/env.js";
 import { prisma } from "./lib/prisma.js";
 import { createApp } from "./app.js";
 import { AuthService } from "./auth/auth-service.js";
@@ -24,28 +24,43 @@ import { VoteService } from "./votes/vote-service.js";
 import { PrismaRefundVoteRepository } from "./votes/prisma-refund-vote-repository.js";
 import { AnalyticsService } from "./analytics/analytics-service.js";
 import { FakePaymentProvider } from "./payments/fakes/fake-payment-provider.js";
-import { DecentroPaymentProvider } from "./payments/decentro/decentro-payment-provider.js";
+import { CashfreePaymentProvider } from "./payments/cashfree/cashfree-payment-provider.js";
 import { FakeIdentityProvider } from "./auth/fakes/fake-identity-provider.js";
-import { DecentroIdentityProvider } from "./auth/decentro-identity-provider.js";
+import { CashfreeIdentityProvider } from "./auth/cashfree-identity-provider.js";
 
 const userRepository = new PrismaUserRepository(prisma);
 
-// Real BaaS/UPI partner (ticket #14, Decentro) — falls back to the fakes
-// used by every other ticket's tests when credentials aren't configured, so
-// the app stays runnable without a live Decentro account. See lib/env.ts.
-const identityProvider = hasDecentroCredentials
-  ? new DecentroIdentityProvider({
-      clientId: env.DECENTRO_CLIENT_ID!,
-      clientSecret: env.DECENTRO_CLIENT_SECRET!,
-      env: env.DECENTRO_ENV,
+// Real BaaS/UPI partner (ADR 0002/0005/0013, Cashfree) — falls back to the
+// fakes used by every other ticket's tests when credentials aren't
+// configured, so the app stays runnable without a live Cashfree account. See
+// lib/env.ts.
+const identityProvider = hasCashfreeIdentityCredentials
+  ? new CashfreeIdentityProvider({
+      clientId: env.CASHFREE_VERIFICATION_CLIENT_ID!,
+      clientSecret: env.CASHFREE_VERIFICATION_CLIENT_SECRET!,
+      env: env.CASHFREE_ENV,
     })
   : new FakeIdentityProvider();
+
+const paymentProvider = hasCashfreePaymentCredentials
+  ? new CashfreePaymentProvider({
+      env: env.CASHFREE_ENV,
+      pg: { clientId: env.CASHFREE_PG_CLIENT_ID!, clientSecret: env.CASHFREE_PG_CLIENT_SECRET! },
+      payout: { clientId: env.CASHFREE_PAYOUT_CLIENT_ID!, clientSecret: env.CASHFREE_PAYOUT_CLIENT_SECRET! },
+      verification: {
+        clientId: env.CASHFREE_VERIFICATION_CLIENT_ID!,
+        clientSecret: env.CASHFREE_VERIFICATION_CLIENT_SECRET!,
+      },
+      virtualVpa: env.CASHFREE_VIRTUAL_VPA!,
+    })
+  : new FakePaymentProvider();
 
 const authService = new AuthService({
   userRepository,
   otpStore: new PrismaOtpStore(prisma),
   otpSender: new ConsoleOtpSender(),
   identityProvider,
+  paymentProvider,
 });
 
 const poolRepository = new PrismaPoolRepository(prisma);
@@ -56,15 +71,6 @@ const spendRepository = new PrismaSpendRepository(prisma);
 const reimbursementRepository = new PrismaReimbursementRepository(prisma);
 const refundRepository = new PrismaRefundRepository(prisma);
 const refundVoteRepository = new PrismaRefundVoteRepository(prisma);
-const paymentProvider = hasDecentroCredentials
-  ? new DecentroPaymentProvider({
-      clientId: env.DECENTRO_CLIENT_ID!,
-      clientSecret: env.DECENTRO_CLIENT_SECRET!,
-      env: env.DECENTRO_ENV,
-      consumerUrn: env.DECENTRO_CONSUMER_URN!,
-      virtualVpa: env.DECENTRO_VIRTUAL_VPA!,
-    })
-  : new FakePaymentProvider();
 
 const poolService = new PoolService({ poolRepository, membershipRepository, userRepository });
 const membershipService = new MembershipService({ poolRepository, membershipRepository });
@@ -77,6 +83,7 @@ const depositService = new DepositService({
   reimbursementRepository,
   refundRepository,
   paymentProvider,
+  userRepository,
 });
 const spendService = new SpendService({
   poolRepository,
@@ -94,6 +101,7 @@ const reimbursementService = new ReimbursementService({
   spendRepository,
   reimbursementRepository,
   refundRepository,
+  userRepository,
   paymentProvider,
 });
 const ledgerService = new LedgerService({
@@ -110,6 +118,7 @@ const closureService = new ClosureService({
   spendRepository,
   reimbursementRepository,
   refundRepository,
+  userRepository,
   paymentProvider,
 });
 const voteService = new VoteService({
@@ -133,7 +142,6 @@ const app = createApp({
   analyticsService,
   jwtSecret: env.JWT_SECRET,
   paymentProvider,
-  decentroWebhookSecret: env.DECENTRO_WEBHOOK_SECRET,
 });
 
 const port = Number(env.PORT);

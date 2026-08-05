@@ -16,6 +16,7 @@ const MEMBER_ID = "user_member";
 async function makeApp() {
   const userRepository = new InMemoryUserRepository();
   userRepository.seedVerifiedUser(ORGANIZER_ID);
+  userRepository.seedVerifiedUser(MEMBER_ID, `+91${MEMBER_ID}`, { upiId: "member@upi" });
   const authService = new AuthService({
     userRepository,
     otpStore: new InMemoryOtpStore(),
@@ -76,7 +77,7 @@ describe("POST /pools/:poolId/reimbursements", () => {
     const res = await request(app)
       .post(`/pools/${pool.id}/reimbursements`)
       .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ memberId: MEMBER_ID, vpa: "member@upi", amountPaise: 30000 });
+      .send({ memberId: MEMBER_ID, amountPaise: 30000 });
 
     expect(res.status).toBe(201);
     expect(res.body.reimbursement).toMatchObject({
@@ -93,7 +94,7 @@ describe("POST /pools/:poolId/reimbursements", () => {
     const res = await request(app)
       .post(`/pools/${pool.id}/reimbursements`)
       .set("Authorization", bearerFor(MEMBER_ID))
-      .send({ memberId: MEMBER_ID, vpa: "member@upi", amountPaise: 1000 });
+      .send({ memberId: MEMBER_ID, amountPaise: 1000 });
     expect(res.status).toBe(403);
   });
 
@@ -102,7 +103,7 @@ describe("POST /pools/:poolId/reimbursements", () => {
     const res = await request(app)
       .post(`/pools/${pool.id}/reimbursements`)
       .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ memberId: "user_stranger", vpa: "stranger@upi", amountPaise: 1000 });
+      .send({ memberId: "user_stranger", amountPaise: 1000 });
     expect(res.status).toBe(400);
   });
 
@@ -111,7 +112,7 @@ describe("POST /pools/:poolId/reimbursements", () => {
     const res = await request(app)
       .post(`/pools/${pool.id}/reimbursements`)
       .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ memberId: MEMBER_ID, vpa: "member@upi", amountPaise: 100001 });
+      .send({ memberId: MEMBER_ID, amountPaise: 100001 });
     expect(res.status).toBe(400);
   });
 
@@ -120,16 +121,18 @@ describe("POST /pools/:poolId/reimbursements", () => {
     const res = await request(app)
       .post(`/pools/${pool.id}/reimbursements`)
       .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ memberId: MEMBER_ID, vpa: "member@upi", amountPaise: 0 });
+      .send({ memberId: MEMBER_ID, amountPaise: 0 });
     expect(res.status).toBe(400);
   });
 
-  it("returns 400 for a missing UPI ID", async () => {
+  it("returns 400 for a Member with no Registered UPI ID on file", async () => {
     const { app, pool } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor("user_no_upi"));
+
     const res = await request(app)
       .post(`/pools/${pool.id}/reimbursements`)
       .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ memberId: MEMBER_ID, amountPaise: 1000 });
+      .send({ memberId: "user_no_upi", amountPaise: 1000 });
     expect(res.status).toBe(400);
   });
 
@@ -138,7 +141,7 @@ describe("POST /pools/:poolId/reimbursements", () => {
     const res = await request(app)
       .post("/pools/pool_missing/reimbursements")
       .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ memberId: MEMBER_ID, vpa: "member@upi", amountPaise: 1000 });
+      .send({ memberId: MEMBER_ID, amountPaise: 1000 });
     expect(res.status).toBe(404);
   });
 
@@ -146,7 +149,7 @@ describe("POST /pools/:poolId/reimbursements", () => {
     const { app, pool } = await makeApp();
     const res = await request(app)
       .post(`/pools/${pool.id}/reimbursements`)
-      .send({ memberId: MEMBER_ID, vpa: "member@upi", amountPaise: 1000 });
+      .send({ memberId: MEMBER_ID, amountPaise: 1000 });
     expect(res.status).toBe(401);
   });
 });

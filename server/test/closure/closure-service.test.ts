@@ -11,6 +11,7 @@ import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provi
 import { PoolNotFoundError } from "../../src/memberships/types.js";
 import { MembershipService } from "../../src/memberships/membership-service.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
+import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 
 const ORGANIZER_ID = "user_organizer";
 const MEMBER_A = "user_member_a";
@@ -23,6 +24,7 @@ async function makeService() {
   const spendRepository = new InMemorySpendRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
   const refundRepository = new InMemoryRefundRepository();
+  const userRepository = new InMemoryUserRepository();
   const paymentProvider = new FakePaymentProvider();
   const closureService = new ClosureService({
     poolRepository,
@@ -30,6 +32,7 @@ async function makeService() {
     spendRepository,
     reimbursementRepository,
     refundRepository,
+    userRepository,
     paymentProvider,
   });
 
@@ -47,6 +50,7 @@ async function makeService() {
     spendRepository,
     reimbursementRepository,
     refundRepository,
+    userRepository,
     paymentProvider,
     pool,
   };
@@ -117,6 +121,25 @@ describe("ClosureService.closePool", () => {
 
     expect(result.refunds[0].vpa).toBeTruthy();
     expect(result.refunds[0].amountPaise).toBe(50000);
+  });
+
+  it("refunds to the Member's Registered UPI ID from Onboarding when they have one (ADR 0012)", async () => {
+    const { closureService, depositRepository, userRepository, pool } = await makeService();
+    userRepository.seedVerifiedUser(MEMBER_A, "+91member_a", { upiId: "member-a@upi" });
+    await depositRepository.create(pool.id, MEMBER_A, 50000);
+
+    const result = await closureService.closePool(pool.id, ORGANIZER_ID);
+
+    expect(result.refunds[0].vpa).toBe("member-a@upi");
+  });
+
+  it("falls back to a synthesized VPA for a Member with no Registered UPI ID on file", async () => {
+    const { closureService, depositRepository, pool } = await makeService();
+    await depositRepository.create(pool.id, MEMBER_A, 50000);
+
+    const result = await closureService.closePool(pool.id, ORGANIZER_ID);
+
+    expect(result.refunds[0].vpa).toBe(`${MEMBER_A}@fakebank`);
   });
 
   it("rejects Closure by a non-Organizer", async () => {

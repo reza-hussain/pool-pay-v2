@@ -8,15 +8,32 @@ import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repo
 import { InMemoryOtpStore } from "../../src/auth/fakes/in-memory-otp-store.js";
 import { FakeOtpSender } from "../../src/auth/fakes/fake-otp-sender.js";
 import { FakeIdentityProvider } from "../../src/auth/fakes/fake-identity-provider.js";
+import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
+import type { PaymentProvider } from "../../src/payments/types.js";
 import { makeTestServices } from "../support/make-test-services.js";
 
 const JWT_SECRET = "test-secret";
 const ORGANIZER_ID = "user_organizer";
 const MEMBER_ID = "user_member";
 
-async function makeApp(webhookSecret?: string) {
+// Only overrides verifyWebhookSignature — used to exercise the router's 401
+// path without needing a real Cashfree signature (that's covered by
+// CashfreePaymentProvider's own unit tests). Doesn't touch depositService's
+// own paymentProvider, since createApp's paymentProvider param is only ever
+// consumed by the webhook router (see app.ts).
+class SignatureTogglePaymentProvider extends FakePaymentProvider {
+  constructor(private readonly signatureIsValid: boolean) {
+    super();
+  }
+  override verifyWebhookSignature(): boolean {
+    return this.signatureIsValid;
+  }
+}
+
+async function makeApp(webhookPaymentProvider?: PaymentProvider) {
   const userRepository = new InMemoryUserRepository();
   userRepository.seedVerifiedUser(ORGANIZER_ID);
+  userRepository.seedVerifiedUser(MEMBER_ID);
   const authService = new AuthService({
     userRepository,
     otpStore: new InMemoryOtpStore(),
@@ -47,8 +64,7 @@ async function makeApp(webhookSecret?: string) {
     voteService,
     analyticsService,
     jwtSecret: JWT_SECRET,
-    paymentProvider,
-    decentroWebhookSecret: webhookSecret,
+    paymentProvider: webhookPaymentProvider ?? paymentProvider,
   });
 
   const createRes = await request(app)
@@ -73,13 +89,13 @@ async function getIntentId(app: Express, poolId: string, userId: string): Promis
   return res.body.intent.id as string;
 }
 
-describe("POST /webhooks/decentro/deposits", () => {
+describe("POST /webhooks/cashfree/deposits", () => {
   it("confirms the deposit for the Member the intent was created for", async () => {
     const { app, pool, depositService } = await makeApp();
     const depositIntentId = await getIntentId(app, pool.id, MEMBER_ID);
 
     const res = await request(app)
-      .post("/webhooks/decentro/deposits")
+      .post("/webhooks/cashfree/deposits")
       .send({ providerRef: depositIntentId, amountPaise: 100000, status: "SUCCESS" });
 
     expect(res.status).toBe(200);
@@ -91,8 +107,8 @@ describe("POST /webhooks/decentro/deposits", () => {
     const depositIntentId = await getIntentId(app, pool.id, MEMBER_ID);
     const payload = { providerRef: depositIntentId, amountPaise: 100000, status: "SUCCESS" };
 
-    await request(app).post("/webhooks/decentro/deposits").send(payload);
-    await request(app).post("/webhooks/decentro/deposits").send(payload);
+    await request(app).post("/webhooks/cashfree/deposits").send(payload);
+    await request(app).post("/webhooks/cashfree/deposits").send(payload);
 
     expect(await depositService.getPoolBalance(pool.id)).toBe(100000);
   });
@@ -107,7 +123,7 @@ describe("POST /webhooks/decentro/deposits", () => {
       .send({ depositIntentId, amountPaise: 100000 });
 
     await request(app)
-      .post("/webhooks/decentro/deposits")
+      .post("/webhooks/cashfree/deposits")
       .send({ providerRef: depositIntentId, amountPaise: 100000, status: "SUCCESS" });
 
     expect(await depositService.getPoolBalance(pool.id)).toBe(100000);
@@ -115,14 +131,14 @@ describe("POST /webhooks/decentro/deposits", () => {
 
   it("acks (200) even for an unrecognized payload, so the caller doesn't retry-storm", async () => {
     const { app } = await makeApp();
-    const res = await request(app).post("/webhooks/decentro/deposits").send({ nonsense: true });
+    const res = await request(app).post("/webhooks/cashfree/deposits").send({ nonsense: true });
     expect(res.status).toBe(200);
   });
 
   it("acks (200) even when the referenced deposit can't be confirmed", async () => {
     const { app } = await makeApp();
     const res = await request(app)
-      .post("/webhooks/decentro/deposits")
+      .post("/webhooks/cashfree/deposits")
       .send({ providerRef: "does-not-exist", amountPaise: 1000, status: "SUCCESS" });
     expect(res.status).toBe(200);
   });
@@ -132,31 +148,29 @@ describe("POST /webhooks/decentro/deposits", () => {
     const depositIntentId = await getIntentId(app, pool.id, MEMBER_ID);
 
     await request(app)
-      .post("/webhooks/decentro/deposits")
+      .post("/webhooks/cashfree/deposits")
       .send({ providerRef: depositIntentId, amountPaise: 100000, status: "FAILED" });
 
     expect(await depositService.getPoolBalance(pool.id)).toBe(0);
   });
 
-  it("rejects a call with the wrong webhook secret when one is configured", async () => {
-    const { app, pool } = await makeApp("shh-secret");
+  it("rejects a call whose webhook signature doesn't verify", async () => {
+    const { app, pool } = await makeApp(new SignatureTogglePaymentProvider(false));
     const depositIntentId = await getIntentId(app, pool.id, MEMBER_ID);
 
     const res = await request(app)
-      .post("/webhooks/decentro/deposits")
-      .set("x-decentro-webhook-secret", "wrong")
+      .post("/webhooks/cashfree/deposits")
       .send({ providerRef: depositIntentId, amountPaise: 100000, status: "SUCCESS" });
 
     expect(res.status).toBe(401);
   });
 
-  it("accepts a call with the correct webhook secret when one is configured", async () => {
-    const { app, pool, depositService } = await makeApp("shh-secret");
+  it("accepts a call whose webhook signature verifies", async () => {
+    const { app, pool, depositService } = await makeApp(new SignatureTogglePaymentProvider(true));
     const depositIntentId = await getIntentId(app, pool.id, MEMBER_ID);
 
     const res = await request(app)
-      .post("/webhooks/decentro/deposits")
-      .set("x-decentro-webhook-secret", "shh-secret")
+      .post("/webhooks/cashfree/deposits")
       .send({ providerRef: depositIntentId, amountPaise: 100000, status: "SUCCESS" });
 
     expect(res.status).toBe(200);

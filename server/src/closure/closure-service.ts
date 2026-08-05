@@ -5,6 +5,7 @@ import type { DepositRepository } from "../deposits/types.js";
 import type { SpendRepository } from "../spends/types.js";
 import type { ReimbursementRepository } from "../reimbursements/types.js";
 import type { PaymentProvider } from "../payments/types.js";
+import type { UserRepository } from "../auth/types.js";
 import { PoolAlreadyClosedError, type Refund, type RefundRepository } from "./types.js";
 
 export interface RefundBreakdownEntry {
@@ -34,6 +35,7 @@ export interface ClosureServiceOptions {
   spendRepository: SpendRepository;
   reimbursementRepository: ReimbursementRepository;
   refundRepository: RefundRepository;
+  userRepository: UserRepository;
   paymentProvider: PaymentProvider;
 }
 
@@ -43,6 +45,7 @@ export class ClosureService {
   private readonly spendRepository: SpendRepository;
   private readonly reimbursementRepository: ReimbursementRepository;
   private readonly refundRepository: RefundRepository;
+  private readonly userRepository: UserRepository;
   private readonly paymentProvider: PaymentProvider;
 
   constructor(options: ClosureServiceOptions) {
@@ -51,6 +54,7 @@ export class ClosureService {
     this.spendRepository = options.spendRepository;
     this.reimbursementRepository = options.reimbursementRepository;
     this.refundRepository = options.refundRepository;
+    this.userRepository = options.userRepository;
     this.paymentProvider = options.paymentProvider;
   }
 
@@ -81,9 +85,11 @@ export class ClosureService {
 
     const refunds: ClosureRefund[] = [];
     for (const entry of breakdown) {
-      // No linked-VPA storage exists yet (no ticket has added one) — synthesized
-      // the same way a Deposit's fake intent VPA is, per FakePaymentProvider.
-      const vpa = `${entry.memberId}@fakebank`;
+      // Registered UPI ID from Onboarding (ADR 0012) is the real refund
+      // destination. Falls back to the old fake VPA for a Member who somehow
+      // has no Registered UPI ID on file, rather than blocking Closure.
+      const member = await this.userRepository.findById(entry.memberId);
+      const vpa = member?.upiId ?? `${entry.memberId}@fakebank`;
       await this.paymentProvider.initiateTransfer(pool.id, vpa, entry.amountPaise);
       const refund = await this.refundRepository.create(pool.id, entry.memberId, vpa, entry.amountPaise);
       refunds.push({ ...refund, contributedPaise: entry.contributedPaise });

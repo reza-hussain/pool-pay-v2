@@ -4,6 +4,22 @@ export interface User {
   createdAt: Date;
   isVerified: boolean;
   isSubscribed: boolean;
+  // Onboarding (CONTEXT.md, ADR 0012) — all null/false until completeProfile.
+  name: string | null;
+  email: string | null;
+  dateOfBirth: Date | null;
+  // Registered UPI ID — the real refund/reimbursement destination.
+  upiId: string | null;
+  avatarUrl: string | null;
+  isOnboarded: boolean;
+}
+
+export interface CompleteProfileInput {
+  name: string;
+  email: string;
+  dateOfBirth: Date;
+  upiId: string;
+  avatarUrl: string | null;
 }
 
 export interface UserRepository {
@@ -12,6 +28,7 @@ export interface UserRepository {
   create(phoneNumber: string): Promise<User>;
   markFullyVerified(id: string): Promise<User>;
   subscribe(id: string): Promise<User>;
+  completeProfile(id: string, profile: CompleteProfileInput): Promise<User>;
 }
 
 export interface OtpChallenge {
@@ -71,5 +88,24 @@ export class IdentityVerificationFailedError extends Error {
   constructor() {
     super("Identity verification did not succeed");
     this.name = "IdentityVerificationFailedError";
+  }
+}
+
+// Full-KYC (ADR 0007) now checks the PAN's registered name against the
+// person's on-file profile name (ADR 0012's Onboarding), so there's nothing
+// to check it against until Onboarding's profile step has run.
+export class ProfileIncompleteError extends Error {
+  constructor() {
+    super("Complete your profile before verifying your identity");
+    this.name = "ProfileIncompleteError";
+  }
+}
+
+// Universal 18+ age gate at Onboarding (ADR 0012) — applies to every person
+// regardless of role, separate from the Organizer-only full KYC tier (ADR 0007).
+export class UnderageError extends Error {
+  constructor() {
+    super("You must be at least 18 years old to use Pool Pay");
+    this.name = "UnderageError";
   }
 }

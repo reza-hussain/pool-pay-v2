@@ -7,6 +7,10 @@ export interface DepositIntent {
   poolId: string;
   vpa: string;
   fixedAmountPaise: number | null;
+  // A scannable QR image for the Member to pay with — a base64 data: URI
+  // from the real Cashfree adapter, absent from the fake provider used in
+  // dev/tests. Optional so screens fall back to the vpa text alone.
+  qrImageUrl?: string;
 }
 
 export interface Deposit {

@@ -7,13 +7,12 @@ import { NotPoolOrganizerError } from "../pools/types.js";
 import {
   InsufficientPoolBalanceError,
   InvalidReimbursementAmountError,
-  InvalidVpaError,
+  MemberHasNoRegisteredUpiIdError,
   RecipientNotAMemberError,
 } from "./types.js";
 
 const recordReimbursementSchema = z.object({
   memberId: z.string(),
-  vpa: z.string(),
   amountPaise: z.number(),
 });
 
@@ -29,7 +28,7 @@ export function createReimbursementsRouter(
     async (req: AuthenticatedRequest, res, next) => {
       const parsed = recordReimbursementSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: "memberId, vpa, and amountPaise are required" });
+        res.status(400).json({ error: "memberId and amountPaise are required" });
         return;
       }
 
@@ -40,7 +39,6 @@ export function createReimbursementsRouter(
           poolId,
           userId,
           parsed.data.memberId,
-          parsed.data.vpa,
           parsed.data.amountPaise,
         );
         const poolBalancePaise = await reimbursementService.getPoolBalance(poolId);
@@ -52,7 +50,7 @@ export function createReimbursementsRouter(
         }
         if (
           error instanceof InvalidReimbursementAmountError ||
-          error instanceof InvalidVpaError ||
+          error instanceof MemberHasNoRegisteredUpiIdError ||
           error instanceof RecipientNotAMemberError ||
           error instanceof InsufficientPoolBalanceError
         ) {

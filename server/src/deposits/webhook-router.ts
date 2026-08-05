@@ -1,24 +1,23 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import type { DepositService } from "./deposit-service.js";
 import type { PaymentProvider } from "../payments/types.js";
 
-// Server-to-server: Decentro's own backend calls this, not a Pool Pay user,
-// so no requireAuth/JWT. Instead gated by a shared secret in a header —
-// exact scheme (header name, HMAC vs static token) unverified against
-// Decentro's real webhook docs, same flagged-assumption pattern as the rest
-// of ticket #14/#15; swap for whatever Decentro's callback auth actually is
-// once sandbox access confirms it. If webhookSecret is unset (fakes/dev),
-// the check is skipped entirely.
-export function createDepositWebhookRouter(
-  depositService: DepositService,
-  paymentProvider: PaymentProvider,
-  webhookSecret?: string,
-): Router {
+type RequestWithRawBody = Request & { rawBody?: Buffer };
+
+// Server-to-server: Cashfree's own backend calls this, not a Pool Pay user,
+// so no requireAuth/JWT. Authenticated instead via
+// paymentProvider.verifyWebhookSignature, which checks Cashfree's real
+// HMAC-SHA256 signature (x-webhook-signature/x-webhook-timestamp) over the
+// raw request body — see CashfreePaymentProvider and app.ts's rawBody
+// capture. The fake provider's version of this check always passes, so dev/
+// test traffic is unaffected.
+export function createDepositWebhookRouter(depositService: DepositService, paymentProvider: PaymentProvider): Router {
   const router = Router();
 
-  router.post("/decentro/deposits", async (req, res) => {
-    if (webhookSecret && req.header("x-decentro-webhook-secret") !== webhookSecret) {
-      res.status(401).json({ error: "Invalid webhook secret" });
+  router.post("/cashfree/deposits", async (req, res) => {
+    const rawBody = (req as RequestWithRawBody).rawBody ?? Buffer.from(JSON.stringify(req.body));
+    if (!paymentProvider.verifyWebhookSignature(rawBody, req.headers as Record<string, string | undefined>)) {
+      res.status(401).json({ error: "Invalid webhook signature" });
       return;
     }
 
@@ -28,14 +27,14 @@ export function createDepositWebhookRouter(
         await depositService.confirmDeposit(event.providerRef, event.amountPaise);
       } catch (error) {
         // Retrying won't fix an unknown reference or a Pool/Member that no
-        // longer qualifies — log it and ack anyway so Decentro stops retrying.
+        // longer qualifies — log it and ack anyway so Cashfree stops retrying.
         console.error("Deposit webhook confirmation failed", error);
       }
     }
 
-    // Ack unconditionally (per Decentro's callback docs: an unacked/non-200
-    // response is retried up to 3x) — including unrecognized payloads, so a
-    // callback for something this adapter doesn't handle doesn't retry-storm.
+    // Ack unconditionally (per Cashfree's webhook docs: an unacked/non-200
+    // response is retried) — including unrecognized payloads, so a callback
+    // for something this adapter doesn't handle doesn't retry-storm.
     res.status(200).json({ ack: true });
   });
 

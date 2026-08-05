@@ -11,6 +11,34 @@ export interface PublicUser {
   phoneNumber: string;
   isVerified: boolean;
   isSubscribed: boolean;
+  name: string | null;
+  email: string | null;
+  dateOfBirth: string | null;
+  upiId: string | null;
+  avatarUrl: string | null;
+  isOnboarded: boolean;
+}
+
+// Onboarding's profile-setup step (CONTEXT.md, ADR 0012) — dateOfBirth is
+// "YYYY-MM-DD".
+export interface CompleteProfileInput {
+  name: string;
+  email: string;
+  dateOfBirth: string;
+  upiId: string;
+  avatarUrl?: string | null;
+}
+
+export interface CompleteProfileResult {
+  user: PublicUser;
+}
+
+// Registered UPI ID verification (ADR 0012) — a real bank-account lookup,
+// not just a format check. accountHolderName is shown back to the person to
+// visually confirm it's really them, rather than trusted as an exact match.
+export interface VerifyUpiIdResult {
+  verified: boolean;
+  accountHolderName: string | null;
 }
 
 export interface VerifyOtpResult {
@@ -60,4 +88,19 @@ export function verifyIdentity(token: string, panNumber: string): Promise<Verify
 // Stubbed freemium subscription (ticket #13) — passes instantly, no real billing flow yet.
 export function subscribe(token: string): Promise<SubscribeResult> {
   return postJson("/auth/subscribe", undefined, token);
+}
+
+// Onboarding's Registered UPI ID (ADR 0012) — call before completeProfile so
+// the person can see the resolved account-holder name and confirm it's them.
+export function verifyUpiId(token: string, upiId: string): Promise<VerifyUpiIdResult> {
+  return postJson("/auth/verify-upi-id", { upiId }, token);
+}
+
+// Onboarding's profile-setup step (CONTEXT.md, ADR 0012) — mandatory,
+// one-time, blocks reaching Home.
+export function completeProfile(
+  token: string,
+  input: CompleteProfileInput,
+): Promise<CompleteProfileResult> {
+  return postJson("/auth/complete-profile", input, token);
 }

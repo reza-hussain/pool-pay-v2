@@ -8,6 +8,7 @@ import { InMemoryRefundRepository } from "../../src/closure/fakes/in-memory-refu
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
+import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import {
   InvalidDepositAmountError,
   NotAMemberError,
@@ -28,6 +29,15 @@ async function makeService() {
   const reimbursementRepository = new InMemoryReimbursementRepository();
   const refundRepository = new InMemoryRefundRepository();
   const paymentProvider = new FakePaymentProvider();
+  const userRepository = new InMemoryUserRepository();
+  userRepository.seedVerifiedUser(ORGANIZER_ID);
+  userRepository.seedVerifiedUser(MEMBER_ID);
+  // Seeded even though not a Member of any Pool here — "non-Member" in these
+  // tests means "not a Member of this particular Pool," not "doesn't have a
+  // Pool Pay account," and createDepositIntent looks up the caller's User
+  // record before NotAMemberError would ever get a chance to fire (that
+  // check only happens later, in confirmDeposit).
+  userRepository.seedVerifiedUser("user_stranger");
   const depositService = new DepositService({
     poolRepository,
     membershipRepository,
@@ -37,6 +47,7 @@ async function makeService() {
     reimbursementRepository,
     refundRepository,
     paymentProvider,
+    userRepository,
   });
 
   const equalSplitPool = await poolRepository.create(ORGANIZER_ID, {

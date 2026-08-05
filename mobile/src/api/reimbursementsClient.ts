@@ -16,17 +16,18 @@ export interface RecordReimbursementResult {
   poolBalancePaise: number;
 }
 
+// vpa is no longer supplied by the caller (ADR 0012) — the server resolves it
+// from the recipient Member's own Registered UPI ID from Onboarding.
 export async function recordReimbursement(
   token: string,
   poolId: string,
   memberId: string,
-  vpa: string,
   amountPaise: number,
 ): Promise<RecordReimbursementResult> {
   const res = await fetch(`${API_URL}/pools/${poolId}/reimbursements`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ memberId, vpa, amountPaise }),
+    body: JSON.stringify({ memberId, amountPaise }),
   });
 
   const data = await res.json().catch(() => ({}));

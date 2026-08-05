@@ -10,6 +10,7 @@ import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-de
 import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-repository.js";
 import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/in-memory-reimbursement-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
+import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { PoolClosedError, PoolNotFoundError } from "../../src/memberships/types.js";
 
 const ORGANIZER_ID = "user_organizer";
@@ -26,6 +27,7 @@ async function makeService() {
   const reimbursementRepository = new InMemoryReimbursementRepository();
   const refundRepository = new InMemoryRefundRepository();
   const refundVoteRepository = new InMemoryRefundVoteRepository();
+  const userRepository = new InMemoryUserRepository();
   const paymentProvider = new FakePaymentProvider();
   const closureService = new ClosureService({
     poolRepository,
@@ -33,6 +35,7 @@ async function makeService() {
     spendRepository,
     reimbursementRepository,
     refundRepository,
+    userRepository,
     paymentProvider,
   });
   const voteService = new VoteService({

@@ -4,26 +4,45 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(1),
   PORT: z.string().default("3000"),
-  // Real BaaS/UPI partner (ticket #14, ADR 0002/0005) — all optional. When
-  // unset, index.ts falls back to the fake Payment Provider and identity
-  // verification stub used by every other ticket's tests. Vendor: Decentro.
-  DECENTRO_CLIENT_ID: z.string().optional(),
-  DECENTRO_CLIENT_SECRET: z.string().optional(),
-  DECENTRO_ENV: z.enum(["staging", "production"]).default("staging"),
-  // The Pool Pay merchant/virtual account's own UPI VPA — fixed per account,
-  // not generated per transaction. Shown to Members as "Pay to UPI ID"
-  // alongside the per-transaction QR (see DecentroPaymentProvider).
-  DECENTRO_VIRTUAL_VPA: z.string().optional(),
-  // Decentro's "consumer_urn" — a merchant/consumer identifier Decentro
-  // assigns during onboarding, required on every payments-v3 call.
-  DECENTRO_CONSUMER_URN: z.string().optional(),
-  // Shared secret for the deposit-confirmation webhook (ticket #15) — see
-  // deposits/webhook-router.ts. Optional; the check is skipped when unset.
-  DECENTRO_WEBHOOK_SECRET: z.string().optional(),
+  // Real BaaS/UPI partner (ADR 0002/0005/0013) — all optional. When unset,
+  // index.ts falls back to the fake Payment Provider and identity
+  // verification stub used by every other ticket's tests. Vendor: Cashfree
+  // (ADR 0013 — replaced Decentro, which never provisioned us a
+  // consumer_urn). Unlike Decentro's single shared client_id/secret pair,
+  // Cashfree issues separate credentials per product: Payment Gateway
+  // (collections), Payouts (transfers), and Verification Suite (UPI/bank
+  // verification + PAN KYC) are independent dashboard apps.
+  CASHFREE_ENV: z.enum(["sandbox", "production"]).default("sandbox"),
+  CASHFREE_PG_CLIENT_ID: z.string().optional(),
+  CASHFREE_PG_CLIENT_SECRET: z.string().optional(),
+  CASHFREE_PAYOUT_CLIENT_ID: z.string().optional(),
+  CASHFREE_PAYOUT_CLIENT_SECRET: z.string().optional(),
+  // Also backs identity verification (PAN KYC) — both live under Cashfree's
+  // Verification Suite product, sharing one credential pair.
+  CASHFREE_VERIFICATION_CLIENT_ID: z.string().optional(),
+  CASHFREE_VERIFICATION_CLIENT_SECRET: z.string().optional(),
+  // The Pool Pay merchant's own registered UPI ID — fixed per account, not
+  // generated per transaction. Shown to Members as "Pay to UPI ID" alongside
+  // the per-transaction QR (see CashfreePaymentProvider).
+  CASHFREE_VIRTUAL_VPA: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);
 
-export const hasDecentroCredentials = Boolean(
-  env.DECENTRO_CLIENT_ID && env.DECENTRO_CLIENT_SECRET && env.DECENTRO_CONSUMER_URN,
+// Gates CashfreeIdentityProvider — only needs Verification Suite credentials.
+export const hasCashfreeIdentityCredentials = Boolean(
+  env.CASHFREE_VERIFICATION_CLIENT_ID && env.CASHFREE_VERIFICATION_CLIENT_SECRET,
+);
+
+// Gates CashfreePaymentProvider — needs all three product credential pairs
+// (pg for collections, payout for transfers, verification for verifyVpa)
+// plus the merchant's display VPA.
+export const hasCashfreePaymentCredentials = Boolean(
+  env.CASHFREE_PG_CLIENT_ID &&
+    env.CASHFREE_PG_CLIENT_SECRET &&
+    env.CASHFREE_PAYOUT_CLIENT_ID &&
+    env.CASHFREE_PAYOUT_CLIENT_SECRET &&
+    env.CASHFREE_VERIFICATION_CLIENT_ID &&
+    env.CASHFREE_VERIFICATION_CLIENT_SECRET &&
+    env.CASHFREE_VIRTUAL_VPA,
 );

@@ -16,6 +16,7 @@ const MEMBER_ID = "user_member";
 async function makeApp() {
   const userRepository = new InMemoryUserRepository();
   userRepository.seedVerifiedUser(ORGANIZER_ID);
+  userRepository.seedVerifiedUser(MEMBER_ID);
   const authService = new AuthService({
     userRepository,
     otpStore: new InMemoryOtpStore(),

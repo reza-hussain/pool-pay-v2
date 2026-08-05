@@ -1,5 +1,7 @@
 import { randomInt } from "node:crypto";
 import type { IdentityVerificationProvider } from "./identity-provider.js";
+import type { PaymentProvider, VpaVerificationResult } from "../payments/types.js";
+import { FakePaymentProvider } from "../payments/fakes/fake-payment-provider.js";
 import {
   IdentityVerificationFailedError,
   InvalidOtpCodeError,
@@ -7,6 +9,9 @@ import {
   OtpAlreadyUsedError,
   OtpExpiredError,
   OtpNotFoundError,
+  ProfileIncompleteError,
+  UnderageError,
+  type CompleteProfileInput,
   type OtpSender,
   type OtpStore,
   type User,
@@ -22,6 +27,10 @@ export interface AuthServiceOptions {
   otpStore: OtpStore;
   otpSender: OtpSender;
   identityProvider: IdentityVerificationProvider;
+  // Optional (defaults to the fake) so the many existing callers that don't
+  // care about UPI ID verification don't all need updating — only
+  // src/index.ts needs to pass the real Cashfree-backed one explicitly.
+  paymentProvider?: PaymentProvider;
   now?: () => Date;
   generateCode?: () => string;
 }
@@ -36,6 +45,7 @@ export class AuthService {
   private readonly otpStore: OtpStore;
   private readonly otpSender: OtpSender;
   private readonly identityProvider: IdentityVerificationProvider;
+  private readonly paymentProvider: PaymentProvider;
   private readonly now: () => Date;
   private readonly generateCode: () => string;
 
@@ -44,6 +54,7 @@ export class AuthService {
     this.otpStore = options.otpStore;
     this.otpSender = options.otpSender;
     this.identityProvider = options.identityProvider;
+    this.paymentProvider = options.paymentProvider ?? new FakePaymentProvider();
     this.now = options.now ?? (() => new Date());
     this.generateCode = options.generateCode ?? defaultGenerateCode;
   }
@@ -88,11 +99,19 @@ export class AuthService {
   }
 
   // Full-KYC (ticket #12, ADR 0007) — delegates to whichever
-  // IdentityVerificationProvider is configured. The fake (used until ticket
-  // #14's real credentials exist) always passes; the real one actually
-  // checks the PAN against Decentro's CKYC registry.
+  // IdentityVerificationProvider is configured. The fake (used until real
+  // credentials exist) always passes; the real one actually checks the PAN
+  // against Cashfree's PAN-registry verification, including a name-match
+  // against the person's own on-file profile name (ADR 0013). Requires
+  // Onboarding's profile step (ADR 0012) to have already run — otherwise
+  // there's no name on file to check the PAN against, which would silently
+  // make the name-match check meaningless.
   async verifyIdentity(userId: string, panNumber: string): Promise<User> {
-    const result = await this.identityProvider.verifyFullIdentity(userId, panNumber);
+    const user = await this.userRepository.findById(userId);
+    if (!user?.name) {
+      throw new ProfileIncompleteError();
+    }
+    const result = await this.identityProvider.verifyFullIdentity(userId, panNumber, user.name);
     if (!result.verified) {
       throw new IdentityVerificationFailedError();
     }
@@ -104,6 +123,35 @@ export class AuthService {
   async subscribe(userId: string): Promise<User> {
     return this.userRepository.subscribe(userId);
   }
+
+  // Verifies a Registered UPI ID is real before Onboarding accepts it (ADR
+  // 0012) — delegates to whichever PaymentProvider is configured. Doesn't
+  // persist anything; ProfileSetupScreen calls this once per UPI ID the
+  // person types before letting them submit it via completeProfile.
+  async verifyUpiId(vpa: string): Promise<VpaVerificationResult> {
+    return this.paymentProvider.verifyVpa(vpa);
+  }
+
+  // Onboarding's profile-setup step (CONTEXT.md, ADR 0012) — mandatory,
+  // one-time, blocks reaching Home. Field shape/required-ness is validated
+  // at the router; the age gate is domain logic so it lives here.
+  async completeProfile(userId: string, input: CompleteProfileInput): Promise<User> {
+    if (ageInYears(input.dateOfBirth, this.now()) < 18) {
+      throw new UnderageError();
+    }
+    return this.userRepository.completeProfile(userId, input);
+  }
+}
+
+function ageInYears(dateOfBirth: Date, now: Date): number {
+  let age = now.getFullYear() - dateOfBirth.getFullYear();
+  const hasNotHadBirthdayYetThisYear =
+    now.getMonth() < dateOfBirth.getMonth() ||
+    (now.getMonth() === dateOfBirth.getMonth() && now.getDate() < dateOfBirth.getDate());
+  if (hasNotHadBirthdayYetThisYear) {
+    age -= 1;
+  }
+  return age;
 }
 
 function defaultGenerateCode(): string {

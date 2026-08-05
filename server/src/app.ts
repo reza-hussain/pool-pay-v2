@@ -36,7 +36,6 @@ export interface AppDependencies {
   // Deposit-confirmation webhook (ticket #15) — optional so every other
   // test file's createApp call is unaffected; only mounted when provided.
   paymentProvider?: PaymentProvider;
-  decentroWebhookSecret?: string;
 }
 
 export function createApp({
@@ -52,10 +51,19 @@ export function createApp({
   analyticsService,
   jwtSecret,
   paymentProvider,
-  decentroWebhookSecret,
 }: AppDependencies): Express {
   const app = express();
-  app.use(express.json());
+  // The verify callback stashes the raw request bytes on req.rawBody — the
+  // deposit webhook needs the exact bytes Cashfree signed for HMAC signature
+  // verification (see createDepositWebhookRouter); a re-serialized copy of
+  // the parsed JSON wouldn't reliably match.
+  app.use(
+    express.json({
+      verify: (req, _res, buf) => {
+        (req as Request & { rawBody?: Buffer }).rawBody = buf;
+      },
+    }),
+  );
   app.use("/auth", createAuthRouter(authService, jwtSecret));
   app.use("/pools", createPoolsRouter(poolService, membershipService, jwtSecret));
   app.use("/pools", createDepositsRouter(depositService, jwtSecret));
@@ -66,7 +74,7 @@ export function createApp({
   app.use("/pools", createVotesRouter(voteService, jwtSecret));
   app.use("/analytics", createAnalyticsRouter(analyticsService, jwtSecret));
   if (paymentProvider) {
-    app.use("/webhooks", createDepositWebhookRouter(depositService, paymentProvider, decentroWebhookSecret));
+    app.use("/webhooks", createDepositWebhookRouter(depositService, paymentProvider));
   }
 
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
