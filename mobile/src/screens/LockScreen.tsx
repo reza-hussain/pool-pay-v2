@@ -9,7 +9,16 @@ import { colors, radii, spacing, type } from "../theme/tokens";
 // just launched or come back to the foreground — gates every other screen
 // until authenticateAsync succeeds, so it deliberately renders in place of
 // the whole authenticated tree rather than as an overlay.
-export function LockScreen({ onUnlocked }: { onUnlocked: () => void }) {
+export function LockScreen({
+  onUnlocked,
+  onLogout,
+}: {
+  onUnlocked: () => void;
+  // Escape hatch for when biometrics can never succeed again on this device
+  // (enrollment removed after the toggle was turned on, hardware trouble,
+  // etc.) — without this, turning app lock on would be a one-way door.
+  onLogout: () => void;
+}) {
   const [failed, setFailed] = useState(false);
 
   async function attempt() {
@@ -44,6 +53,9 @@ export function LockScreen({ onUnlocked }: { onUnlocked: () => void }) {
         </Text>
         <Pressable style={styles.button} onPress={() => void attempt()}>
           <Text style={styles.buttonText}>Unlock</Text>
+        </Pressable>
+        <Pressable style={styles.logoutButton} onPress={onLogout}>
+          <Text style={styles.logoutButtonText}>Log out instead</Text>
         </Pressable>
       </View>
     </Screen>
@@ -88,5 +100,12 @@ const styles = StyleSheet.create({
   buttonText: {
     ...type.bodyBold,
     color: colors.cream,
+  },
+  logoutButton: {
+    marginTop: spacing.s5,
+  },
+  logoutButtonText: {
+    ...type.bodyBold,
+    color: colors.danger600,
   },
 });

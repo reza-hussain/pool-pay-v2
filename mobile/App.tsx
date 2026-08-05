@@ -540,8 +540,8 @@ export default function App() {
           )
         ) : !session.user.isOnboarded ? (
           <ProfileSetupScreen session={session} onCompleted={setSession} />
-        ) : appLockEnabled && locked ? (
-          <LockScreen onUnlocked={() => setLocked(false)} />
+        ) : locked ? (
+          <LockScreen onUnlocked={() => setLocked(false)} onLogout={handleLogout} />
         ) : (
           <SessionContext.Provider
             value={{

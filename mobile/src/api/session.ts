@@ -75,6 +75,7 @@ export async function clearStaleDataFromPriorInstall(): Promise<void> {
   await Promise.allSettled([
     SecureStore.deleteItemAsync(SESSION_KEY),
     SecureStore.deleteItemAsync(WELCOME_SEEN_KEY),
+    SecureStore.deleteItemAsync(APP_LOCK_ENABLED_KEY),
   ]);
   FRESH_INSTALL_MARKER.create();
 }
