@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
 import { recordSpend, SpendsApiError, type RecordSpendResult } from "../api/spendsClient";
+import { parseUpiPaymentQr } from "../lib/upiQr";
 import { paiseToRupeeLabel, rupeesToPaise } from "../lib/money";
+import { Screen } from "../components/Screen";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
 export function SpendScreen({
@@ -17,11 +20,49 @@ export function SpendScreen({
   onDone: () => void;
   onCancel: () => void;
 }) {
+  const [step, setStep] = useState<"scan" | "form">("scan");
   const [merchantRef, setMerchantRef] = useState("");
   const [amountRupees, setAmountRupees] = useState("");
+  const [scannedPayeeName, setScannedPayeeName] = useState<string | null>(null);
+  const [scanNotice, setScanNotice] = useState<string | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RecordSpendResult | null>(null);
+  // Guards against onBarcodeScanned firing repeatedly for the same code
+  // while the camera keeps decoding the same frame.
+  const alreadyScanned = useRef(false);
+
+  useEffect(() => {
+    if (step === "scan" && permission && !permission.granted && permission.canAskAgain) {
+      requestPermission();
+    }
+  }, [step, permission, requestPermission]);
+
+  function handleBarcodeScanned(scan: BarcodeScanningResult) {
+    if (alreadyScanned.current) {
+      return;
+    }
+    const parsed = parseUpiPaymentQr(scan.data);
+    if (!parsed) {
+      setScanNotice("That doesn't look like a UPI QR code — try again, or enter it manually.");
+      return;
+    }
+    alreadyScanned.current = true;
+    setScanNotice(null);
+    setMerchantRef(parsed.vpa);
+    setScannedPayeeName(parsed.payeeName);
+    if (parsed.amountRupees) {
+      setAmountRupees(parsed.amountRupees);
+    }
+    setStep("form");
+  }
+
+  function startScanning() {
+    alreadyScanned.current = false;
+    setScanNotice(null);
+    setStep("scan");
+  }
 
   async function confirmSpend() {
     setError(null);
@@ -65,6 +106,48 @@ export function SpendScreen({
     );
   }
 
+  if (step === "scan") {
+    const permissionBlocked = permission !== null && !permission.granted && !permission.canAskAgain;
+
+    return (
+      <Screen backgroundColor={colors.ink900} edges={["top"]}>
+        <View style={styles.scanContainer}>
+          <Pressable onPress={onCancel} style={styles.darkBack}>
+            <Text style={styles.darkBackGlyph}>{"‹"}</Text>
+          </Pressable>
+
+          <Text style={styles.scanTitle}>Scan merchant's UPI QR</Text>
+          <Text style={styles.scanSubtitle}>from {pool.name}</Text>
+
+          <View style={styles.viewfinder}>
+            {permission?.granted ? (
+              <CameraView
+                style={StyleSheet.absoluteFill}
+                facing="back"
+                barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                onBarcodeScanned={handleBarcodeScanned}
+              />
+            ) : (
+              <ActivityIndicator color={colors.cream} />
+            )}
+            <View style={styles.viewfinderFrame} pointerEvents="none" />
+          </View>
+
+          {scanNotice ? <Text style={styles.scanNotice}>{scanNotice}</Text> : null}
+          {permissionBlocked ? (
+            <Text style={styles.scanNotice}>
+              Camera access is off for Pool Pay — enable it in Settings, or enter the UPI ID manually.
+            </Text>
+          ) : null}
+
+          <Pressable onPress={() => setStep("form")} style={styles.manualLink}>
+            <Text style={styles.manualLinkText}>Enter manually instead</Text>
+          </Pressable>
+        </View>
+      </Screen>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
@@ -76,6 +159,10 @@ export function SpendScreen({
       <Text style={styles.title}>Pay a merchant</Text>
       <Text style={styles.subtitle}>from {pool.name}</Text>
 
+      {scannedPayeeName ? (
+        <Text style={styles.scannedCaption}>Scanned: {scannedPayeeName}</Text>
+      ) : null}
+
       <View style={styles.field}>
         <Text style={styles.fieldLabel}>Merchant UPI reference</Text>
         <TextInput
@@ -84,7 +171,10 @@ export function SpendScreen({
           placeholderTextColor={colors.ink400}
           autoCapitalize="none"
           value={merchantRef}
-          onChangeText={setMerchantRef}
+          onChangeText={(text) => {
+            setMerchantRef(text);
+            setScannedPayeeName(null);
+          }}
         />
       </View>
 
@@ -99,6 +189,10 @@ export function SpendScreen({
           onChangeText={setAmountRupees}
         />
       </View>
+
+      <Pressable onPress={startScanning} style={styles.scanAgainLink}>
+        <Text style={styles.scanAgainLinkText}>Scan a QR code instead</Text>
+      </Pressable>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -141,6 +235,11 @@ const styles = StyleSheet.create({
     ...type.caption,
     marginBottom: spacing.s5,
   },
+  scannedCaption: {
+    ...type.caption,
+    color: colors.green600,
+    marginBottom: spacing.s3,
+  },
   field: {
     backgroundColor: colors.fieldFill,
     borderRadius: radii.md,
@@ -164,6 +263,15 @@ const styles = StyleSheet.create({
     marginTop: 5,
     padding: 0,
   },
+  scanAgainLink: {
+    alignSelf: "center",
+    marginBottom: spacing.s2,
+  },
+  scanAgainLinkText: {
+    ...type.caption,
+    color: colors.ink600,
+    textDecorationLine: "underline",
+  },
   primaryButton: {
     height: 48,
     backgroundColor: colors.pumpkin500,
@@ -180,6 +288,62 @@ const styles = StyleSheet.create({
     ...type.body,
     color: colors.danger600,
     marginTop: spacing.s2,
+  },
+
+  scanContainer: {
+    flex: 1,
+    backgroundColor: colors.ink900,
+    alignItems: "center",
+    padding: spacing.s6,
+  },
+  darkBack: {
+    alignSelf: "flex-start",
+  },
+  darkBackGlyph: {
+    fontSize: 24,
+    color: colors.cream,
+  },
+  scanTitle: {
+    ...type.title,
+    color: colors.cream,
+    marginTop: spacing.s4,
+    textAlign: "center",
+  },
+  scanSubtitle: {
+    ...type.caption,
+    color: colors.ink200,
+    marginTop: spacing.s1,
+  },
+  viewfinder: {
+    width: 260,
+    height: 260,
+    marginTop: spacing.s7,
+    borderRadius: radii.lg,
+    backgroundColor: colors.ink600,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  viewfinderFrame: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: radii.lg,
+    borderWidth: 3,
+    borderColor: colors.flax500,
+  },
+  scanNotice: {
+    ...type.caption,
+    color: colors.cream,
+    textAlign: "center",
+    marginTop: spacing.s5,
+    paddingHorizontal: spacing.s4,
+  },
+  manualLink: {
+    marginTop: spacing.s6,
+  },
+  manualLinkText: {
+    ...type.bodyBold,
+    color: colors.cream,
+    textDecorationLine: "underline",
   },
 
   successContainer: {

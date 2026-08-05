@@ -23,6 +23,16 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": ["expo-secure-store", "expo-font", "expo-splash-screen"]
+    "plugins": [
+      "expo-secure-store",
+      "expo-font",
+      "expo-splash-screen",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Pool Pay needs your camera to scan a merchant's UPI QR code."
+        }
+      ]
+    ]
   }
 }
