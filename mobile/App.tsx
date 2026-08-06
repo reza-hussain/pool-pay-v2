@@ -183,6 +183,11 @@ function HomeRoute({ navigation }: HomeRouteProps) {
 // badge shown) until that ticket fetches a real count from GET /notifications.
 const unreadAlertsCount = 0;
 
+function ActivityRoute() {
+  const { session } = useSessionContext();
+  return <ActivityScreen session={session} />;
+}
+
 function AppTabs() {
   return (
     <AppTab.Navigator
@@ -211,7 +216,7 @@ function AppTabs() {
       />
       <AppTab.Screen
         name="Activity"
-        component={ActivityScreen}
+        component={ActivityRoute}
         options={{ tabBarIcon: ({ color }) => <ActivityTabIcon color={color} /> }}
       />
       <AppTab.Screen

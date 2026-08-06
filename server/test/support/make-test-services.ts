@@ -18,6 +18,7 @@ import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repo
 import type { UserRepository } from "../../src/auth/types.js";
 import { AnalyticsService } from "../../src/analytics/analytics-service.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
+import { ActivityService } from "../../src/activity/activity-service.js";
 
 // Shared across test files that just need working Pool/Membership/Deposit/Spend/
 // Reimbursement/Ledger/Closure/Vote services and don't care about their
@@ -97,6 +98,13 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     closureService,
   });
   const analyticsService = new AnalyticsService({ userRepository, poolRepository, spendRepository });
+  const activityService = new ActivityService({
+    membershipRepository,
+    poolRepository,
+    depositRepository,
+    refundRepository,
+    userRepository,
+  });
 
   return {
     poolService,
@@ -108,6 +116,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     closureService,
     voteService,
     analyticsService,
+    activityService,
     poolRepository,
     membershipRepository,
     userRepository,
