@@ -3,6 +3,7 @@ import { File, Paths } from "expo-file-system";
 
 const SESSION_KEY = "pool-pay-session";
 const WELCOME_SEEN_KEY = "pool-pay-welcome-seen";
+const APP_LOCK_ENABLED_KEY = "pool-pay-app-lock-enabled";
 
 export interface StoredSession {
   token: string;
@@ -28,6 +29,21 @@ export async function loadSession(): Promise<StoredSession | null> {
   const raw = await SecureStore.getItemAsync(SESSION_KEY);
   if (!raw) return null;
   return JSON.parse(raw) as StoredSession;
+}
+
+export async function clearSession(): Promise<void> {
+  await SecureStore.deleteItemAsync(SESSION_KEY);
+}
+
+// The Face ID / app-lock preference is a device-level security setting, not
+// part of the account session — it's read at bootstrap regardless of which
+// account is currently signed in, and survives Log out on purpose (ticket #24).
+export async function isAppLockEnabled(): Promise<boolean> {
+  return (await SecureStore.getItemAsync(APP_LOCK_ENABLED_KEY)) === "true";
+}
+
+export async function persistAppLockEnabled(enabled: boolean): Promise<void> {
+  await SecureStore.setItemAsync(APP_LOCK_ENABLED_KEY, enabled ? "true" : "false");
 }
 
 // The welcome carousel (CONTEXT.md's "Onboarding") is a first-run marketing
@@ -59,6 +75,7 @@ export async function clearStaleDataFromPriorInstall(): Promise<void> {
   await Promise.allSettled([
     SecureStore.deleteItemAsync(SESSION_KEY),
     SecureStore.deleteItemAsync(WELCOME_SEEN_KEY),
+    SecureStore.deleteItemAsync(APP_LOCK_ENABLED_KEY),
   ]);
   FRESH_INSTALL_MARKER.create();
 }

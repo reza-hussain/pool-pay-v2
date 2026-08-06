@@ -32,6 +32,12 @@
         {
           "cameraPermission": "Pool Pay needs your camera to scan a merchant's UPI QR code."
         }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Pool Pay uses Face ID to lock your Pools when app lock is turned on."
+        }
       ]
     ]
   }

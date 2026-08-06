@@ -32,6 +32,9 @@ export const colors = {
   lineStrong: "rgba(23,20,12,0.20)",
   fieldFill: "rgba(23,20,12,0.045)",
   selectedFill: "rgba(23,20,12,0.03)",
+  // .set-row .sicon and .toggle (off state) respectively — kit section 08.
+  settingsIconFill: "rgba(23,20,12,0.05)",
+  toggleTrackOff: "rgba(23,20,12,0.16)",
   // .segment background (kit's Activity/segment-control track).
   segmentFill: "rgba(23,20,12,0.06)",
 } as const;
