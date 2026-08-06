@@ -20,6 +20,7 @@ import { AnalyticsService } from "../../src/analytics/analytics-service.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 import { NotificationService } from "../../src/notifications/notification-service.js";
 import { InMemoryNotificationRepository } from "../../src/notifications/fakes/in-memory-notification-repository.js";
+import { ActivityService } from "../../src/activity/activity-service.js";
 
 // Shared across test files that just need working Pool/Membership/Deposit/Spend/
 // Reimbursement/Ledger/Closure/Vote services and don't care about their
@@ -108,6 +109,13 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     closureService,
   });
   const analyticsService = new AnalyticsService({ userRepository, poolRepository, spendRepository });
+  const activityService = new ActivityService({
+    membershipRepository,
+    poolRepository,
+    depositRepository,
+    refundRepository,
+    userRepository,
+  });
 
   return {
     poolService,
@@ -120,6 +128,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     voteService,
     analyticsService,
     notificationService,
+    activityService,
     poolRepository,
     membershipRepository,
     userRepository,

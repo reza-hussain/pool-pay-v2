@@ -22,6 +22,8 @@ import type { AnalyticsService } from "./analytics/analytics-service.js";
 import { createAnalyticsRouter } from "./analytics/router.js";
 import type { NotificationService } from "./notifications/notification-service.js";
 import { createNotificationsRouter } from "./notifications/router.js";
+import type { ActivityService } from "./activity/activity-service.js";
+import { createActivityRouter } from "./activity/router.js";
 
 export interface AppDependencies {
   authService: AuthService;
@@ -35,6 +37,7 @@ export interface AppDependencies {
   voteService: VoteService;
   analyticsService: AnalyticsService;
   notificationService: NotificationService;
+  activityService: ActivityService;
   jwtSecret: string;
   // Deposit-confirmation webhook (ticket #15) — optional so every other
   // test file's createApp call is unaffected; only mounted when provided.
@@ -53,6 +56,7 @@ export function createApp({
   voteService,
   analyticsService,
   notificationService,
+  activityService,
   jwtSecret,
   paymentProvider,
 }: AppDependencies): Express {
@@ -78,6 +82,7 @@ export function createApp({
   app.use("/pools", createVotesRouter(voteService, jwtSecret));
   app.use("/analytics", createAnalyticsRouter(analyticsService, jwtSecret));
   app.use("/notifications", createNotificationsRouter(notificationService, jwtSecret));
+  app.use("/activity", createActivityRouter(activityService, jwtSecret));
   if (paymentProvider) {
     app.use("/webhooks", createDepositWebhookRouter(depositService, paymentProvider));
   }

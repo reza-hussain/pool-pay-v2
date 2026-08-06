@@ -25,6 +25,7 @@ import { PrismaRefundVoteRepository } from "./votes/prisma-refund-vote-repositor
 import { AnalyticsService } from "./analytics/analytics-service.js";
 import { NotificationService } from "./notifications/notification-service.js";
 import { PrismaNotificationRepository } from "./notifications/prisma-notification-repository.js";
+import { ActivityService } from "./activity/activity-service.js";
 import { FakePaymentProvider } from "./payments/fakes/fake-payment-provider.js";
 import { CashfreePaymentProvider } from "./payments/cashfree/cashfree-payment-provider.js";
 import { FakeIdentityProvider } from "./auth/fakes/fake-identity-provider.js";
@@ -139,6 +140,13 @@ const voteService = new VoteService({
   closureService,
 });
 const analyticsService = new AnalyticsService({ userRepository, poolRepository, spendRepository });
+const activityService = new ActivityService({
+  membershipRepository,
+  poolRepository,
+  depositRepository,
+  refundRepository,
+  userRepository,
+});
 
 const app = createApp({
   authService,
@@ -152,6 +160,7 @@ const app = createApp({
   voteService,
   analyticsService,
   notificationService,
+  activityService,
   jwtSecret: env.JWT_SECRET,
   paymentProvider,
 });

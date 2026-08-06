@@ -191,6 +191,11 @@ function AlertsRoute() {
   return <AlertsScreen session={session} onUnreadCountChange={setUnreadAlertsCount} />;
 }
 
+function ActivityRoute() {
+  const { session } = useSessionContext();
+  return <ActivityScreen session={session} />;
+}
+
 function AppTabs() {
   const { unreadAlertsCount } = useSessionContext();
   return (
@@ -220,7 +225,7 @@ function AppTabs() {
       />
       <AppTab.Screen
         name="Activity"
-        component={ActivityScreen}
+        component={ActivityRoute}
         options={{ tabBarIcon: ({ color }) => <ActivityTabIcon color={color} /> }}
       />
       <AppTab.Screen

@@ -32,6 +32,8 @@ export const colors = {
   lineStrong: "rgba(23,20,12,0.20)",
   fieldFill: "rgba(23,20,12,0.045)",
   selectedFill: "rgba(23,20,12,0.03)",
+  // .segment background (kit's Activity/segment-control track).
+  segmentFill: "rgba(23,20,12,0.06)",
 } as const;
 
 export const spacing = {
