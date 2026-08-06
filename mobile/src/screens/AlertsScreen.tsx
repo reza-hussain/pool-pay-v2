@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Path, Rect } from "react-native-svg";
 import { Screen } from "../components/Screen";
 import type { StoredSession } from "../api/session";
@@ -102,7 +102,7 @@ export function AlertsScreen({
             Deposit, funding, Lock, and Refund notifications will show up here soon.
           </Text>
         ) : (
-          <>
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {unread.length > 0 ? (
               <View>
                 <Text style={styles.groupLabel}>New</Text>
@@ -123,7 +123,7 @@ export function AlertsScreen({
                 </View>
               </View>
             ) : null}
-          </>
+          </ScrollView>
         )}
       </View>
     </Screen>
@@ -164,6 +164,9 @@ const styles = StyleSheet.create({
     ...type.label,
     marginBottom: spacing.s2,
     marginTop: spacing.s2,
+  },
+  scrollContent: {
+    paddingBottom: spacing.s8,
   },
   list: {
     gap: spacing.s2,
