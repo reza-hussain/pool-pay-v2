@@ -31,6 +31,7 @@ function makeApp() {
     closureService,
     voteService,
     analyticsService,
+    notificationService,
     activityService,
     poolRepository,
   } = makeTestServices({ userRepository });
@@ -45,6 +46,7 @@ function makeApp() {
     closureService,
     voteService,
     analyticsService,
+    notificationService,
     activityService,
     jwtSecret: JWT_SECRET,
   });

@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import type { MembershipRepository } from "../memberships/types.js";
 import { PoolNotFoundError } from "../memberships/types.js";
 import type { UserRepository } from "../auth/types.js";
+import type { NotificationService } from "../notifications/notification-service.js";
 import {
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
@@ -24,6 +25,7 @@ export interface PoolServiceOptions {
   poolRepository: PoolRepository;
   membershipRepository: MembershipRepository;
   userRepository: UserRepository;
+  notificationService: NotificationService;
   generateJoinCode?: () => string;
 }
 
@@ -31,12 +33,14 @@ export class PoolService {
   private readonly poolRepository: PoolRepository;
   private readonly membershipRepository: MembershipRepository;
   private readonly userRepository: UserRepository;
+  private readonly notificationService: NotificationService;
   private readonly generateJoinCode: () => string;
 
   constructor(options: PoolServiceOptions) {
     this.poolRepository = options.poolRepository;
     this.membershipRepository = options.membershipRepository;
     this.userRepository = options.userRepository;
+    this.notificationService = options.notificationService;
     this.generateJoinCode = options.generateJoinCode ?? defaultGenerateJoinCode;
   }
 
@@ -102,7 +106,20 @@ export class PoolService {
       throw new NotPoolOrganizerError();
     }
 
-    return this.poolRepository.updateState(poolId, "LOCKED");
+    const locked = await this.poolRepository.updateState(poolId, "LOCKED");
+
+    const members = await this.membershipRepository.listByPool(poolId);
+    const otherMemberIds = members.map((member) => member.userId).filter((id) => id !== userId);
+    if (otherMemberIds.length > 0) {
+      await this.notificationService.notify({
+        recipientUserIds: otherMemberIds,
+        poolId,
+        type: "POOL_LOCKED",
+        message: `${pool.name} was locked`,
+      });
+    }
+
+    return locked;
   }
 
   async listPoolsForUser(userId: string): Promise<Pool[]> {

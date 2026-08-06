@@ -29,6 +29,7 @@ function makeApp() {
     closureService,
     voteService,
     analyticsService,
+    notificationService,
     activityService,
   } = makeTestServices();
   const app = createApp({
@@ -42,6 +43,7 @@ function makeApp() {
     closureService,
     voteService,
     analyticsService,
+    notificationService,
     activityService,
     jwtSecret: JWT_SECRET,
   });
@@ -71,6 +73,7 @@ describe("error handling", () => {
       closureService,
       voteService,
       analyticsService,
+      notificationService,
       activityService,
     } = makeTestServices();
     const app = createApp({
@@ -84,6 +87,7 @@ describe("error handling", () => {
       closureService,
       voteService,
       analyticsService,
+      notificationService,
       activityService,
       jwtSecret: JWT_SECRET,
     });

@@ -18,6 +18,8 @@ import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repo
 import type { UserRepository } from "../../src/auth/types.js";
 import { AnalyticsService } from "../../src/analytics/analytics-service.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
+import { NotificationService } from "../../src/notifications/notification-service.js";
+import { InMemoryNotificationRepository } from "../../src/notifications/fakes/in-memory-notification-repository.js";
 import { ActivityService } from "../../src/activity/activity-service.js";
 
 // Shared across test files that just need working Pool/Membership/Deposit/Spend/
@@ -41,8 +43,15 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
   const refundRepository = new InMemoryRefundRepository();
   const refundVoteRepository = new InMemoryRefundVoteRepository();
   const paymentProvider = new FakePaymentProvider();
+  const notificationRepository = new InMemoryNotificationRepository();
+  const notificationService = new NotificationService({ notificationRepository });
 
-  const poolService = new PoolService({ poolRepository, membershipRepository, userRepository });
+  const poolService = new PoolService({
+    poolRepository,
+    membershipRepository,
+    userRepository,
+    notificationService,
+  });
   const membershipService = new MembershipService({ poolRepository, membershipRepository });
   const depositService = new DepositService({
     poolRepository,
@@ -54,6 +63,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     refundRepository,
     paymentProvider,
     userRepository,
+    notificationService,
   });
   const spendService = new SpendService({
     poolRepository,
@@ -90,6 +100,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     refundRepository,
     userRepository,
     paymentProvider,
+    notificationService,
   });
   const voteService = new VoteService({
     poolRepository,
@@ -116,6 +127,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     closureService,
     voteService,
     analyticsService,
+    notificationService,
     activityService,
     poolRepository,
     membershipRepository,
@@ -126,6 +138,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     reimbursementRepository,
     refundRepository,
     refundVoteRepository,
+    notificationRepository,
     paymentProvider,
   };
 }

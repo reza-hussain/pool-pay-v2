@@ -29,6 +29,7 @@ function makeApp() {
     closureService,
     voteService,
     analyticsService,
+    notificationService,
     activityService,
   } = makeTestServices();
   const app = createApp({
@@ -42,6 +43,7 @@ function makeApp() {
     closureService,
     voteService,
     analyticsService,
+    notificationService,
     activityService,
     jwtSecret: JWT_SECRET,
   });

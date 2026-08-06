@@ -48,9 +48,14 @@ import {
 } from './src/api/session';
 import { listPools, lockPool, type Pool } from './src/api/poolsClient';
 import { joinByPoolId } from './src/api/membersClient';
+import { getNotifications } from './src/api/notificationsClient';
 import { parseJoinPoolId } from './src/lib/inviteLink';
 
 SplashScreen.preventAutoHideAsync();
+
+function fetchUnreadAlertsCount(token: string): Promise<number> {
+  return getNotifications(token).then((notifications) => notifications.filter((n) => n.readAt === null).length);
+}
 
 type AuthStackParamList = {
   SignupLogin: undefined;
@@ -109,6 +114,8 @@ const SessionContext = createContext<{
   pools: Pool[];
   setPools: Dispatch<SetStateAction<Pool[]>>;
   setSession: (session: StoredSession) => void;
+  unreadAlertsCount: number;
+  setUnreadAlertsCount: Dispatch<SetStateAction<number>>;
 } | null>(null);
 
 function useAuthContext() {
@@ -179,9 +186,10 @@ function HomeRoute({ navigation }: HomeRouteProps) {
   );
 }
 
-// Unread count wiring lands with the Alerts ticket (#23) — this stays 0 (no
-// badge shown) until that ticket fetches a real count from GET /notifications.
-const unreadAlertsCount = 0;
+function AlertsRoute() {
+  const { session, setUnreadAlertsCount } = useSessionContext();
+  return <AlertsScreen session={session} onUnreadCountChange={setUnreadAlertsCount} />;
+}
 
 function ActivityRoute() {
   const { session } = useSessionContext();
@@ -189,6 +197,7 @@ function ActivityRoute() {
 }
 
 function AppTabs() {
+  const { unreadAlertsCount } = useSessionContext();
   return (
     <AppTab.Navigator
       screenOptions={{
@@ -221,7 +230,7 @@ function AppTabs() {
       />
       <AppTab.Screen
         name="Alerts"
-        component={AlertsScreen}
+        component={AlertsRoute}
         options={{
           tabBarIcon: ({ color }) => <AlertsTabIcon color={color} />,
           tabBarBadge: unreadAlertsCount > 0 ? unreadAlertsCount : undefined,
@@ -411,6 +420,7 @@ export default function App() {
   // A rehydrated session (app relaunch) is never a fresh signup.
   const [isNewUser, setIsNewUser] = useState(false);
   const [pools, setPools] = useState<Pool[]>([]);
+  const [unreadAlertsCount, setUnreadAlertsCount] = useState(0);
   const [welcomeSeen, setWelcomeSeen] = useState(false);
   const navigationRef = useNavigationContainerRef<AppStackParamList>();
 
@@ -424,6 +434,7 @@ export default function App() {
           // Populates Home from real membership state on every app restart —
           // previously `pools` only ever grew via in-session create/join calls.
           listPools(storedSession.token).then(setPools).catch(() => {});
+          fetchUnreadAlertsCount(storedSession.token).then(setUnreadAlertsCount).catch(() => {});
         }
       })
       .finally(() => setBootstrapping(false));
@@ -485,6 +496,7 @@ export default function App() {
                   setSession(newSession);
                   setIsNewUser(newUser);
                   listPools(newSession.token).then(setPools).catch(() => {});
+                  fetchUnreadAlertsCount(newSession.token).then(setUnreadAlertsCount).catch(() => {});
                 },
               }}
             >
@@ -496,7 +508,17 @@ export default function App() {
         ) : !session.user.isOnboarded ? (
           <ProfileSetupScreen session={session} onCompleted={setSession} />
         ) : (
-          <SessionContext.Provider value={{ session, isNewUser, pools, setPools, setSession: updateSession }}>
+          <SessionContext.Provider
+            value={{
+              session,
+              isNewUser,
+              pools,
+              setPools,
+              setSession: updateSession,
+              unreadAlertsCount,
+              setUnreadAlertsCount,
+            }}
+          >
             <AppStack.Navigator screenOptions={{ headerShown: false }}>
               <AppStack.Screen name="Home" component={AppTabs} />
               <AppStack.Screen name="VerifyIdentity" component={VerifyIdentityRoute} />
