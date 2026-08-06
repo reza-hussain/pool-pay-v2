@@ -1,12 +1,14 @@
 import { PoolNotFoundError } from "../memberships/types.js";
 import type { MembershipRepository } from "../memberships/types.js";
 import { getPoolBalance } from "../pools/pool-balance.js";
-import type { PoolRepository } from "../pools/types.js";
+import type { Pool, PoolRepository } from "../pools/types.js";
 import type { DepositIntent, PaymentProvider } from "../payments/types.js";
 import type { SpendRepository } from "../spends/types.js";
 import type { ReimbursementRepository } from "../reimbursements/types.js";
 import type { RefundRepository } from "../closure/types.js";
 import { UserNotFoundError, type UserRepository } from "../auth/types.js";
+import { formatRupees } from "../lib/format-money.js";
+import type { NotificationService } from "../notifications/notification-service.js";
 import {
   InvalidDepositAmountError,
   NotAMemberError,
@@ -34,6 +36,7 @@ export interface DepositServiceOptions {
   // paymentProvider.createDepositIntent — Cashfree's Orders API requires a
   // real customer phone per order.
   userRepository: UserRepository;
+  notificationService: NotificationService;
 }
 
 export class DepositService {
@@ -46,6 +49,7 @@ export class DepositService {
   private readonly refundRepository: RefundRepository;
   private readonly paymentProvider: PaymentProvider;
   private readonly userRepository: UserRepository;
+  private readonly notificationService: NotificationService;
 
   constructor(options: DepositServiceOptions) {
     this.poolRepository = options.poolRepository;
@@ -57,6 +61,7 @@ export class DepositService {
     this.refundRepository = options.refundRepository;
     this.paymentProvider = options.paymentProvider;
     this.userRepository = options.userRepository;
+    this.notificationService = options.notificationService;
   }
 
   async createDepositIntent(poolId: string, userId: string): Promise<DepositIntent> {
@@ -124,7 +129,44 @@ export class DepositService {
 
     const deposit = await this.depositRepository.create(pending.poolId, pending.userId, amountPaise);
     await this.pendingDepositRepository.markConsumed(providerRef, deposit.id);
+    await this.notifyDeposit(pool, deposit);
     return deposit;
+  }
+
+  private async notifyDeposit(pool: Pool, deposit: Deposit): Promise<void> {
+    const [members, depositor] = await Promise.all([
+      this.membershipRepository.listByPool(pool.id),
+      this.userRepository.findById(deposit.userId),
+    ]);
+    const otherMemberIds = members
+      .map((member) => member.userId)
+      .filter((userId) => userId !== deposit.userId);
+    if (otherMemberIds.length === 0) {
+      return;
+    }
+
+    const depositorName = depositor?.name ?? "Member";
+    await this.notificationService.notify({
+      recipientUserIds: otherMemberIds,
+      poolId: pool.id,
+      type: "DEPOSIT_RECEIVED",
+      message: `${depositorName} deposited ${formatRupees(deposit.amountPaise)} into ${pool.name}`,
+    });
+
+    if (pool.type === "EQUAL_SPLIT" && pool.perPersonAmountPaise) {
+      const targetPaise = pool.perPersonAmountPaise * members.length;
+      const balanceAfterPaise = await this.getPoolBalance(pool.id);
+      const balanceBeforePaise = balanceAfterPaise - deposit.amountPaise;
+      const justCrossedTarget = balanceBeforePaise < targetPaise && balanceAfterPaise >= targetPaise;
+      if (justCrossedTarget) {
+        await this.notificationService.notify({
+          recipientUserIds: otherMemberIds,
+          poolId: pool.id,
+          type: "POOL_FULLY_FUNDED",
+          message: `${pool.name} is fully funded`,
+        });
+      }
+    }
   }
 
   async getPoolBalance(poolId: string): Promise<number> {

@@ -54,9 +54,14 @@ import {
 import { isBiometricAuthAvailable } from './src/lib/biometrics';
 import { listPools, lockPool, type Pool } from './src/api/poolsClient';
 import { joinByPoolId } from './src/api/membersClient';
+import { getNotifications } from './src/api/notificationsClient';
 import { parseJoinPoolId } from './src/lib/inviteLink';
 
 SplashScreen.preventAutoHideAsync();
+
+function fetchUnreadAlertsCount(token: string): Promise<number> {
+  return getNotifications(token).then((notifications) => notifications.filter((n) => n.readAt === null).length);
+}
 
 type AuthStackParamList = {
   SignupLogin: undefined;
@@ -118,6 +123,8 @@ const SessionContext = createContext<{
   onLogout: () => void;
   appLockEnabled: boolean;
   setAppLockEnabled: Dispatch<SetStateAction<boolean>>;
+  unreadAlertsCount: number;
+  setUnreadAlertsCount: Dispatch<SetStateAction<number>>;
 } | null>(null);
 
 function useAuthContext() {
@@ -200,11 +207,18 @@ function ProfileRoute() {
   );
 }
 
-// Unread count wiring lands with the Alerts ticket (#23) — this stays 0 (no
-// badge shown) until that ticket fetches a real count from GET /notifications.
-const unreadAlertsCount = 0;
+function AlertsRoute() {
+  const { session, setUnreadAlertsCount } = useSessionContext();
+  return <AlertsScreen session={session} onUnreadCountChange={setUnreadAlertsCount} />;
+}
+
+function ActivityRoute() {
+  const { session } = useSessionContext();
+  return <ActivityScreen session={session} />;
+}
 
 function AppTabs() {
+  const { unreadAlertsCount } = useSessionContext();
   return (
     <AppTab.Navigator
       screenOptions={{
@@ -232,12 +246,12 @@ function AppTabs() {
       />
       <AppTab.Screen
         name="Activity"
-        component={ActivityScreen}
+        component={ActivityRoute}
         options={{ tabBarIcon: ({ color }) => <ActivityTabIcon color={color} /> }}
       />
       <AppTab.Screen
         name="Alerts"
-        component={AlertsScreen}
+        component={AlertsRoute}
         options={{
           tabBarIcon: ({ color }) => <AlertsTabIcon color={color} />,
           tabBarBadge: unreadAlertsCount > 0 ? unreadAlertsCount : undefined,
@@ -427,6 +441,7 @@ export default function App() {
   // A rehydrated session (app relaunch) is never a fresh signup.
   const [isNewUser, setIsNewUser] = useState(false);
   const [pools, setPools] = useState<Pool[]>([]);
+  const [unreadAlertsCount, setUnreadAlertsCount] = useState(0);
   const [welcomeSeen, setWelcomeSeen] = useState(false);
   // Device-level security preference (ticket #24) — survives Log out on
   // purpose (see session.ts), so it's read once at bootstrap regardless of
@@ -464,6 +479,7 @@ export default function App() {
           // Populates Home from real membership state on every app restart —
           // previously `pools` only ever grew via in-session create/join calls.
           listPools(storedSession.token).then(setPools).catch(() => {});
+          fetchUnreadAlertsCount(storedSession.token).then(setUnreadAlertsCount).catch(() => {});
         }
       })
       .finally(() => setBootstrapping(false));
@@ -554,6 +570,7 @@ export default function App() {
                   setSession(newSession);
                   setIsNewUser(newUser);
                   listPools(newSession.token).then(setPools).catch(() => {});
+                  fetchUnreadAlertsCount(newSession.token).then(setUnreadAlertsCount).catch(() => {});
                 },
               }}
             >
@@ -577,6 +594,8 @@ export default function App() {
               onLogout: handleLogout,
               appLockEnabled,
               setAppLockEnabled,
+              unreadAlertsCount,
+              setUnreadAlertsCount,
             }}
           >
             <AppStack.Navigator screenOptions={{ headerShown: false }}>

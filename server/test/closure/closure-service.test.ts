@@ -13,6 +13,8 @@ import { PoolNotFoundError } from "../../src/memberships/types.js";
 import { MembershipService } from "../../src/memberships/membership-service.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
+import { NotificationService } from "../../src/notifications/notification-service.js";
+import { InMemoryNotificationRepository } from "../../src/notifications/fakes/in-memory-notification-repository.js";
 
 const ORGANIZER_ID = "user_organizer";
 const MEMBER_A = "user_member_a";
@@ -27,6 +29,8 @@ async function makeService() {
   const refundRepository = new InMemoryRefundRepository();
   const userRepository = new InMemoryUserRepository();
   const paymentProvider = new FakePaymentProvider();
+  const notificationRepository = new InMemoryNotificationRepository();
+  const notificationService = new NotificationService({ notificationRepository });
   const closureService = new ClosureService({
     poolRepository,
     depositRepository,
@@ -35,6 +39,7 @@ async function makeService() {
     refundRepository,
     userRepository,
     paymentProvider,
+    notificationService,
   });
 
   const pool = await poolRepository.create(ORGANIZER_ID, {
@@ -53,6 +58,7 @@ async function makeService() {
     refundRepository,
     userRepository,
     paymentProvider,
+    notificationRepository,
     pool,
   };
 }
@@ -213,6 +219,42 @@ describe("ClosureService.closePool", () => {
     const result = await closureService.closePool(pool.id, ORGANIZER_ID);
 
     expect(result.pool.state).toBe("CLOSED");
+  });
+});
+
+describe("ClosureService refund notifications", () => {
+  it("notifies each recipient only, not every Member of the Pool", async () => {
+    const { closureService, depositRepository, userRepository, notificationRepository, pool } =
+      await makeService();
+    seedUpi(userRepository, MEMBER_A);
+    seedUpi(userRepository, MEMBER_B);
+    await depositRepository.create(pool.id, MEMBER_A, 60000);
+    await depositRepository.create(pool.id, MEMBER_B, 40000);
+
+    await closureService.closePool(pool.id, ORGANIZER_ID);
+
+    const forA = await notificationRepository.listByUser(MEMBER_A);
+    const forB = await notificationRepository.listByUser(MEMBER_B);
+    const forOrganizer = await notificationRepository.listByUser(ORGANIZER_ID);
+    expect(forA).toHaveLength(1);
+    expect(forA[0]).toMatchObject({
+      poolId: pool.id,
+      type: "REFUND_PROCESSED",
+      message: "Refund of ₹600 processed for Goa Trip",
+    });
+    expect(forB).toHaveLength(1);
+    expect(forOrganizer).toHaveLength(0);
+  });
+
+  it("sends no notification for a Member excluded from the refund (zero deposits)", async () => {
+    const { closureService, depositRepository, userRepository, notificationRepository, pool } =
+      await makeService();
+    seedUpi(userRepository, MEMBER_A);
+    await depositRepository.create(pool.id, MEMBER_A, 50000);
+
+    await closureService.closePool(pool.id, ORGANIZER_ID);
+
+    expect(await notificationRepository.listByUser(MEMBER_B)).toHaveLength(0);
   });
 });
 

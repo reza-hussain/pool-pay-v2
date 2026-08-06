@@ -35,6 +35,8 @@ export const colors = {
   // .set-row .sicon and .toggle (off state) respectively — kit section 08.
   settingsIconFill: "rgba(23,20,12,0.05)",
   toggleTrackOff: "rgba(23,20,12,0.16)",
+  // .segment background (kit's Activity/segment-control track).
+  segmentFill: "rgba(23,20,12,0.06)",
 } as const;
 
 export const spacing = {

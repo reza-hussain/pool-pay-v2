@@ -15,8 +15,8 @@ const MEMBER_ID = "user_member";
 
 async function makeApp() {
   const userRepository = new InMemoryUserRepository();
-  userRepository.seedVerifiedUser(ORGANIZER_ID);
-  userRepository.seedVerifiedUser(MEMBER_ID);
+  userRepository.seedVerifiedUser(ORGANIZER_ID, undefined, { name: "Rhea" });
+  userRepository.seedVerifiedUser(MEMBER_ID, undefined, { name: "Maya" });
   const authService = new AuthService({
     userRepository,
     otpStore: new InMemoryOtpStore(),
@@ -33,8 +33,8 @@ async function makeApp() {
     closureService,
     voteService,
     analyticsService,
-    notificationService,
     activityService,
+    notificationService,
   } = makeTestServices({ userRepository });
   const app = createApp({
     authService,
@@ -47,8 +47,8 @@ async function makeApp() {
     closureService,
     voteService,
     analyticsService,
-    notificationService,
     activityService,
+    notificationService,
     jwtSecret: JWT_SECRET,
   });
 
@@ -74,54 +74,38 @@ function bearerFor(userId: string) {
   return `Bearer ${jwt.sign({ sub: userId }, JWT_SECRET)}`;
 }
 
-describe("GET /pools/:poolId/ledger", () => {
-  it("returns the ledger for a Member of the Pool", async () => {
+describe("GET /activity", () => {
+  it("returns the cross-Pool feed for the authenticated user", async () => {
     const { app, pool } = await makeApp();
 
-    const res = await request(app)
-      .get(`/pools/${pool.id}/ledger`)
-      .set("Authorization", bearerFor(MEMBER_ID));
+    const res = await request(app).get("/activity").set("Authorization", bearerFor(MEMBER_ID));
 
     expect(res.status).toBe(200);
     expect(res.body.entries).toHaveLength(1);
-    expect(res.body.entries[0]).toMatchObject({ type: "DEPOSIT", amountPaise: 100000 });
+    expect(res.body.entries[0]).toMatchObject({
+      type: "DEPOSIT",
+      poolId: pool.id,
+      poolName: "Goa Trip",
+      amountPaise: 100000,
+      counterpartyName: "Maya",
+    });
   });
 
-  it("returns the ledger for the Organizer too", async () => {
-    const { app, pool } = await makeApp();
-
-    const res = await request(app)
-      .get(`/pools/${pool.id}/ledger`)
-      .set("Authorization", bearerFor(ORGANIZER_ID));
-
-    expect(res.status).toBe(200);
-    expect(res.body.entries).toHaveLength(1);
-  });
-
-  it("returns 403 for a non-Member", async () => {
-    const { app, pool } = await makeApp();
-
-    const res = await request(app)
-      .get(`/pools/${pool.id}/ledger`)
-      .set("Authorization", bearerFor("user_stranger"));
-
-    expect(res.status).toBe(403);
-  });
-
-  it("returns 404 for an unknown pool", async () => {
+  it("is empty for a user with no Pools", async () => {
     const { app } = await makeApp();
 
     const res = await request(app)
-      .get("/pools/pool_missing/ledger")
-      .set("Authorization", bearerFor(MEMBER_ID));
+      .get("/activity")
+      .set("Authorization", bearerFor("user_no_pools"));
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect(res.body.entries).toEqual([]);
   });
 
   it("returns 401 without a bearer token", async () => {
-    const { app, pool } = await makeApp();
+    const { app } = await makeApp();
 
-    const res = await request(app).get(`/pools/${pool.id}/ledger`);
+    const res = await request(app).get("/activity");
 
     expect(res.status).toBe(401);
   });

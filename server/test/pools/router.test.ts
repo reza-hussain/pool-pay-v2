@@ -31,6 +31,8 @@ function makeApp() {
     closureService,
     voteService,
     analyticsService,
+    notificationService,
+    activityService,
     poolRepository,
   } = makeTestServices({ userRepository });
   const app = createApp({
@@ -44,6 +46,8 @@ function makeApp() {
     closureService,
     voteService,
     analyticsService,
+    notificationService,
+    activityService,
     jwtSecret: JWT_SECRET,
   });
   return { app, poolRepository };

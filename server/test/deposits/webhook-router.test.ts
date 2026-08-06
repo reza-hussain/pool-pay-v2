@@ -50,6 +50,8 @@ async function makeApp(webhookPaymentProvider?: PaymentProvider) {
     closureService,
     voteService,
     analyticsService,
+    notificationService,
+    activityService,
     paymentProvider,
   } = makeTestServices({ userRepository });
   const app = createApp({
@@ -63,6 +65,8 @@ async function makeApp(webhookPaymentProvider?: PaymentProvider) {
     closureService,
     voteService,
     analyticsService,
+    notificationService,
+    activityService,
     jwtSecret: JWT_SECRET,
     paymentProvider: webhookPaymentProvider ?? paymentProvider,
   });

@@ -3,6 +3,8 @@ import { PoolService } from "../../src/pools/pool-service.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
+import { NotificationService } from "../../src/notifications/notification-service.js";
+import { InMemoryNotificationRepository } from "../../src/notifications/fakes/in-memory-notification-repository.js";
 import {
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
@@ -21,8 +23,15 @@ function makePoolService() {
   const membershipRepository = new InMemoryMembershipRepository();
   const userRepository = new InMemoryUserRepository();
   userRepository.seedVerifiedUser(ORGANIZER_ID);
-  const poolService = new PoolService({ poolRepository, membershipRepository, userRepository });
-  return { poolService, poolRepository, membershipRepository, userRepository };
+  const notificationRepository = new InMemoryNotificationRepository();
+  const notificationService = new NotificationService({ notificationRepository });
+  const poolService = new PoolService({
+    poolRepository,
+    membershipRepository,
+    userRepository,
+    notificationService,
+  });
+  return { poolService, poolRepository, membershipRepository, userRepository, notificationRepository };
 }
 
 describe("PoolService.createPool", () => {
@@ -136,8 +145,16 @@ describe("PoolService.createPool", () => {
     const poolRepository = new InMemoryPoolRepository();
     const membershipRepository = new InMemoryMembershipRepository();
     const userRepository = new InMemoryUserRepository();
+    const notificationService = new NotificationService({
+      notificationRepository: new InMemoryNotificationRepository(),
+    });
     // Not seeded as verified.
-    const poolService = new PoolService({ poolRepository, membershipRepository, userRepository });
+    const poolService = new PoolService({
+      poolRepository,
+      membershipRepository,
+      userRepository,
+      notificationService,
+    });
 
     await expect(
       poolService.createPool(ORGANIZER_ID, { name: "Goa Trip", type: "OPEN" }),
@@ -223,6 +240,24 @@ describe("PoolService.lockPool", () => {
     await expect(poolService.lockPool("pool_missing", ORGANIZER_ID)).rejects.toThrow(
       PoolNotFoundError,
     );
+  });
+
+  it("notifies every other current Member, but not the Organizer who locked it", async () => {
+    const { poolService, membershipRepository, notificationRepository } = makePoolService();
+    const pool = await poolService.createPool(ORGANIZER_ID, { name: "Goa Trip", type: "OPEN" });
+    const memberId = "user_member";
+    await membershipRepository.create(pool.id, memberId, "MEMBER");
+
+    await poolService.lockPool(pool.id, ORGANIZER_ID);
+
+    const memberNotifications = await notificationRepository.listByUser(memberId);
+    expect(memberNotifications).toHaveLength(1);
+    expect(memberNotifications[0]).toMatchObject({
+      poolId: pool.id,
+      type: "POOL_LOCKED",
+      message: "Goa Trip was locked",
+    });
+    expect(await notificationRepository.listByUser(ORGANIZER_ID)).toHaveLength(0);
   });
 });
 
