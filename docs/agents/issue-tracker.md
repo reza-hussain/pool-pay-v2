@@ -4,8 +4,6 @@ Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all op
 
 Repo: `git@github.com:reza-hussain/pool-pay-v2.git`
 
-**Note:** as of this writing, this directory is not yet an initialized git repository and has no remote configured. `gh` operations below will fail until `git init`, `git remote add origin git@github.com:reza-hussain/pool-pay-v2.git`, and an initial push have happened.
-
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
