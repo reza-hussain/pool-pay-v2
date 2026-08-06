@@ -38,7 +38,8 @@
         {
           "faceIDPermission": "Pool Pay uses Face ID to lock your Pools when app lock is turned on."
         }
-      ]
+      ],
+      "expo-status-bar"
     ]
   }
 }
