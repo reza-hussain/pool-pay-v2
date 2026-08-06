@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Screen } from "../components/Screen";
 import type { StoredSession } from "../api/session";
 import { getActivity, type ActivityEntry } from "../api/activityClient";
@@ -31,7 +31,7 @@ function dateGroupFor(iso: string, now: Date): DateGroup {
 }
 
 function entryTitle(entry: ActivityEntry): string {
-  return entry.type === "DEPOSIT" ? `${entry.counterpartyName} deposited` : `Refund to ${entry.counterpartyName}`;
+  return entry.type === "DEPOSIT" ? `${entry.counterpartyName} deposited` : "Refund received";
 }
 
 function groupEntries(entries: ActivityEntry[]): { group: DateGroup; entries: ActivityEntry[] }[] {
@@ -120,16 +120,18 @@ export function ActivityScreen({ session }: { session: StoredSession }) {
               : "Nothing to show for this filter yet."}
           </Text>
         ) : (
-          groups.map(({ group, entries: groupItems }) => (
-            <View key={group}>
-              <Text style={styles.groupLabel}>{group}</Text>
-              <View style={styles.list}>
-                {groupItems.map((entry) => (
-                  <EntryRow key={entry.id} entry={entry} />
-                ))}
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {groups.map(({ group, entries: groupItems }) => (
+              <View key={group}>
+                <Text style={styles.groupLabel}>{group}</Text>
+                <View style={styles.list}>
+                  {groupItems.map((entry) => (
+                    <EntryRow key={entry.id} entry={entry} />
+                  ))}
+                </View>
               </View>
-            </View>
-          ))
+            ))}
+          </ScrollView>
         )}
       </View>
     </Screen>
@@ -186,6 +188,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.s2,
     marginTop: spacing.s2,
   },
+  scrollContent: {
+    paddingBottom: spacing.s8,
+  },
   list: {
     gap: spacing.s2,
     marginBottom: spacing.s4,
@@ -209,7 +214,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.green100,
   },
   iconCircleInk: {
-    backgroundColor: colors.ink100,
+    backgroundColor: colors.flax300,
   },
   iconGlyph: {
     ...type.bodyBold,

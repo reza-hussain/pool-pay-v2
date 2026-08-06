@@ -115,14 +115,6 @@ describe("ActivityService.getActivity", () => {
     expect(entries[1].id).toBe(first.id);
   });
 
-  it("excludes Spends and Reimbursements from the feed", async () => {
-    // ActivityService only wires up Deposit and Refund repositories at all —
-    // this test documents that constraint via its type signature rather than
-    // asserting on excluded data, since there's nothing else to assert.
-    const { activityService } = await makeService();
-    expect(await activityService.getActivity(USER_ID)).toEqual([]);
-  });
-
   it("excludes a Pool the user is not currently a Member of", async () => {
     const { activityService, poolRepository, membershipRepository, depositRepository } = await makeService();
 
