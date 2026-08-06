@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PrismaUserRepository } from "../../src/auth/prisma-user-repository.js";
 import { PrismaOtpStore } from "../../src/auth/prisma-otp-store.js";
+import { PrismaUpiOwnershipConfirmationRepository } from "../../src/auth/prisma-upi-ownership-confirmation-repository.js";
 
 const TEST_DB_PATH = "prisma/test.db";
 const TEST_DB_URL = `file:./test.db`;
@@ -22,6 +23,7 @@ beforeAll(() => {
 
 beforeEach(async () => {
   await prisma.otpRequest.deleteMany();
+  await prisma.upiOwnershipConfirmation.deleteMany();
   await prisma.user.deleteMany();
 });
 
@@ -131,5 +133,65 @@ describe("PrismaOtpStore", () => {
 
     const found = await store.findById(challenge.id);
     expect(found?.consumedAt).not.toBeNull();
+  });
+});
+
+describe("PrismaUpiOwnershipConfirmationRepository (ticket #38, ADR 0014)", () => {
+  it("creates a PENDING confirmation and finds it by id or providerRef", async () => {
+    const userRepo = new PrismaUserRepository(prisma);
+    const user = await userRepo.create("+919876543210");
+    const repo = new PrismaUpiOwnershipConfirmationRepository(prisma);
+
+    const createdAt = new Date("2026-07-09T00:00:00.000Z");
+    const created = await repo.create(user.id, "asha.rao@upi", "ref_1", createdAt);
+    expect(created).toMatchObject({
+      userId: user.id,
+      upiId: "asha.rao@upi",
+      providerRef: "ref_1",
+      status: "PENDING",
+      confirmedAt: null,
+    });
+    expect(created.createdAt).toEqual(createdAt);
+
+    await expect(repo.findById(created.id)).resolves.toMatchObject({ providerRef: "ref_1" });
+    await expect(repo.findByProviderRef("ref_1")).resolves.toMatchObject({ userId: user.id });
+    await expect(repo.findByProviderRef("does-not-exist")).resolves.toBeNull();
+  });
+
+  it("marks a confirmation CONFIRMED and surfaces it as the latest confirmed for that (userId, upiId)", async () => {
+    const userRepo = new PrismaUserRepository(prisma);
+    const user = await userRepo.create("+919876543210");
+    const repo = new PrismaUpiOwnershipConfirmationRepository(prisma);
+    await repo.create(user.id, "asha.rao@upi", "ref_1", new Date());
+
+    await expect(repo.findLatestConfirmed(user.id, "asha.rao@upi")).resolves.toBeNull();
+
+    await repo.markConfirmed("ref_1");
+
+    const confirmed = await repo.findLatestConfirmed(user.id, "asha.rao@upi");
+    expect(confirmed).toMatchObject({ providerRef: "ref_1", status: "CONFIRMED" });
+    expect(confirmed?.confirmedAt).toBeInstanceOf(Date);
+  });
+
+  it("marks a confirmation FAILED", async () => {
+    const userRepo = new PrismaUserRepository(prisma);
+    const user = await userRepo.create("+919876543210");
+    const repo = new PrismaUpiOwnershipConfirmationRepository(prisma);
+    await repo.create(user.id, "asha.rao@upi", "ref_1", new Date());
+
+    await repo.markFailed("ref_1");
+
+    const found = await repo.findByProviderRef("ref_1");
+    expect(found?.status).toBe("FAILED");
+  });
+
+  it("doesn't surface a CONFIRMED row for a different UPI ID as the latest confirmed", async () => {
+    const userRepo = new PrismaUserRepository(prisma);
+    const user = await userRepo.create("+919876543210");
+    const repo = new PrismaUpiOwnershipConfirmationRepository(prisma);
+    await repo.create(user.id, "asha.rao@upi", "ref_1", new Date());
+    await repo.markConfirmed("ref_1");
+
+    await expect(repo.findLatestConfirmed(user.id, "someone-else@upi")).resolves.toBeNull();
   });
 });

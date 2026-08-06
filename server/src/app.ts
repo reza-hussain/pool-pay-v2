@@ -84,7 +84,7 @@ export function createApp({
   app.use("/notifications", createNotificationsRouter(notificationService, jwtSecret));
   app.use("/activity", createActivityRouter(activityService, jwtSecret));
   if (paymentProvider) {
-    app.use("/webhooks", createDepositWebhookRouter(depositService, paymentProvider));
+    app.use("/webhooks", createDepositWebhookRouter(depositService, authService, paymentProvider));
   }
 
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {

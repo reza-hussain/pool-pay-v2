@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -12,23 +12,35 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { AuthApiError, completeProfile, verifyUpiId } from "../api/authClient";
+import {
+  AuthApiError,
+  completeProfile,
+  getUpiOwnershipStatus,
+  initiateUpiOwnershipCheck,
+  verifyUpiId,
+} from "../api/authClient";
 import { saveSession, type StoredSession } from "../api/session";
 import { Screen } from "../components/Screen";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// How often to poll while awaiting the person's UPI-app approval — the
+// server itself times a PENDING check out after ~2 min (ticket #38, ADR
+// 0014), so this is just the poll cadence, not the deadline.
+const UPI_OWNERSHIP_POLL_MS = 3000;
 
-// A real bank-account lookup (ADR 0012), not just a format check — status
-// tracks the outcome for whichever UPI ID string was last checked; editing
-// the field afterward resets this back to "idle" since the check no longer
-// applies to the new text.
+// A real bank-account lookup (ADR 0012) plus a real UPI collect-request
+// ownership proof (ticket #38, ADR 0014) — status tracks the outcome for
+// whichever UPI ID string was last checked; editing the field afterward
+// resets this back to "idle" since neither check applies to the new text.
 type UpiVerificationStatus =
   | { status: "idle" }
   | { status: "verifying" }
-  | { status: "verified"; accountHolderName: string | null }
-  | { status: "failed" };
+  | { status: "pennyDropFailed" }
+  | { status: "awaitingApproval"; accountHolderName: string | null; confirmationId: string }
+  | { status: "confirmed"; accountHolderName: string | null }
+  | { status: "ownershipFailed"; accountHolderName: string | null };
 
 // Auto-inserts the dashes as the person types digits, so "20000101" becomes
 // "2000-01-01" without them having to type the separators themselves.
@@ -63,31 +75,70 @@ export function ProfileSetupScreen({
     name.trim().length > 0 &&
     EMAIL_PATTERN.test(email) &&
     DATE_PATTERN.test(dateOfBirth) &&
-    upiVerification.status === "verified";
+    upiVerification.status === "confirmed";
 
   function handleChangeUpiId(value: string) {
     setUpiId(value);
-    // Any edit invalidates a prior verification — it was for different text.
+    // Any edit invalidates a prior check — it was for different text.
     if (upiVerification.status !== "idle") {
       setUpiVerification({ status: "idle" });
     }
   }
 
+  // Penny-drop pre-check (ADR 0012), then — only if it passes — starts the
+  // real ~₹1 UPI collect-request ownership proof (ticket #38, ADR 0014).
+  // Also the Retry handler for either step failing, so a retry always
+  // re-confirms the account is still real before asking for another
+  // approval.
   async function handleVerifyUpiId() {
     const value = upiId.trim();
     if (!value || upiVerification.status === "verifying") return;
     setUpiVerification({ status: "verifying" });
     try {
       const result = await verifyUpiId(session.token, value);
-      setUpiVerification(
-        result.verified
-          ? { status: "verified", accountHolderName: result.accountHolderName }
-          : { status: "failed" },
-      );
+      if (!result.verified) {
+        setUpiVerification({ status: "pennyDropFailed" });
+        return;
+      }
+      const { confirmationId } = await initiateUpiOwnershipCheck(session.token, value);
+      setUpiVerification({
+        status: "awaitingApproval",
+        accountHolderName: result.accountHolderName,
+        confirmationId,
+      });
     } catch {
-      setUpiVerification({ status: "failed" });
+      setUpiVerification({ status: "pennyDropFailed" });
     }
   }
+
+  // Polls while awaiting the person's approval, stopping as soon as status
+  // leaves PENDING (or this effect re-runs because upiVerification changed
+  // for any other reason, e.g. the field was edited).
+  useEffect(() => {
+    if (upiVerification.status !== "awaitingApproval") return;
+    const { confirmationId, accountHolderName } = upiVerification;
+    let cancelled = false;
+
+    const interval = setInterval(async () => {
+      try {
+        const { status } = await getUpiOwnershipStatus(session.token, confirmationId);
+        if (cancelled || status === "PENDING") return;
+        setUpiVerification(
+          status === "CONFIRMED"
+            ? { status: "confirmed", accountHolderName }
+            : { status: "ownershipFailed", accountHolderName },
+        );
+      } catch {
+        // Transient network hiccup — the next poll retries; the server's
+        // own ~2 min timeout is the real backstop against waiting forever.
+      }
+    }, UPI_OWNERSHIP_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [upiVerification, session.token]);
 
   async function handleFinish() {
     setError(null);
@@ -185,15 +236,29 @@ export function ProfileSetupScreen({
                     <ActivityIndicator size="small" color={colors.ink400} />
                     <Text style={styles.fieldHelper}>Verifying…</Text>
                   </View>
-                ) : upiVerification.status === "verified" ? (
+                ) : upiVerification.status === "awaitingApproval" ? (
+                  <View style={styles.upiStatusRow}>
+                    <ActivityIndicator size="small" color={colors.ink400} />
+                    <Text style={styles.fieldHelper}>Waiting for you to approve ₹1 in your UPI app…</Text>
+                  </View>
+                ) : upiVerification.status === "confirmed" ? (
                   <Text style={[styles.fieldHelper, styles.upiVerified]}>
                     {upiVerification.accountHolderName
                       ? `✓ Paying to ${upiVerification.accountHolderName}`
                       : "✓ Verified"}
                   </Text>
-                ) : upiVerification.status === "failed" ? (
+                ) : upiVerification.status === "pennyDropFailed" ? (
                   <View style={styles.upiStatusRow}>
                     <Text style={[styles.fieldHelper, styles.upiFailed]}>Couldn't verify this UPI ID.</Text>
+                    <Pressable onPress={handleVerifyUpiId}>
+                      <Text style={[styles.fieldHelper, styles.upiRetry]}>Retry</Text>
+                    </Pressable>
+                  </View>
+                ) : upiVerification.status === "ownershipFailed" ? (
+                  <View style={styles.upiStatusRow}>
+                    <Text style={[styles.fieldHelper, styles.upiFailed]}>
+                      Approval wasn't received in time.
+                    </Text>
                     <Pressable onPress={handleVerifyUpiId}>
                       <Text style={[styles.fieldHelper, styles.upiRetry]}>Retry</Text>
                     </Pressable>

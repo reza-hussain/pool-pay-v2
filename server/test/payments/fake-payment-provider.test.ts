@@ -107,6 +107,56 @@ describe("FakePaymentProvider.initiateTransfer", () => {
   });
 });
 
+describe("FakePaymentProvider.initiateUpiOwnershipCollectRequest", () => {
+  it("returns a collect request for the given vpa and amount", async () => {
+    const provider = new FakePaymentProvider();
+
+    const request = await provider.initiateUpiOwnershipCollectRequest("asha.rao@upi", 100, "+919876543210");
+
+    expect(request).toMatchObject({ vpa: "asha.rao@upi", amountPaise: 100 });
+    expect(request.id).toBeTruthy();
+  });
+});
+
+describe("FakePaymentProvider.simulateOwnershipConfirmation", () => {
+  it("simulates confirmation of a known collect request", async () => {
+    const provider = new FakePaymentProvider();
+    const request = await provider.initiateUpiOwnershipCollectRequest("asha.rao@upi", 100, "+919876543210");
+
+    const simulated = provider.simulateOwnershipConfirmation(request.id, 100);
+
+    expect(simulated).toEqual({ providerRef: request.id, amountPaise: 100, status: "SUCCESS" });
+  });
+
+  it("throws for an unknown collect request id", () => {
+    const provider = new FakePaymentProvider();
+    expect(() => provider.simulateOwnershipConfirmation("does-not-exist", 100)).toThrow();
+  });
+});
+
+describe("FakePaymentProvider.lastCollectRequestFor", () => {
+  it("returns the most recently raised collect request for a vpa", async () => {
+    const provider = new FakePaymentProvider();
+    await provider.initiateUpiOwnershipCollectRequest("asha.rao@upi", 100, "+919876543210");
+    const second = await provider.initiateUpiOwnershipCollectRequest("asha.rao@upi", 100, "+919876543210");
+
+    expect(provider.lastCollectRequestFor("asha.rao@upi")?.id).toBe(second.id);
+  });
+
+  it("returns undefined when no collect request was raised for that vpa", () => {
+    const provider = new FakePaymentProvider();
+    expect(provider.lastCollectRequestFor("nobody@upi")).toBeUndefined();
+  });
+});
+
+describe("FakePaymentProvider.refundUpiOwnershipCollectRequest", () => {
+  it("returns a refund confirmation id", async () => {
+    const provider = new FakePaymentProvider();
+    const refund = await provider.refundUpiOwnershipCollectRequest("asha.rao@upi", 100);
+    expect(refund.id).toBeTruthy();
+  });
+});
+
 describe("FakePaymentProvider.verifyVpa", () => {
   it("verifies a well-formed VPA and derives an account holder name from it", async () => {
     const provider = new FakePaymentProvider();

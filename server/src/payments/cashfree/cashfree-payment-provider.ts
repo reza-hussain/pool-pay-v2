@@ -5,6 +5,7 @@ import type {
   PaymentProvider,
   SpendConfirmation,
   TransferConfirmation,
+  UpiCollectRequest,
   VpaVerificationResult,
 } from "../types.js";
 import { CashfreeApiError, CashfreeClient, type CashfreeClientConfig } from "./client.js";
@@ -32,6 +33,18 @@ interface CreateOrderResponse {
 // a UPI QR request the QR image comes back base64-encoded in data.payload.
 interface OrderSessionQrResponse {
   data: { payload: string; content_type?: string };
+}
+
+// docs.cashfree.com's headless Order Pay call, "collect" channel — pushes a
+// request notification straight to a named payer VPA instead of returning a
+// scannable QR (payment_method.upi.channel "qrcode"). Field name upi_id and
+// the response shape itself aren't confirmed against a live sandbox call
+// (this environment's egress IP isn't whitelisted for Cashfree traffic, see
+// ADR 0014) — only that Cashfree's Orders API documents a "collect" channel
+// alongside "qrcode" for a specific payer UPI ID. Confirm against real
+// sandbox traffic before relying on this beyond the ticket #38 MVP.
+interface OrderSessionCollectResponse {
+  data?: { payload?: string };
 }
 
 interface StandardTransferResponse {
@@ -163,6 +176,41 @@ export class CashfreePaymentProvider implements PaymentProvider {
       }
       throw error;
     }
+  }
+
+  // Ticket #38 (ADR 0014): same two-call Orders shape as createDepositIntent
+  // (create order, then Order Pay), but channel "collect" with an explicit
+  // upi_id targets a specific payer VPA instead of returning a QR — see
+  // OrderSessionCollectResponse's caveat. Confirmation arrives later via the
+  // same PAYMENT_SUCCESS_WEBHOOK/parseDepositWebhook path as any deposit.
+  async initiateUpiOwnershipCollectRequest(
+    vpa: string,
+    amountPaise: number,
+    customerPhone: string,
+  ): Promise<UpiCollectRequest> {
+    const orderId = `upiown_${randomUUID().replace(/-/g, "").slice(0, 24)}`;
+
+    const order = await this.pgClient.post<CreateOrderResponse>("/orders", {
+      order_id: orderId,
+      order_amount: amountPaise / 100,
+      order_currency: "INR",
+      customer_details: { customer_id: customerPhone, customer_phone: customerPhone },
+      order_meta: { payment_methods: "upi" },
+    });
+
+    await this.pgClient.postUnauthenticated<OrderSessionCollectResponse>("/orders/sessions", {
+      payment_session_id: order.payment_session_id,
+      payment_method: { upi: { channel: "collect", upi_id: vpa } },
+    });
+
+    return { id: order.cf_order_id ?? order.order_id, vpa, amountPaise };
+  }
+
+  // Refunds ticket #38's ownership-proof amount straight back to the same
+  // VPA once confirmed — reuses the same beneficiary-based payout path as
+  // initiateSpend/initiateTransfer, just not scoped to any Pool.
+  async refundUpiOwnershipCollectRequest(vpa: string, amountPaise: number): Promise<{ id: string }> {
+    return this.payout({ toUpi: vpa, payeeName: "Member", amountPaise });
   }
 
   parseDepositWebhook(payload: unknown): DepositWebhookEvent | null {

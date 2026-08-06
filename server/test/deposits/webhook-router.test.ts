@@ -34,12 +34,6 @@ async function makeApp(webhookPaymentProvider?: PaymentProvider) {
   const userRepository = new InMemoryUserRepository();
   userRepository.seedVerifiedUser(ORGANIZER_ID);
   userRepository.seedVerifiedUser(MEMBER_ID);
-  const authService = new AuthService({
-    userRepository,
-    otpStore: new InMemoryOtpStore(),
-    otpSender: new FakeOtpSender(),
-    identityProvider: new FakeIdentityProvider(),
-  });
   const {
     poolService,
     membershipService,
@@ -54,6 +48,18 @@ async function makeApp(webhookPaymentProvider?: PaymentProvider) {
     activityService,
     paymentProvider,
   } = makeTestServices({ userRepository });
+  // Shares the same PaymentProvider instance the webhook route/depositService
+  // use (webhookPaymentProvider ?? paymentProvider) — otherwise a UPI
+  // ownership collect request raised via authService.initiateUpiOwnershipCheck
+  // would land in a different FakePaymentProvider than the one the webhook
+  // test asserts against (ticket #38).
+  const authService = new AuthService({
+    userRepository,
+    otpStore: new InMemoryOtpStore(),
+    otpSender: new FakeOtpSender(),
+    identityProvider: new FakeIdentityProvider(),
+    paymentProvider: webhookPaymentProvider ?? paymentProvider,
+  });
   const app = createApp({
     authService,
     poolService,
@@ -179,5 +185,28 @@ describe("POST /webhooks/cashfree/deposits", () => {
 
     expect(res.status).toBe(200);
     expect(await depositService.getPoolBalance(pool.id)).toBe(100000);
+  });
+
+  // Ticket #38 (ADR 0014) — the same Cashfree Orders webhook also resolves
+  // UPI ownership collect requests raised by /auth/upi-ownership/initiate,
+  // distinguished from a deposit only by which providerRef it recognizes.
+  it("falls back to confirming a UPI ownership collect request the deposit service doesn't recognize", async () => {
+    const { app, paymentProvider } = await makeApp();
+
+    const initiateRes = await request(app)
+      .post("/auth/upi-ownership/initiate")
+      .set("Authorization", bearerFor(MEMBER_ID))
+      .send({ upiId: "asha.rao@upi" });
+    const collectRequest = paymentProvider.lastCollectRequestFor("asha.rao@upi")!;
+
+    const res = await request(app)
+      .post("/webhooks/cashfree/deposits")
+      .send({ providerRef: collectRequest.id, amountPaise: initiateRes.body.amountPaise, status: "SUCCESS" });
+
+    expect(res.status).toBe(200);
+    const statusRes = await request(app)
+      .get(`/auth/upi-ownership/${initiateRes.body.confirmationId}`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+    expect(statusRes.body.status).toBe("CONFIRMED");
   });
 });

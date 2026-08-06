@@ -47,6 +47,18 @@ export interface VpaVerificationResult {
   accountHolderName: string | null;
 }
 
+// A real UPI collect request raised against a specific VPA (ticket #38, ADR
+// 0014) — proof-of-control for Onboarding's Registered UPI ID, since
+// Cashfree has no API to check phone/VPA linkage directly. Unlike
+// DepositIntent's QR (payer scans, amount not guaranteed), this pushes a
+// request notification straight to the named VPA's UPI app for the exact
+// amount, and confirms via the same webhook mechanism deposits already use.
+export interface UpiCollectRequest {
+  id: string;
+  vpa: string;
+  amountPaise: number;
+}
+
 // The one boundary between Pool Pay's own logic and the external UPI/BaaS
 // partner (see docs/spec-mvp.md's Implementation Decisions — "Payment
 // Provider interface"). CashfreePaymentProvider is the real implementation
@@ -75,6 +87,21 @@ export interface PaymentProvider {
   // Checks whether a UPI ID is real and belongs to a live bank account,
   // returning the bank's registered account-holder name for display.
   verifyVpa(vpa: string): Promise<VpaVerificationResult>;
+  // Raises a real UPI collect request for amountPaise against vpa (ticket
+  // #38) — the person must approve it from their own UPI app, which is
+  // real-world proof they currently control that VPA. customerPhone is the
+  // requesting Member's own phone (same requirement as createDepositIntent).
+  // Confirmation arrives later via parseDepositWebhook, keyed by this
+  // request's id, same as any other Order-backed payment.
+  initiateUpiOwnershipCollectRequest(
+    vpa: string,
+    amountPaise: number,
+    customerPhone: string,
+  ): Promise<UpiCollectRequest>;
+  // Refunds a confirmed ownership collect request straight back to the same
+  // VPA (ticket #38) — not scoped to any Pool, since this happens during
+  // Onboarding before the person has joined one.
+  refundUpiOwnershipCollectRequest(vpa: string, amountPaise: number): Promise<{ id: string }>;
   // Normalizes a provider-specific deposit-confirmation callback into a
   // common shape, or null if the payload isn't a recognized event (ticket
   // #15) — DepositService.confirmDeposit takes it from there, keyed by

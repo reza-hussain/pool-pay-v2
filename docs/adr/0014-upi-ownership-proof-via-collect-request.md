@@ -1,0 +1,22 @@
+# Prove Registered UPI ID ownership via a real collect request, not a phone-linkage lookup
+
+[0012](./0012-registered-upi-id-at-onboarding.md) captures a Registered UPI ID during Onboarding and verifies it's a real, live account via Cashfree's UPI penny-drop (`verifyVpa`). That confirms the account exists, but not that it belongs to the person typing it in — someone could type a friend's, a stranger's, or a scraped VPA, and penny-drop alone would accept it. Ticket #38 closes that gap: applies to the single shared Registered UPI ID field in `ProfileSetupScreen.tsx`, universally (Organizers included), with a hard block on failure and no UPI-edit flow or migration for existing users (dev DB wiped instead).
+
+## What we tried first, and why it doesn't work
+
+The original plan was a second Cashfree Verification Suite check — "UPI ID/VPA from Phone Number" — confirming the typed VPA is linked to the account's already-OTP-verified phone number, alongside penny-drop, both server-enforced in `completeProfile` rather than trusted from a prior client-side call. A live sandbox probe disproved this: three guessed endpoint paths for this lookup all 404'd, while the real penny-drop endpoint (same credentials) correctly returned "IP not whitelisted" — proving the guessed paths genuinely don't exist rather than being blocked by the same IP-whitelist gap. Cashfree's "UPI ID/VPA from Phone Number" feature, as documented, is a manual dashboard lookup a human performs by hand, not a callable backend API.
+
+## What we chose instead
+
+Real-world proof of control, via Cashfree's Payment Gateway (not Verification Suite): after penny-drop passes, `initiateUpiOwnershipCollectRequest` raises a real ~₹1 UPI collect request against the typed VPA. The person must approve it from their own UPI app — proof they currently control that VPA, the same trust model UPI itself relies on. Confirmation arrives via the same Cashfree Orders webhook Deposits already use (`parseDepositWebhook`/`/webhooks/cashfree/deposits`), since both a Deposit and this collect request are Orders underneath; the webhook route now falls back from `DepositService.confirmDeposit`'s `UnknownDepositReferenceError` to `AuthService.confirmUpiOwnership`. On confirmation, the amount is immediately refunded to the same VPA via the existing beneficiary-based payout path (`refundUpiOwnershipCollectRequest`), so nobody is out of pocket.
+
+This is a bigger UX change than a field-level check: onboarding gains a new blocking async step after the UPI ID field — "Waiting for you to approve ₹1 in your UPI app…" — with a ~2 minute timeout and retry, polled via `GET /auth/upi-ownership/:confirmationId`. Finish stays disabled until it confirms.
+
+`UpiOwnershipConfirmation` (new Prisma model) records one row per collect request raised, scoped to the exact `(userId, upiId)` pair — `completeProfile` requires a `CONFIRMED` row for the *exact* UPI ID being submitted, re-checking penny-drop itself too rather than trusting any prior client-side call (closing the same client-trust gap 0012 left open: `completeProfile` previously did zero server-side verification). Editing the UPI ID after confirming leaves no matching confirmed row for the new text, so a changed UPI ID must be re-proven.
+
+## Consequences
+
+- `PaymentProvider` gains `initiateUpiOwnershipCollectRequest` and `refundUpiOwnershipCollectRequest`; `verifyVpaLinkedToPhone`-shaped methods from the abandoned phone-linkage plan were never merged.
+- `AuthService.completeProfile` now throws `InvalidUpiIdError` (penny-drop re-check fails) or `UpiOwnershipUnconfirmedError` (no confirmed ownership row) in addition to `UnderageError` — all three map to `400` at the router.
+- The deposit webhook route (`deposits/webhook-router.ts`) is no longer Deposit-only; it also resolves ticket #38's ownership collect requests, distinguished only by which service recognizes the `providerRef`.
+- Cashfree's "collect" UPI channel (`payment_method.upi.channel: "collect"` with an explicit `upi_id`, alongside the existing `"qrcode"` channel `createDepositIntent` uses) and this environment's Verification Suite IP-whitelist gap (Secure ID → Settings → IP Whitelisting, needed regardless of this ticket for penny-drop to work live) weren't confirmed against a live sandbox call — flagged inline in `cashfree-payment-provider.ts`, same convention as 0013's unverified-field-name notes, to revisit once sandbox access is fixed.

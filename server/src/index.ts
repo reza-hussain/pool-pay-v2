@@ -5,6 +5,7 @@ import { createApp } from "./app.js";
 import { AuthService } from "./auth/auth-service.js";
 import { PrismaUserRepository } from "./auth/prisma-user-repository.js";
 import { PrismaOtpStore } from "./auth/prisma-otp-store.js";
+import { PrismaUpiOwnershipConfirmationRepository } from "./auth/prisma-upi-ownership-confirmation-repository.js";
 import { ConsoleOtpSender } from "./auth/console-otp-sender.js";
 import { PoolService } from "./pools/pool-service.js";
 import { PrismaPoolRepository } from "./pools/prisma-pool-repository.js";
@@ -64,6 +65,7 @@ const authService = new AuthService({
   otpSender: new ConsoleOtpSender(),
   identityProvider,
   paymentProvider,
+  upiOwnershipConfirmationRepository: new PrismaUpiOwnershipConfirmationRepository(prisma),
 });
 
 const poolRepository = new PrismaPoolRepository(prisma);

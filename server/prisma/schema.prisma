@@ -39,6 +39,7 @@ model User {
   refunds        Refund[]
   refundVotes    RefundVote[]
   notifications  Notification[]
+  upiOwnershipConfirmations UpiOwnershipConfirmation[]
 }
 
 model Pool {
@@ -206,6 +207,28 @@ model Notification {
   readAt          DateTime?
 
   @@index([recipientUserId])
+}
+
+// UPI ownership proof-of-control for Onboarding's Registered UPI ID (ticket
+// #38, ADR 0014) — Cashfree has no API to check phone/VPA linkage directly,
+// so a real ~₹1 UPI collect request stands in as real-world proof the
+// person controls the VPA they typed. Confirmed via the same Cashfree
+// Orders webhook Deposits use (see PendingDeposit), then immediately
+// refunded. completeProfile requires a CONFIRMED row for the exact
+// (userId, upiId) pair being submitted — editing the UPI ID after
+// confirming leaves no matching row for the new text.
+model UpiOwnershipConfirmation {
+  id          String    @id @default(cuid())
+  providerRef String    @unique
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  upiId       String
+  // "PENDING" | "CONFIRMED" | "FAILED"
+  status      String    @default("PENDING")
+  createdAt   DateTime  @default(now())
+  confirmedAt DateTime?
+
+  @@index([userId, upiId])
 }
 
 model OtpRequest {
