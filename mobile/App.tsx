@@ -47,9 +47,11 @@ import {
   isAppLockEnabled,
   loadSession,
   markWelcomeSeen,
+  persistAppLockEnabled,
   saveSession,
   type StoredSession,
 } from './src/api/session';
+import { isBiometricAuthAvailable } from './src/lib/biometrics';
 import { listPools, lockPool, type Pool } from './src/api/poolsClient';
 import { joinByPoolId } from './src/api/membersClient';
 import { parseJoinPoolId } from './src/lib/inviteLink';
@@ -440,11 +442,24 @@ export default function App() {
   useEffect(() => {
     clearStaleDataFromPriorInstall()
       .then(() => Promise.all([loadSession(), hasSeenWelcome(), isAppLockEnabled()]))
-      .then(([storedSession, seenWelcome, appLockOn]) => {
+      .then(async ([storedSession, seenWelcome, appLockOn]) => {
         setSession(storedSession);
         setWelcomeSeen(seenWelcome);
-        setAppLockEnabled(appLockOn);
-        setLocked(Boolean(storedSession) && appLockOn);
+        // A device can lose biometric enrollment after app lock was turned
+        // on (Face ID reset, hardware issue) — without this check the user
+        // would be locked out with no way back in, since LockScreen's "Log
+        // out instead" doesn't clear this preference and re-login just hits
+        // the same unsatisfiable lock on the next foreground. Treat it the
+        // same way the Profile toggle already does: biometrics unavailable
+        // means app lock can't be honored, so turn it off instead.
+        const canLock = appLockOn && (await isBiometricAuthAvailable());
+        if (appLockOn && !canLock) {
+          setAppLockEnabled(false);
+          void persistAppLockEnabled(false);
+        } else {
+          setAppLockEnabled(appLockOn);
+        }
+        setLocked(Boolean(storedSession) && canLock);
         if (storedSession) {
           // Populates Home from real membership state on every app restart —
           // previously `pools` only ever grew via in-session create/join calls.
@@ -461,7 +476,16 @@ export default function App() {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active' && session && appLockEnabled) {
-        setLocked(true);
+        isBiometricAuthAvailable().then((available) => {
+          if (available) {
+            setLocked(true);
+          } else {
+            // Same self-healing as the bootstrap check above — biometrics
+            // went away since the preference was last saved.
+            setAppLockEnabled(false);
+            void persistAppLockEnabled(false);
+          }
+        });
       }
     });
     return () => subscription.remove();

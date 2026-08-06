@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { Screen } from "../components/Screen";
 import type { StoredSession } from "../api/session";
@@ -68,7 +68,11 @@ export function ProfileScreen({
 
   return (
     <Screen backgroundColor={colors.cream} edges={["top"]}>
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <View style={styles.avatar}>
             <Text style={styles.avatarLetter}>{(user.name ?? user.phoneNumber).charAt(0).toUpperCase()}</Text>
@@ -123,7 +127,7 @@ export function ProfileScreen({
             <Text style={[styles.rowLabel, styles.rowLabelDanger]}>Log out</Text>
           </Pressable>
         </View>
-      </View>
+      </ScrollView>
     </Screen>
   );
 }
@@ -131,6 +135,8 @@ export function ProfileScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
     padding: spacing.s6,
   },
   header: {
