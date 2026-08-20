@@ -223,6 +223,7 @@ function AppTabs() {
     <AppTab.Navigator
       screenOptions={{
         headerShown: false,
+        animation: 'shift',
         tabBarActiveTintColor: colors.pumpkin600,
         tabBarInactiveTintColor: colors.ink400,
         tabBarStyle: {
@@ -598,7 +599,7 @@ export default function App() {
               setUnreadAlertsCount,
             }}
           >
-            <AppStack.Navigator screenOptions={{ headerShown: false }}>
+            <AppStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
               <AppStack.Screen name="Home" component={AppTabs} />
               <AppStack.Screen name="VerifyIdentity" component={VerifyIdentityRoute} />
               <AppStack.Screen name="CreatePool" component={CreatePoolRoute} />

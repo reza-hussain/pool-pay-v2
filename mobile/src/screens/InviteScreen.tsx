@@ -1,13 +1,18 @@
 import * as Clipboard from "expo-clipboard";
+import { useState } from "react";
 import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
 import { Screen } from "../components/Screen";
+import { Toast } from "../components/Toast";
 import { buildInviteLink } from "../lib/inviteLink";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
 export function InviteScreen({ pool, onDone }: { pool: Pool; onDone: () => void }) {
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   async function copyCode() {
     await Clipboard.setStringAsync(pool.joinCode);
+    setToastMessage("Pool Code copied");
   }
 
   async function shareLink() {
@@ -43,6 +48,7 @@ export function InviteScreen({ pool, onDone }: { pool: Pool; onDone: () => void 
         <Text style={styles.doneLink}>Done</Text>
       </Pressable>
     </View>
+    <Toast message={toastMessage} onHide={() => setToastMessage(null)} />
     </Screen>
   );
 }
