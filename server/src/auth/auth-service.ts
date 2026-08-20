@@ -164,6 +164,7 @@ export class AuthService {
     const collectRequest = await this.paymentProvider.initiateUpiOwnershipCollectRequest(
       upiId,
       UPI_OWNERSHIP_CHECK_AMOUNT_PAISE,
+      user.id,
       user.phoneNumber,
     );
     return this.upiOwnershipConfirmationRepository.create(userId, upiId, collectRequest.id, this.now());

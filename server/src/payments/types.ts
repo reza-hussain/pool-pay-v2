@@ -91,11 +91,17 @@ export interface PaymentProvider {
   // #38) — the person must approve it from their own UPI app, which is
   // real-world proof they currently control that VPA. customerPhone is the
   // requesting Member's own phone (same requirement as createDepositIntent).
+  // customerId must be alphanumeric/underscore/hyphen only — confirmed
+  // against a live sandbox call on 2026-08-21, Cashfree's Orders API rejects
+  // a raw phone number here (the leading "+") with
+  // customer_details.customer_id_invalid. userId (a cuid) satisfies this the
+  // same way poolId already does for createDepositIntent.
   // Confirmation arrives later via parseDepositWebhook, keyed by this
   // request's id, same as any other Order-backed payment.
   initiateUpiOwnershipCollectRequest(
     vpa: string,
     amountPaise: number,
+    customerId: string,
     customerPhone: string,
   ): Promise<UpiCollectRequest>;
   // Refunds a confirmed ownership collect request straight back to the same

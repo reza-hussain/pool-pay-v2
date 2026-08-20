@@ -54,6 +54,7 @@ const paymentProvider = hasCashfreePaymentCredentials
       verification: {
         clientId: env.CASHFREE_VERIFICATION_CLIENT_ID!,
         clientSecret: env.CASHFREE_VERIFICATION_CLIENT_SECRET!,
+        publicKey: env.CASHFREE_VERIFICATION_PUBLIC_KEY?.replace(/\\n/g, "\n"),
       },
       virtualVpa: env.CASHFREE_VIRTUAL_VPA!,
     })

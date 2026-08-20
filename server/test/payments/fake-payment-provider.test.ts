@@ -111,7 +111,7 @@ describe("FakePaymentProvider.initiateUpiOwnershipCollectRequest", () => {
   it("returns a collect request for the given vpa and amount", async () => {
     const provider = new FakePaymentProvider();
 
-    const request = await provider.initiateUpiOwnershipCollectRequest("asha.rao@upi", 100, "+919876543210");
+    const request = await provider.initiateUpiOwnershipCollectRequest("asha.rao@upi", 100, "user_asha", "+919876543210");
 
     expect(request).toMatchObject({ vpa: "asha.rao@upi", amountPaise: 100 });
     expect(request.id).toBeTruthy();
@@ -121,7 +121,7 @@ describe("FakePaymentProvider.initiateUpiOwnershipCollectRequest", () => {
 describe("FakePaymentProvider.simulateOwnershipConfirmation", () => {
   it("simulates confirmation of a known collect request", async () => {
     const provider = new FakePaymentProvider();
-    const request = await provider.initiateUpiOwnershipCollectRequest("asha.rao@upi", 100, "+919876543210");
+    const request = await provider.initiateUpiOwnershipCollectRequest("asha.rao@upi", 100, "user_asha", "+919876543210");
 
     const simulated = provider.simulateOwnershipConfirmation(request.id, 100);
 
@@ -137,8 +137,8 @@ describe("FakePaymentProvider.simulateOwnershipConfirmation", () => {
 describe("FakePaymentProvider.lastCollectRequestFor", () => {
   it("returns the most recently raised collect request for a vpa", async () => {
     const provider = new FakePaymentProvider();
-    await provider.initiateUpiOwnershipCollectRequest("asha.rao@upi", 100, "+919876543210");
-    const second = await provider.initiateUpiOwnershipCollectRequest("asha.rao@upi", 100, "+919876543210");
+    await provider.initiateUpiOwnershipCollectRequest("asha.rao@upi", 100, "user_asha", "+919876543210");
+    const second = await provider.initiateUpiOwnershipCollectRequest("asha.rao@upi", 100, "user_asha", "+919876543210");
 
     expect(provider.lastCollectRequestFor("asha.rao@upi")?.id).toBe(second.id);
   });

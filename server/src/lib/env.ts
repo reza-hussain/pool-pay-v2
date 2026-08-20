@@ -21,6 +21,12 @@ const envSchema = z.object({
   // Verification Suite product, sharing one credential pair.
   CASHFREE_VERIFICATION_CLIENT_ID: z.string().optional(),
   CASHFREE_VERIFICATION_CLIENT_SECRET: z.string().optional(),
+  // Secure ID's Public Key 2FA method, as an alternative to IP whitelisting
+  // (client.ts's signCfRequest) — PEM contents, with literal newlines
+  // escaped as \n the way multi-line PEM env vars conventionally are; index.ts
+  // un-escapes them back to real newlines before use. Optional: only needed
+  // if IP whitelisting isn't being used for the Verification Suite product.
+  CASHFREE_VERIFICATION_PUBLIC_KEY: z.string().optional(),
   // The Pool Pay merchant's own registered UPI ID — fixed per account, not
   // generated per transaction. Shown to Members as "Pay to UPI ID" alongside
   // the per-transaction QR (see CashfreePaymentProvider).

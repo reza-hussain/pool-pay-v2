@@ -14,7 +14,7 @@ export interface CashfreePaymentProviderConfig {
   env: "sandbox" | "production";
   pg: Pick<CashfreeClientConfig, "clientId" | "clientSecret">;
   payout: Pick<CashfreeClientConfig, "clientId" | "clientSecret">;
-  verification: Pick<CashfreeClientConfig, "clientId" | "clientSecret">;
+  verification: Pick<CashfreeClientConfig, "clientId" | "clientSecret" | "publicKey">;
   // Merchant's own registered UPI ID, shown as a fallback "Pay to UPI ID" text
   // alongside the QR — same role DecentroPaymentProviderConfig.virtualVpa
   // played; Cashfree's Orders API doesn't expose a single stable merchant VPA
@@ -37,13 +37,17 @@ interface OrderSessionQrResponse {
 
 // docs.cashfree.com's headless Order Pay call, "collect" channel — pushes a
 // request notification straight to a named payer VPA instead of returning a
-// scannable QR (payment_method.upi.channel "qrcode"). Field name upi_id and
-// the response shape itself aren't confirmed against a live sandbox call
-// (this environment's egress IP isn't whitelisted for Cashfree traffic, see
-// ADR 0014) — only that Cashfree's Orders API documents a "collect" channel
-// alongside "qrcode" for a specific payer UPI ID. Confirm against real
-// sandbox traffic before relying on this beyond the ticket #38 MVP.
+// scannable QR (payment_method.upi.channel "qrcode"). Confirmed against a
+// live sandbox call on 2026-08-21: data.payload is always null for this
+// channel (there's no QR to render), and the call itself doesn't move the
+// order to PAID synchronously — Cashfree's test VPAs (e.g. testsuccess@gocash)
+// don't auto-resolve for this headless path the way they do for hosted
+// checkout; only a real UPI-app approval (or, in sandbox, the Simulate
+// Payment API) moves the order to PAID, which then fires
+// PAYMENT_SUCCESS_WEBHOOK the normal way. cf_payment_id is unused here but
+// present if a future status-poll fallback needs it.
 interface OrderSessionCollectResponse {
+  cf_payment_id?: string;
   data?: { payload?: string };
 }
 
@@ -53,14 +57,11 @@ interface StandardTransferResponse {
 
 // docs.cashfree.com's UPI penny-drop (POST /verification/upi/penny-drop) —
 // synchronous, unlike Decentro's VerifyPay which could come back PENDING and
-// need a status poll. Exact response field names beyond account_exists
-// weren't confirmed against a live sandbox call (the research pass found the
-// endpoint and request shape but not a full response example) — name_at_bank
-// follows Cashfree's naming convention on their bank-account-verification
-// sibling endpoint; confirm against real sandbox traffic before relying on it
-// for anything beyond display.
+// need a status poll. Confirmed against a live sandbox call on 2026-08-20:
+// success looks like { status: "VALID", name_at_bank: "JOHN SNOW", ... }, not
+// the account_exists field this was originally guessed against.
 interface UpiPennyDropResponse {
-  account_exists?: boolean;
+  status?: string;
   name_at_bank?: string;
 }
 
@@ -134,7 +135,14 @@ export class CashfreePaymentProvider implements PaymentProvider {
     });
 
     return {
-      id: order.cf_order_id ?? order.order_id,
+      // The merchant order_id we generated, not cf_order_id — confirmed
+      // against a live sandbox call on 2026-08-21 that Cashfree's real
+      // PAYMENT_SUCCESS_WEBHOOK payload's data.order.order_id carries this
+      // one, not cf_order_id (GET /orders/{id}/payments 404s on cf_order_id,
+      // 200s on this). Storing cf_order_id here — as this previously did —
+      // means confirmDeposit's providerRef lookup can never match a real
+      // webhook.
+      id: orderId,
       poolId,
       vpa: this.virtualVpa,
       fixedAmountPaise,
@@ -160,18 +168,25 @@ export class CashfreePaymentProvider implements PaymentProvider {
         vpa,
         user_consent: {
           obtained: true,
-          type: "explicit",
+          type: "EXPLICIT",
           timestamp: new Date().toISOString(),
           purpose: "Pool Pay UPI ID verification",
         },
       });
 
-      if (response.account_exists) {
+      if (response.status === "VALID") {
         return { verified: true, accountHolderName: response.name_at_bank ?? null };
       }
       return { verified: false, accountHolderName: null };
     } catch (error) {
       if (error instanceof CashfreeApiError) {
+        // Surfaced to the caller as an ordinary "not verified" result either
+        // way (ADR 0012), but logged here so an infra failure (bad
+        // credentials, IP not whitelisted, etc.) is distinguishable
+        // server-side from a genuinely nonexistent VPA — the two looked
+        // identical to both the person testing this and to anyone digging
+        // through logs otherwise.
+        console.error("Cashfree UPI penny-drop failed", { code: error.code, message: error.message });
         return { verified: false, accountHolderName: null };
       }
       throw error;
@@ -186,6 +201,7 @@ export class CashfreePaymentProvider implements PaymentProvider {
   async initiateUpiOwnershipCollectRequest(
     vpa: string,
     amountPaise: number,
+    customerId: string,
     customerPhone: string,
   ): Promise<UpiCollectRequest> {
     const orderId = `upiown_${randomUUID().replace(/-/g, "").slice(0, 24)}`;
@@ -194,7 +210,7 @@ export class CashfreePaymentProvider implements PaymentProvider {
       order_id: orderId,
       order_amount: amountPaise / 100,
       order_currency: "INR",
-      customer_details: { customer_id: customerPhone, customer_phone: customerPhone },
+      customer_details: { customer_id: customerId, customer_phone: customerPhone },
       order_meta: { payment_methods: "upi" },
     });
 
@@ -203,7 +219,9 @@ export class CashfreePaymentProvider implements PaymentProvider {
       payment_method: { upi: { channel: "collect", upi_id: vpa } },
     });
 
-    return { id: order.cf_order_id ?? order.order_id, vpa, amountPaise };
+    // orderId, not order.cf_order_id — see createDepositIntent's comment on
+    // the same fix; this shares the identical webhook-matching requirement.
+    return { id: orderId, vpa, amountPaise };
   }
 
   // Refunds ticket #38's ownership-proof amount straight back to the same

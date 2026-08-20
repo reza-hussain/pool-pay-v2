@@ -99,6 +99,7 @@ export class FakePaymentProvider implements PaymentProvider {
   async initiateUpiOwnershipCollectRequest(
     vpa: string,
     amountPaise: number,
+    _customerId: string,
     _customerPhone: string,
   ): Promise<UpiCollectRequest> {
     const request: UpiCollectRequest = { id: `collect_${nextId++}`, vpa, amountPaise };

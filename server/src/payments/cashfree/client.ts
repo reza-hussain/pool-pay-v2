@@ -1,3 +1,5 @@
+import { publicEncrypt, constants } from "node:crypto";
+
 // Thin fetch wrapper for Cashfree's REST APIs (docs.cashfree.com). Unlike
 // Decentro (one client_id/secret pair shared across modules), Cashfree issues
 // a separate client-id/secret pair per product — Payment Gateway (pg),
@@ -20,6 +22,14 @@ export interface CashfreeClientConfig {
   clientId: string;
   clientSecret: string;
   env: "sandbox" | "production";
+  // Secure ID's alternative to IP whitelisting as a request-level 2FA method
+  // (docs.cashfree.com/secure-id) — only meaningful for the "verification"
+  // product, whose dashboard is the one offering the choice between the two.
+  // PEM contents of the public key downloaded from Secure ID's dashboard
+  // (Developers → Two-Factor Authentication → Public Key). When set, every
+  // request additionally proves possession of that key instead of relying on
+  // the caller's source IP being whitelisted.
+  publicKey?: string;
 }
 
 export class CashfreeApiError extends Error {
@@ -36,6 +46,23 @@ function baseUrl(product: CashfreeProduct, env: "sandbox" | "production"): strin
   return `https://${env === "production" ? "api" : "sandbox"}.cashfree.com/${product}`;
 }
 
+// docs.cashfree.com/secure-id's Public Key 2FA scheme: clientId + "." +
+// current Unix timestamp (seconds), RSA-OAEP(SHA-1) encrypted with the
+// public key Secure ID's dashboard issued, base64-encoded. Cashfree holds
+// the matching private key, so only someone who received that exact key
+// file can produce a signature their server accepts — proof of possession,
+// not proof of identity (x-client-id/x-client-secret already cover that).
+// Valid 5 minutes per Cashfree's docs; generated fresh per request here
+// rather than cached, since Secure ID calls in this codebase are low-volume
+// (penny-drop only) and freshness matters more than the extra CPU cost.
+function signCfRequest(clientId: string, publicKeyPem: string): string {
+  const payload = `${clientId}.${Math.floor(Date.now() / 1000)}`;
+  return publicEncrypt(
+    { key: publicKeyPem, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: "sha1" },
+    Buffer.from(payload),
+  ).toString("base64");
+}
+
 export class CashfreeClient {
   private readonly base: string;
 
@@ -46,12 +73,7 @@ export class CashfreeClient {
   async post<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(`${this.base}${path}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-client-id": this.config.clientId,
-        "x-client-secret": this.config.clientSecret,
-        "x-api-version": API_VERSION[this.config.product],
-      },
+      headers: { "Content-Type": "application/json", ...this.authHeaders() },
       body: JSON.stringify(body),
     });
     return this.parseResponse<T>(res);
@@ -62,14 +84,20 @@ export class CashfreeClient {
     for (const [key, value] of Object.entries(query)) {
       url.searchParams.set(key, value);
     }
-    const res = await fetch(url, {
-      headers: {
-        "x-client-id": this.config.clientId,
-        "x-client-secret": this.config.clientSecret,
-        "x-api-version": API_VERSION[this.config.product],
-      },
-    });
+    const res = await fetch(url, { headers: this.authHeaders() });
     return this.parseResponse<T>(res);
+  }
+
+  private authHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      "x-client-id": this.config.clientId,
+      "x-client-secret": this.config.clientSecret,
+      "x-api-version": API_VERSION[this.config.product],
+    };
+    if (this.config.publicKey) {
+      headers["x-cf-signature"] = signCfRequest(this.config.clientId, this.config.publicKey);
+    }
+    return headers;
   }
 
   // The headless "Order Pay" call (POST /orders/sessions) is the one Cashfree
