@@ -16,9 +16,6 @@ const FILTER_LABELS: Record<PoolStateFilter, string> = {
   CLOSED: "Closed",
 };
 
-// No "list pools" endpoint exists yet — this only shows Pools created during
-// this app session, not fetched from the server. Will be replaced once a
-// list-pools ticket exists.
 export function PoolsHomeScreen({
   session,
   isNewUser,
