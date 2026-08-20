@@ -1,9 +1,20 @@
+import { useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
 import { Screen } from "../components/Screen";
 import { paiseToRupeeLabel } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
+
+type PoolStateFilter = "ACTIVE" | "LOCKED" | "CLOSED";
+
+// Order also governs the default: the first of these with any Pools in it wins.
+const FILTER_ORDER: PoolStateFilter[] = ["ACTIVE", "LOCKED", "CLOSED"];
+const FILTER_LABELS: Record<PoolStateFilter, string> = {
+  ACTIVE: "Active",
+  LOCKED: "Locked",
+  CLOSED: "Closed",
+};
 
 // No "list pools" endpoint exists yet — this only shows Pools created during
 // this app session, not fetched from the server. Will be replaced once a
@@ -31,6 +42,18 @@ export function PoolsHomeScreen({
   onVoteToRefund: (pool: Pool) => void;
   onOpenAnalytics: () => void;
 }) {
+  const [filter, setFilter] = useState<PoolStateFilter>("ACTIVE");
+
+  const segments = useMemo(
+    () => FILTER_ORDER.filter((key) => pools.some((pool) => pool.state === key)),
+    [pools],
+  );
+  const activeFilter = segments.includes(filter) ? filter : segments[0];
+  const visiblePools = useMemo(
+    () => (segments.length <= 1 ? pools : pools.filter((pool) => pool.state === activeFilter)),
+    [pools, segments, activeFilter],
+  );
+
   return (
     <Screen backgroundColor={colors.cream}>
     <View style={styles.container}>
@@ -57,8 +80,23 @@ export function PoolsHomeScreen({
         </View>
       ) : (
         <>
+          {segments.length > 1 ? (
+            <View style={styles.segment}>
+              {segments.map((key) => (
+                <Pressable
+                  key={key}
+                  style={[styles.seg, activeFilter === key && styles.segActive]}
+                  onPress={() => setFilter(key)}
+                >
+                  <Text style={[styles.segLabel, activeFilter === key && styles.segLabelActive]}>
+                    {FILTER_LABELS[key]}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
           <FlatList
-            data={pools}
+            data={visiblePools}
             keyExtractor={(pool) => pool.id}
             contentContainerStyle={styles.list}
             renderItem={({ item }) => (
@@ -192,6 +230,30 @@ const styles = StyleSheet.create({
     textAlign: "center",
     maxWidth: 220,
     marginBottom: spacing.s4,
+  },
+  segment: {
+    flexDirection: "row",
+    backgroundColor: colors.segmentFill,
+    borderRadius: radii.md,
+    padding: 4,
+    gap: 4,
+    marginBottom: spacing.s3,
+  },
+  seg: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 9,
+    borderRadius: radii.sm,
+  },
+  segActive: {
+    backgroundColor: colors.ink900,
+  },
+  segLabel: {
+    ...type.body,
+    color: colors.ink400,
+  },
+  segLabelActive: {
+    color: colors.cream,
   },
   list: {
     gap: spacing.s3,
