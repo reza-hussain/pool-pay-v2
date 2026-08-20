@@ -50,7 +50,11 @@ const paymentProvider = hasCashfreePaymentCredentials
   ? new CashfreePaymentProvider({
       env: env.CASHFREE_ENV,
       pg: { clientId: env.CASHFREE_PG_CLIENT_ID!, clientSecret: env.CASHFREE_PG_CLIENT_SECRET! },
-      payout: { clientId: env.CASHFREE_PAYOUT_CLIENT_ID!, clientSecret: env.CASHFREE_PAYOUT_CLIENT_SECRET! },
+      payout: {
+        clientId: env.CASHFREE_PAYOUT_CLIENT_ID!,
+        clientSecret: env.CASHFREE_PAYOUT_CLIENT_SECRET!,
+        publicKey: env.CASHFREE_PAYOUT_PUBLIC_KEY?.replace(/\\n/g, "\n"),
+      },
       verification: {
         clientId: env.CASHFREE_VERIFICATION_CLIENT_ID!,
         clientSecret: env.CASHFREE_VERIFICATION_CLIENT_SECRET!,

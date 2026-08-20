@@ -13,7 +13,7 @@ import { CashfreeApiError, CashfreeClient, type CashfreeClientConfig } from "./c
 export interface CashfreePaymentProviderConfig {
   env: "sandbox" | "production";
   pg: Pick<CashfreeClientConfig, "clientId" | "clientSecret">;
-  payout: Pick<CashfreeClientConfig, "clientId" | "clientSecret">;
+  payout: Pick<CashfreeClientConfig, "clientId" | "clientSecret" | "publicKey">;
   verification: Pick<CashfreeClientConfig, "clientId" | "clientSecret" | "publicKey">;
   // Merchant's own registered UPI ID, shown as a fallback "Pay to UPI ID" text
   // alongside the QR — same role DecentroPaymentProviderConfig.virtualVpa

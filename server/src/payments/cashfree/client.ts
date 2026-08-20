@@ -23,8 +23,13 @@ export interface CashfreeClientConfig {
   clientSecret: string;
   env: "sandbox" | "production";
   // Secure ID's alternative to IP whitelisting as a request-level 2FA method
-  // (docs.cashfree.com/secure-id) — only meaningful for the "verification"
-  // product, whose dashboard is the one offering the choice between the two.
+  // (docs.cashfree.com/secure-id). Originally assumed to be a "verification"
+  // product option only — corrected 2026-08-21 after a live sandbox call:
+  // Payouts' beneficiary/transfer endpoints enforce the same 2FA requirement
+  // (IP whitelisting or this signature) and reject with "Signature missing
+  // in the request" when neither is configured. Each product's dashboard
+  // offers this independently, so a payout-product client needs its own
+  // Payouts-dashboard-issued key, separate from verification's.
   // PEM contents of the public key downloaded from Secure ID's dashboard
   // (Developers → Two-Factor Authentication → Public Key). When set, every
   // request additionally proves possession of that key instead of relying on
