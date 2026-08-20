@@ -92,7 +92,19 @@ export function ProfileSetupScreen({
   // approval.
   async function handleVerifyUpiId() {
     const value = upiId.trim();
-    if (!value || upiVerification.status === "verifying") return;
+    // onBlur fires on every focus-then-blur, including a stray tap on the
+    // field after it's already confirmed/in-flight for this exact text (no
+    // edit happened — handleChangeUpiId is what resets to "idle" on a real
+    // change) — without this guard, that re-raised a brand new ~₹1 collect
+    // request and refund on every accidental re-tap.
+    if (
+      !value ||
+      upiVerification.status === "verifying" ||
+      upiVerification.status === "awaitingApproval" ||
+      upiVerification.status === "confirmed"
+    ) {
+      return;
+    }
     setUpiVerification({ status: "verifying" });
     try {
       const result = await verifyUpiId(session.token, value);
