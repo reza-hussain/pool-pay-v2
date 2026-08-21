@@ -26,6 +26,7 @@ import { LockScreen } from './src/screens/LockScreen';
 import { CreatePoolScreen } from './src/screens/CreatePoolScreen';
 import { InviteScreen } from './src/screens/InviteScreen';
 import { JoinPoolScreen } from './src/screens/JoinPoolScreen';
+import { PoolDetailScreen } from './src/screens/PoolDetailScreen';
 import { DepositScreen } from './src/screens/DepositScreen';
 import { SpendScreen } from './src/screens/SpendScreen';
 import { ReimburseScreen } from './src/screens/ReimburseScreen';
@@ -73,6 +74,7 @@ type AppStackParamList = {
   CreatePool: undefined;
   Invite: { pool: Pool };
   JoinPool: undefined;
+  PoolDetail: { pool: Pool };
   Deposit: { pool: Pool };
   Spend: { pool: Pool };
   Reimburse: { pool: Pool };
@@ -158,7 +160,7 @@ function HomeRoute({ navigation }: HomeRouteProps) {
           navigation.navigate(session.user.isVerified ? 'CreatePool' : 'VerifyIdentity')
         }
         onJoinPool={() => navigation.navigate('JoinPool')}
-        onSelectPool={(pool) => navigation.navigate('Deposit', { pool })}
+        onSelectPool={(pool) => navigation.navigate('PoolDetail', { pool })}
         onOpenOrganizerControls={(pool) => setOrganizerControlsPool(pool)}
         onViewLedger={(pool) => navigation.navigate('Ledger', { pool })}
         onVoteToRefund={(pool) => navigation.navigate('Vote', { pool })}
@@ -320,6 +322,56 @@ function JoinPoolRoute({ navigation }: NativeStackScreenProps<AppStackParamList,
       onJoined={() => navigation.goBack()}
       onCancel={() => navigation.goBack()}
     />
+  );
+}
+
+function PoolDetailRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'PoolDetail'>) {
+  const { session, setPools } = useSessionContext();
+  const pool = route.params.pool;
+  const [organizerControlsOpen, setOrganizerControlsOpen] = useState(false);
+
+  return (
+    <>
+      <PoolDetailScreen
+        session={session}
+        pool={pool}
+        onCancel={() => navigation.goBack()}
+        onDeposit={() => navigation.navigate('Deposit', { pool })}
+        onViewLedger={() => navigation.navigate('Ledger', { pool })}
+        onOpenOrganizerControls={() => setOrganizerControlsOpen(true)}
+        onVoteToRefund={() => navigation.navigate('Vote', { pool })}
+      />
+      {organizerControlsOpen ? (
+        <OrganizerControlsSheet
+          pool={pool}
+          onLock={async () => {
+            const locked = await lockPool(session.token, pool.id);
+            setPools((prev) => prev.map((p) => (p.id === locked.id ? locked : p)));
+            setOrganizerControlsOpen(false);
+          }}
+          onTransferOut={() => {
+            navigation.navigate('Spend', { pool });
+            setOrganizerControlsOpen(false);
+          }}
+          onReimburse={() => {
+            navigation.navigate('Reimburse', { pool });
+            setOrganizerControlsOpen(false);
+          }}
+          onManageMembers={() => {
+            navigation.navigate('Members', { pool });
+            setOrganizerControlsOpen(false);
+          }}
+          onClosePool={() => {
+            navigation.navigate('CloseConfirm', { pool });
+            setOrganizerControlsOpen(false);
+          }}
+          onClose={() => setOrganizerControlsOpen(false)}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -605,6 +657,7 @@ export default function App() {
               <AppStack.Screen name="CreatePool" component={CreatePoolRoute} />
               <AppStack.Screen name="Invite" component={InviteRoute} options={{ gestureEnabled: false }} />
               <AppStack.Screen name="JoinPool" component={JoinPoolRoute} />
+              <AppStack.Screen name="PoolDetail" component={PoolDetailRoute} />
               <AppStack.Screen name="Deposit" component={DepositRoute} />
               <AppStack.Screen name="Spend" component={SpendRoute} />
               <AppStack.Screen name="Reimburse" component={ReimburseRoute} />
