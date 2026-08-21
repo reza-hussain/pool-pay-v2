@@ -42,6 +42,7 @@ const identityProvider = hasCashfreeIdentityCredentials
       clientId: env.CASHFREE_VERIFICATION_CLIENT_ID!,
       clientSecret: env.CASHFREE_VERIFICATION_CLIENT_SECRET!,
       env: env.CASHFREE_ENV,
+      publicKey: env.CASHFREE_VERIFICATION_PUBLIC_KEY,
     })
   : new FakeIdentityProvider();
 
@@ -53,6 +54,7 @@ const paymentProvider = hasCashfreePaymentCredentials
       verification: {
         clientId: env.CASHFREE_VERIFICATION_CLIENT_ID!,
         clientSecret: env.CASHFREE_VERIFICATION_CLIENT_SECRET!,
+        publicKey: env.CASHFREE_VERIFICATION_PUBLIC_KEY,
       },
       virtualVpa: env.CASHFREE_VIRTUAL_VPA!,
     })

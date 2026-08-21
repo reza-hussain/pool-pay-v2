@@ -44,7 +44,7 @@ export function isVerifiedPanResponse(response: PanVerificationResponse): boolea
 export class CashfreeIdentityProvider implements IdentityVerificationProvider {
   private readonly client: CashfreeClient;
 
-  constructor(config: Pick<CashfreeClientConfig, "clientId" | "clientSecret" | "env">) {
+  constructor(config: Pick<CashfreeClientConfig, "clientId" | "clientSecret" | "env" | "publicKey">) {
     this.client = new CashfreeClient({ product: "verification", ...config });
   }
 
