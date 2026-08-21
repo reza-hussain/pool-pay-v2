@@ -2,18 +2,25 @@ import { randomInt } from "node:crypto";
 import type { IdentityVerificationProvider } from "./identity-provider.js";
 import type { PaymentProvider, VpaVerificationResult } from "../payments/types.js";
 import { FakePaymentProvider } from "../payments/fakes/fake-payment-provider.js";
+import { InMemoryUpiOwnershipConfirmationRepository } from "./fakes/in-memory-upi-ownership-confirmation-repository.js";
 import {
   IdentityVerificationFailedError,
   InvalidOtpCodeError,
   InvalidPhoneNumberError,
+  InvalidUpiIdError,
   OtpAlreadyUsedError,
   OtpExpiredError,
   OtpNotFoundError,
   ProfileIncompleteError,
   UnderageError,
+  UnknownUpiOwnershipConfirmationError,
+  UpiOwnershipUnconfirmedError,
+  UserNotFoundError,
   type CompleteProfileInput,
   type OtpSender,
   type OtpStore,
+  type UpiOwnershipConfirmation,
+  type UpiOwnershipConfirmationRepository,
   type User,
   type UserRepository,
 } from "./types.js";
@@ -21,6 +28,12 @@ import {
 // v1 is India-only (ADR 0003) — Indian mobile numbers are 10 digits starting with 6-9.
 const INDIAN_PHONE_NUMBER_PATTERN = /^\+91[6-9]\d{9}$/;
 const OTP_TTL_MS = 10 * 60 * 1000;
+// Ticket #38 (ADR 0014) — small enough that nobody minds fronting it for the
+// ~seconds-to-minutes it takes Cashfree to confirm and this service to
+// refund it, real enough to require an actual approval in their UPI app.
+export const UPI_OWNERSHIP_CHECK_AMOUNT_PAISE = 100;
+// Matches the "~2 min" wait the mobile onboarding step commits to.
+const UPI_OWNERSHIP_TIMEOUT_MS = 2 * 60 * 1000;
 
 export interface AuthServiceOptions {
   userRepository: UserRepository;
@@ -31,6 +44,9 @@ export interface AuthServiceOptions {
   // care about UPI ID verification don't all need updating — only
   // src/index.ts needs to pass the real Cashfree-backed one explicitly.
   paymentProvider?: PaymentProvider;
+  // Optional (defaults to an in-memory fake) for the same reason — only
+  // src/index.ts needs the Prisma-backed one (ticket #38, ADR 0014).
+  upiOwnershipConfirmationRepository?: UpiOwnershipConfirmationRepository;
   now?: () => Date;
   generateCode?: () => string;
 }
@@ -46,6 +62,7 @@ export class AuthService {
   private readonly otpSender: OtpSender;
   private readonly identityProvider: IdentityVerificationProvider;
   private readonly paymentProvider: PaymentProvider;
+  private readonly upiOwnershipConfirmationRepository: UpiOwnershipConfirmationRepository;
   private readonly now: () => Date;
   private readonly generateCode: () => string;
 
@@ -55,6 +72,8 @@ export class AuthService {
     this.otpSender = options.otpSender;
     this.identityProvider = options.identityProvider;
     this.paymentProvider = options.paymentProvider ?? new FakePaymentProvider();
+    this.upiOwnershipConfirmationRepository =
+      options.upiOwnershipConfirmationRepository ?? new InMemoryUpiOwnershipConfirmationRepository();
     this.now = options.now ?? (() => new Date());
     this.generateCode = options.generateCode ?? defaultGenerateCode;
   }
@@ -132,12 +151,77 @@ export class AuthService {
     return this.paymentProvider.verifyVpa(vpa);
   }
 
+  // Ticket #38 (ADR 0014) — starts the real UPI collect-request
+  // proof-of-control. Called only after the client's own verifyUpiId (penny
+  // drop) already passed for this text; raises a real ~₹1 request against
+  // vpa via the configured PaymentProvider and records it PENDING so a later
+  // webhook (confirmUpiOwnership) or a timed-out status poll can resolve it.
+  async initiateUpiOwnershipCheck(userId: string, upiId: string): Promise<UpiOwnershipConfirmation> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new UserNotFoundError();
+    }
+    const collectRequest = await this.paymentProvider.initiateUpiOwnershipCollectRequest(
+      upiId,
+      UPI_OWNERSHIP_CHECK_AMOUNT_PAISE,
+      user.id,
+      user.phoneNumber,
+    );
+    return this.upiOwnershipConfirmationRepository.create(userId, upiId, collectRequest.id, this.now());
+  }
+
+  // Mobile onboarding polls this while showing "Waiting for you to
+  // approve…" (ticket #38) — lazily resolves a stale PENDING row to FAILED
+  // once the ~2 min window passes, same lazy-timeout shape as other
+  // poll-driven state in this codebase rather than a background job.
+  async getUpiOwnershipStatus(userId: string, confirmationId: string): Promise<UpiOwnershipConfirmation> {
+    const confirmation = await this.upiOwnershipConfirmationRepository.findById(confirmationId);
+    if (!confirmation || confirmation.userId !== userId) {
+      throw new UnknownUpiOwnershipConfirmationError();
+    }
+    if (
+      confirmation.status === "PENDING" &&
+      this.now().getTime() - confirmation.createdAt.getTime() > UPI_OWNERSHIP_TIMEOUT_MS
+    ) {
+      await this.upiOwnershipConfirmationRepository.markFailed(confirmation.providerRef);
+      return { ...confirmation, status: "FAILED" };
+    }
+    return confirmation;
+  }
+
+  // Called by the deposit webhook route once Cashfree confirms the ownership
+  // collect request was approved (ticket #38) — idempotent by providerRef
+  // (a retried callback or a callback arriving after the poll already timed
+  // it out server-side is a no-op), then immediately refunds the same
+  // amount back to the same VPA so nobody is out of pocket.
+  async confirmUpiOwnership(providerRef: string, amountPaise: number): Promise<void> {
+    const confirmation = await this.upiOwnershipConfirmationRepository.findByProviderRef(providerRef);
+    if (!confirmation || confirmation.status === "CONFIRMED") {
+      return;
+    }
+    await this.upiOwnershipConfirmationRepository.markConfirmed(providerRef);
+    await this.paymentProvider.refundUpiOwnershipCollectRequest(confirmation.upiId, amountPaise);
+  }
+
   // Onboarding's profile-setup step (CONTEXT.md, ADR 0012) — mandatory,
   // one-time, blocks reaching Home. Field shape/required-ness is validated
   // at the router; the age gate is domain logic so it lives here.
+  //
+  // Re-checks both the penny-drop (verifyVpa) and the ownership
+  // collect-request confirmation itself, rather than trusting the client's
+  // prior verify-upi-id/upi-ownership calls (ticket #38, ADR 0014) — a
+  // direct API call bypassing the client UI would otherwise skip both.
   async completeProfile(userId: string, input: CompleteProfileInput): Promise<User> {
     if (ageInYears(input.dateOfBirth, this.now()) < 18) {
       throw new UnderageError();
+    }
+    const vpaResult = await this.paymentProvider.verifyVpa(input.upiId);
+    if (!vpaResult.verified) {
+      throw new InvalidUpiIdError();
+    }
+    const confirmed = await this.upiOwnershipConfirmationRepository.findLatestConfirmed(userId, input.upiId);
+    if (!confirmed) {
+      throw new UpiOwnershipUnconfirmedError();
     }
     return this.userRepository.completeProfile(userId, input);
   }

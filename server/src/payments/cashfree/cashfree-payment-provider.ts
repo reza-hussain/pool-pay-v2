@@ -5,6 +5,7 @@ import type {
   PaymentProvider,
   SpendConfirmation,
   TransferConfirmation,
+  UpiCollectRequest,
   VpaVerificationResult,
 } from "../types.js";
 import { CashfreeApiError, CashfreeClient, type CashfreeClientConfig } from "./client.js";
@@ -12,8 +13,8 @@ import { CashfreeApiError, CashfreeClient, type CashfreeClientConfig } from "./c
 export interface CashfreePaymentProviderConfig {
   env: "sandbox" | "production";
   pg: Pick<CashfreeClientConfig, "clientId" | "clientSecret">;
-  payout: Pick<CashfreeClientConfig, "clientId" | "clientSecret">;
-  verification: Pick<CashfreeClientConfig, "clientId" | "clientSecret">;
+  payout: Pick<CashfreeClientConfig, "clientId" | "clientSecret" | "publicKey">;
+  verification: Pick<CashfreeClientConfig, "clientId" | "clientSecret" | "publicKey">;
   // Merchant's own registered UPI ID, shown as a fallback "Pay to UPI ID" text
   // alongside the QR — same role DecentroPaymentProviderConfig.virtualVpa
   // played; Cashfree's Orders API doesn't expose a single stable merchant VPA
@@ -34,20 +35,33 @@ interface OrderSessionQrResponse {
   data: { payload: string; content_type?: string };
 }
 
+// docs.cashfree.com's headless Order Pay call, "collect" channel — pushes a
+// request notification straight to a named payer VPA instead of returning a
+// scannable QR (payment_method.upi.channel "qrcode"). Confirmed against a
+// live sandbox call on 2026-08-21: data.payload is always null for this
+// channel (there's no QR to render), and the call itself doesn't move the
+// order to PAID synchronously — Cashfree's test VPAs (e.g. testsuccess@gocash)
+// don't auto-resolve for this headless path the way they do for hosted
+// checkout; only a real UPI-app approval (or, in sandbox, the Simulate
+// Payment API) moves the order to PAID, which then fires
+// PAYMENT_SUCCESS_WEBHOOK the normal way. cf_payment_id is unused here but
+// present if a future status-poll fallback needs it.
+interface OrderSessionCollectResponse {
+  cf_payment_id?: string;
+  data?: { payload?: string };
+}
+
 interface StandardTransferResponse {
   transfer_id?: string;
 }
 
 // docs.cashfree.com's UPI penny-drop (POST /verification/upi/penny-drop) —
 // synchronous, unlike Decentro's VerifyPay which could come back PENDING and
-// need a status poll. Exact response field names beyond account_exists
-// weren't confirmed against a live sandbox call (the research pass found the
-// endpoint and request shape but not a full response example) — name_at_bank
-// follows Cashfree's naming convention on their bank-account-verification
-// sibling endpoint; confirm against real sandbox traffic before relying on it
-// for anything beyond display.
+// need a status poll. Confirmed against a live sandbox call on 2026-08-20:
+// success looks like { status: "VALID", name_at_bank: "JOHN SNOW", ... }, not
+// the account_exists field this was originally guessed against.
 interface UpiPennyDropResponse {
-  account_exists?: boolean;
+  status?: string;
   name_at_bank?: string;
 }
 
@@ -121,7 +135,14 @@ export class CashfreePaymentProvider implements PaymentProvider {
     });
 
     return {
-      id: order.cf_order_id ?? order.order_id,
+      // The merchant order_id we generated, not cf_order_id — confirmed
+      // against a live sandbox call on 2026-08-21 that Cashfree's real
+      // PAYMENT_SUCCESS_WEBHOOK payload's data.order.order_id carries this
+      // one, not cf_order_id (GET /orders/{id}/payments 404s on cf_order_id,
+      // 200s on this). Storing cf_order_id here — as this previously did —
+      // means confirmDeposit's providerRef lookup can never match a real
+      // webhook.
+      id: orderId,
       poolId,
       vpa: this.virtualVpa,
       fixedAmountPaise,
@@ -147,22 +168,67 @@ export class CashfreePaymentProvider implements PaymentProvider {
         vpa,
         user_consent: {
           obtained: true,
-          type: "explicit",
+          type: "EXPLICIT",
           timestamp: new Date().toISOString(),
           purpose: "Pool Pay UPI ID verification",
         },
       });
 
-      if (response.account_exists) {
+      if (response.status === "VALID") {
         return { verified: true, accountHolderName: response.name_at_bank ?? null };
       }
       return { verified: false, accountHolderName: null };
     } catch (error) {
       if (error instanceof CashfreeApiError) {
+        // Surfaced to the caller as an ordinary "not verified" result either
+        // way (ADR 0012), but logged here so an infra failure (bad
+        // credentials, IP not whitelisted, etc.) is distinguishable
+        // server-side from a genuinely nonexistent VPA — the two looked
+        // identical to both the person testing this and to anyone digging
+        // through logs otherwise.
+        console.error("Cashfree UPI penny-drop failed", { code: error.code, message: error.message });
         return { verified: false, accountHolderName: null };
       }
       throw error;
     }
+  }
+
+  // Ticket #38 (ADR 0014): same two-call Orders shape as createDepositIntent
+  // (create order, then Order Pay), but channel "collect" with an explicit
+  // upi_id targets a specific payer VPA instead of returning a QR — see
+  // OrderSessionCollectResponse's caveat. Confirmation arrives later via the
+  // same PAYMENT_SUCCESS_WEBHOOK/parseDepositWebhook path as any deposit.
+  async initiateUpiOwnershipCollectRequest(
+    vpa: string,
+    amountPaise: number,
+    customerId: string,
+    customerPhone: string,
+  ): Promise<UpiCollectRequest> {
+    const orderId = `upiown_${randomUUID().replace(/-/g, "").slice(0, 24)}`;
+
+    const order = await this.pgClient.post<CreateOrderResponse>("/orders", {
+      order_id: orderId,
+      order_amount: amountPaise / 100,
+      order_currency: "INR",
+      customer_details: { customer_id: customerId, customer_phone: customerPhone },
+      order_meta: { payment_methods: "upi" },
+    });
+
+    await this.pgClient.postUnauthenticated<OrderSessionCollectResponse>("/orders/sessions", {
+      payment_session_id: order.payment_session_id,
+      payment_method: { upi: { channel: "collect", upi_id: vpa } },
+    });
+
+    // orderId, not order.cf_order_id — see createDepositIntent's comment on
+    // the same fix; this shares the identical webhook-matching requirement.
+    return { id: orderId, vpa, amountPaise };
+  }
+
+  // Refunds ticket #38's ownership-proof amount straight back to the same
+  // VPA once confirmed — reuses the same beneficiary-based payout path as
+  // initiateSpend/initiateTransfer, just not scoped to any Pool.
+  async refundUpiOwnershipCollectRequest(vpa: string, amountPaise: number): Promise<{ id: string }> {
+    return this.payout({ toUpi: vpa, payeeName: "Member", amountPaise });
   }
 
   parseDepositWebhook(payload: unknown): DepositWebhookEvent | null {

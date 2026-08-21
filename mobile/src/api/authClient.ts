@@ -55,6 +55,22 @@ export interface SubscribeResult {
   user: PublicUser;
 }
 
+// UPI ownership proof-of-control (ticket #38, ADR 0014) — a real ~₹1 UPI
+// collect request the person approves from their own UPI app, real-world
+// proof they control the typed UPI ID. Call only after verifyUpiId's penny
+// drop already passed for this exact text.
+export type UpiOwnershipStatus = "PENDING" | "CONFIRMED" | "FAILED";
+
+export interface InitiateUpiOwnershipResult {
+  confirmationId: string;
+  amountPaise: number;
+  status: UpiOwnershipStatus;
+}
+
+export interface UpiOwnershipStatusResult {
+  status: UpiOwnershipStatus;
+}
+
 async function postJson<T>(path: string, body: unknown, token?: string): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
@@ -63,6 +79,18 @@ async function postJson<T>(path: string, body: unknown, token?: string): Promise
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new AuthApiError(data.error ?? `Request failed with status ${res.status}`);
+  }
+  return data as T;
+}
+
+async function getJson<T>(path: string, token: string): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
 
   const data = await res.json().catch(() => ({}));
@@ -103,4 +131,22 @@ export function completeProfile(
   input: CompleteProfileInput,
 ): Promise<CompleteProfileResult> {
   return postJson("/auth/complete-profile", input, token);
+}
+
+// Starts the real ~₹1 UPI collect-request ownership check (ticket #38) —
+// the person must approve it from their own UPI app.
+export function initiateUpiOwnershipCheck(
+  token: string,
+  upiId: string,
+): Promise<InitiateUpiOwnershipResult> {
+  return postJson("/auth/upi-ownership/initiate", { upiId }, token);
+}
+
+// Poll while showing "Waiting for you to approve…" (ticket #38) until
+// status leaves PENDING.
+export function getUpiOwnershipStatus(
+  token: string,
+  confirmationId: string,
+): Promise<UpiOwnershipStatusResult> {
+  return getJson(`/auth/upi-ownership/${confirmationId}`, token);
 }

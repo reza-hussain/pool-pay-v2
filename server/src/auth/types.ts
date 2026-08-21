@@ -49,6 +49,40 @@ export interface OtpSender {
   send(phoneNumber: string, code: string): Promise<void>;
 }
 
+// UPI ownership proof-of-control for Onboarding's Registered UPI ID (ticket
+// #38, ADR 0014) — Cashfree has no API to check phone/VPA linkage directly,
+// so a real ~₹1 UPI collect request stands in as real-world proof the person
+// controls the VPA they typed. PENDING until the webhook confirms or the
+// check times out; scoped to the exact (userId, upiId) pair it was raised
+// for — editing the typed UPI ID afterward means there's no longer a
+// confirmed row for the new text.
+export type UpiOwnershipConfirmationStatus = "PENDING" | "CONFIRMED" | "FAILED";
+
+export interface UpiOwnershipConfirmation {
+  id: string;
+  userId: string;
+  upiId: string;
+  providerRef: string;
+  status: UpiOwnershipConfirmationStatus;
+  createdAt: Date;
+  confirmedAt: Date | null;
+}
+
+export interface UpiOwnershipConfirmationRepository {
+  // createdAt is supplied by the caller (AuthService's injected clock,
+  // matching OtpStore.create's expiresAt) rather than stamped by the
+  // repository itself, so the ~2 min timeout check in
+  // AuthService.getUpiOwnershipStatus is testable against a fake clock.
+  create(userId: string, upiId: string, providerRef: string, createdAt: Date): Promise<UpiOwnershipConfirmation>;
+  findById(id: string): Promise<UpiOwnershipConfirmation | null>;
+  findByProviderRef(providerRef: string): Promise<UpiOwnershipConfirmation | null>;
+  markConfirmed(providerRef: string): Promise<void>;
+  markFailed(providerRef: string): Promise<void>;
+  // Most recent CONFIRMED row for this exact (userId, upiId) pair — the
+  // check completeProfile relies on (ADR 0014).
+  findLatestConfirmed(userId: string, upiId: string): Promise<UpiOwnershipConfirmation | null>;
+}
+
 export class InvalidPhoneNumberError extends Error {
   constructor(phoneNumber: string) {
     super(`Invalid phone number: ${phoneNumber}`);
@@ -114,5 +148,33 @@ export class UnderageError extends Error {
   constructor() {
     super("You must be at least 18 years old to use Pool Pay");
     this.name = "UnderageError";
+  }
+}
+
+// completeProfile's own penny-drop re-check (ADR 0014) — closes the gap
+// where completeProfile previously trusted a prior client-side verify-upi-id
+// call rather than re-verifying server-side.
+export class InvalidUpiIdError extends Error {
+  constructor() {
+    super("This UPI ID couldn't be verified");
+    this.name = "InvalidUpiIdError";
+  }
+}
+
+// completeProfile's ownership-proof gate (ticket #38, ADR 0014) — thrown
+// when there's no CONFIRMED UpiOwnershipConfirmation on file for the exact
+// (userId, upiId) pair being submitted: the collect request was never sent,
+// is still pending, was declined, or timed out.
+export class UpiOwnershipUnconfirmedError extends Error {
+  constructor() {
+    super("UPI ID ownership hasn't been confirmed yet");
+    this.name = "UpiOwnershipUnconfirmedError";
+  }
+}
+
+export class UnknownUpiOwnershipConfirmationError extends Error {
+  constructor() {
+    super("Unknown UPI ownership confirmation");
+    this.name = "UnknownUpiOwnershipConfirmationError";
   }
 }

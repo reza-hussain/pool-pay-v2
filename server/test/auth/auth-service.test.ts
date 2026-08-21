@@ -8,11 +8,14 @@ import {
   IdentityVerificationFailedError,
   InvalidOtpCodeError,
   InvalidPhoneNumberError,
+  InvalidUpiIdError,
   OtpAlreadyUsedError,
   OtpExpiredError,
   OtpNotFoundError,
   ProfileIncompleteError,
   UnderageError,
+  UnknownUpiOwnershipConfirmationError,
+  UpiOwnershipUnconfirmedError,
 } from "../../src/auth/types.js";
 
 const PHONE = "+919876543210";
@@ -25,6 +28,16 @@ function makeAuthService(now = () => new Date("2026-07-09T00:00:00.000Z")) {
   const identityProvider = new FakeIdentityProvider();
   const authService = new AuthService({ userRepository, otpStore, otpSender, identityProvider, now });
   return { authService, userRepository, otpStore, otpSender, identityProvider };
+}
+
+// Ticket #38 (ADR 0014) — completeProfile now requires a CONFIRMED
+// UpiOwnershipConfirmation for the exact (userId, upiId) pair being
+// submitted; this drives the real initiate-then-webhook-confirm path
+// against AuthService directly, the same one /auth/upi-ownership and the
+// deposit webhook route drive over HTTP.
+async function proveUpiOwnership(authService: AuthService, userId: string, upiId: string): Promise<void> {
+  const confirmation = await authService.initiateUpiOwnershipCheck(userId, upiId);
+  await authService.confirmUpiOwnership(confirmation.providerRef, 100);
 }
 
 describe("AuthService.requestOtp", () => {
@@ -161,6 +174,7 @@ describe("AuthService.verifyIdentity", () => {
     const code = otpSender.lastCodeSentTo(PHONE)!;
     const { user } = await authService.verifyOtp(requestId, code);
     expect(user.isVerified).toBe(false);
+    await proveUpiOwnership(authService, user.id, COMPLETE_PROFILE_INPUT.upiId);
     await authService.completeProfile(user.id, COMPLETE_PROFILE_INPUT);
 
     const verified = await authService.verifyIdentity(user.id, PAN);
@@ -188,6 +202,7 @@ describe("AuthService.verifyIdentity", () => {
     });
     const { requestId } = await authService.requestOtp(PHONE);
     const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+    await proveUpiOwnership(authService, user.id, COMPLETE_PROFILE_INPUT.upiId);
     await authService.completeProfile(user.id, COMPLETE_PROFILE_INPUT);
 
     await expect(authService.verifyIdentity(user.id, PAN)).rejects.toThrow(
@@ -227,6 +242,7 @@ describe("AuthService.completeProfile", () => {
     const { requestId } = await authService.requestOtp(PHONE);
     const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
     expect(user.isOnboarded).toBe(false);
+    await proveUpiOwnership(authService, user.id, PROFILE.upiId);
 
     const onboarded = await authService.completeProfile(user.id, {
       ...PROFILE,
@@ -257,10 +273,105 @@ describe("AuthService.completeProfile", () => {
     const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
 
     const dateOfBirth = new Date("2008-07-09T00:00:00.000Z");
+    await proveUpiOwnership(authService, user.id, PROFILE.upiId);
 
     const onboarded = await authService.completeProfile(user.id, { ...PROFILE, dateOfBirth });
 
     expect(onboarded.isOnboarded).toBe(true);
+  });
+
+  it("rejects a UPI ID that fails its own penny-drop re-check (ADR 0014)", async () => {
+    const { authService, otpSender } = makeAuthService();
+    const { requestId } = await authService.requestOtp(PHONE);
+    const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+
+    await expect(
+      authService.completeProfile(user.id, {
+        ...PROFILE,
+        upiId: "not-a-vpa",
+        dateOfBirth: new Date("2000-01-01T00:00:00.000Z"),
+      }),
+    ).rejects.toThrow(InvalidUpiIdError);
+  });
+
+  it("rejects when the UPI ID's ownership was never confirmed (ticket #38, ADR 0014)", async () => {
+    const { authService, otpSender } = makeAuthService();
+    const { requestId } = await authService.requestOtp(PHONE);
+    const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+
+    await expect(
+      authService.completeProfile(user.id, {
+        ...PROFILE,
+        dateOfBirth: new Date("2000-01-01T00:00:00.000Z"),
+      }),
+    ).rejects.toThrow(UpiOwnershipUnconfirmedError);
+  });
+
+  it("rejects when the confirmed ownership was for a different UPI ID than submitted (ticket #38)", async () => {
+    const { authService, otpSender } = makeAuthService();
+    const { requestId } = await authService.requestOtp(PHONE);
+    const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+    await proveUpiOwnership(authService, user.id, "someone-else@upi");
+
+    await expect(
+      authService.completeProfile(user.id, {
+        ...PROFILE,
+        dateOfBirth: new Date("2000-01-01T00:00:00.000Z"),
+      }),
+    ).rejects.toThrow(UpiOwnershipUnconfirmedError);
+  });
+});
+
+describe("AuthService UPI ownership check (ticket #38, ADR 0014)", () => {
+  it("starts PENDING and moves to CONFIRMED once the collect request is confirmed", async () => {
+    const { authService, otpSender } = makeAuthService();
+    const { requestId } = await authService.requestOtp(PHONE);
+    const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+
+    const confirmation = await authService.initiateUpiOwnershipCheck(user.id, "asha.rao@upi");
+    expect(confirmation.status).toBe("PENDING");
+
+    await authService.confirmUpiOwnership(confirmation.providerRef, 100);
+
+    const status = await authService.getUpiOwnershipStatus(user.id, confirmation.id);
+    expect(status.status).toBe("CONFIRMED");
+  });
+
+  it("is idempotent against a retried webhook confirmation", async () => {
+    const { authService, otpSender } = makeAuthService();
+    const { requestId } = await authService.requestOtp(PHONE);
+    const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+    const confirmation = await authService.initiateUpiOwnershipCheck(user.id, "asha.rao@upi");
+
+    await authService.confirmUpiOwnership(confirmation.providerRef, 100);
+    await authService.confirmUpiOwnership(confirmation.providerRef, 100);
+
+    const status = await authService.getUpiOwnershipStatus(user.id, confirmation.id);
+    expect(status.status).toBe("CONFIRMED");
+  });
+
+  it("marks a still-PENDING check FAILED once the timeout window has passed", async () => {
+    let currentTime = new Date("2026-07-09T00:00:00.000Z");
+    const { authService, otpSender } = makeAuthService(() => currentTime);
+    const { requestId } = await authService.requestOtp(PHONE);
+    const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+    const confirmation = await authService.initiateUpiOwnershipCheck(user.id, "asha.rao@upi");
+
+    currentTime = new Date("2026-07-09T00:02:01.000Z"); // 2 minutes + 1s later
+
+    const status = await authService.getUpiOwnershipStatus(user.id, confirmation.id);
+    expect(status.status).toBe("FAILED");
+  });
+
+  it("rejects checking the status of someone else's confirmation", async () => {
+    const { authService, otpSender } = makeAuthService();
+    const { requestId } = await authService.requestOtp(PHONE);
+    const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
+    const confirmation = await authService.initiateUpiOwnershipCheck(user.id, "asha.rao@upi");
+
+    await expect(authService.getUpiOwnershipStatus("someone-else", confirmation.id)).rejects.toThrow(
+      UnknownUpiOwnershipConfirmationError,
+    );
   });
 });
 

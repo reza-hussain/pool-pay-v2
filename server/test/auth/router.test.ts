@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
+import type { Express } from "express";
 import { createApp } from "../../src/app.js";
 import { AuthService } from "../../src/auth/auth-service.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { InMemoryOtpStore } from "../../src/auth/fakes/in-memory-otp-store.js";
 import { FakeOtpSender } from "../../src/auth/fakes/fake-otp-sender.js";
 import { FakeIdentityProvider } from "../../src/auth/fakes/fake-identity-provider.js";
+import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 import { makeTestServices } from "../support/make-test-services.js";
 
 const PHONE = "+919876543210";
@@ -13,11 +15,13 @@ const JWT_SECRET = "test-secret";
 
 function makeApp() {
   const otpSender = new FakeOtpSender();
+  const paymentProvider = new FakePaymentProvider();
   const authService = new AuthService({
     userRepository: new InMemoryUserRepository(),
     otpStore: new InMemoryOtpStore(),
     otpSender,
     identityProvider: new FakeIdentityProvider(),
+    paymentProvider,
   });
   const {
     poolService,
@@ -46,8 +50,35 @@ function makeApp() {
     notificationService,
     activityService,
     jwtSecret: JWT_SECRET,
+    // Mounts /webhooks/cashfree/deposits so tests can drive UPI ownership
+    // confirmations (ticket #38) through the same route a real Cashfree
+    // callback would hit.
+    paymentProvider,
   });
-  return { app, otpSender };
+  return { app, otpSender, paymentProvider };
+}
+
+// Ticket #38 (ADR 0014) — drives a full ownership proof-of-control through
+// the real HTTP surface: initiate the collect request, then simulate
+// Cashfree's webhook confirming it, the same two calls the mobile client and
+// Cashfree respectively make.
+async function proveUpiOwnership(
+  app: Express,
+  token: string,
+  paymentProvider: FakePaymentProvider,
+  upiId: string,
+): Promise<void> {
+  const initiateRes = await request(app)
+    .post("/auth/upi-ownership/initiate")
+    .set("Authorization", `Bearer ${token}`)
+    .send({ upiId });
+  const collectRequest = paymentProvider.lastCollectRequestFor(upiId);
+  if (!collectRequest) {
+    throw new Error(`No collect request raised for ${upiId}`);
+  }
+  await request(app)
+    .post("/webhooks/cashfree/deposits")
+    .send({ providerRef: collectRequest.id, amountPaise: initiateRes.body.amountPaise, status: "SUCCESS" });
 }
 
 describe("error handling", () => {
@@ -181,12 +212,13 @@ describe("POST /auth/otp/verify", () => {
 
 describe("POST /auth/verify", () => {
   it("marks the signed-up user as fully verified (stubbed full-KYC, ticket #12)", async () => {
-    const { app, otpSender } = makeApp();
+    const { app, otpSender, paymentProvider } = makeApp();
     const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
     const verifyOtpRes = await request(app)
       .post("/auth/otp/verify")
       .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
     expect(verifyOtpRes.body.user.isVerified).toBe(false);
+    await proveUpiOwnership(app, verifyOtpRes.body.token, paymentProvider, "asha.rao@upi");
     await request(app)
       .post("/auth/complete-profile")
       .set("Authorization", `Bearer ${verifyOtpRes.body.token}`)
@@ -297,6 +329,71 @@ describe("POST /auth/verify-upi-id", () => {
   });
 });
 
+describe("POST /auth/upi-ownership/initiate and GET /auth/upi-ownership/:confirmationId", () => {
+  it("starts PENDING, then CONFIRMED once the webhook confirms it (ticket #38)", async () => {
+    const { app, otpSender, paymentProvider } = makeApp();
+    const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyOtpRes = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+    const token = verifyOtpRes.body.token;
+
+    const initiateRes = await request(app)
+      .post("/auth/upi-ownership/initiate")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ upiId: "asha.rao@upi" });
+
+    expect(initiateRes.status).toBe(200);
+    expect(initiateRes.body.status).toBe("PENDING");
+    expect(initiateRes.body.confirmationId).toBeTruthy();
+
+    const pendingStatusRes = await request(app)
+      .get(`/auth/upi-ownership/${initiateRes.body.confirmationId}`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(pendingStatusRes.body.status).toBe("PENDING");
+
+    const collectRequest = paymentProvider.lastCollectRequestFor("asha.rao@upi")!;
+    await request(app)
+      .post("/webhooks/cashfree/deposits")
+      .send({ providerRef: collectRequest.id, amountPaise: initiateRes.body.amountPaise, status: "SUCCESS" });
+
+    const confirmedStatusRes = await request(app)
+      .get(`/auth/upi-ownership/${initiateRes.body.confirmationId}`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(confirmedStatusRes.body.status).toBe("CONFIRMED");
+  });
+
+  it("returns 404 for a confirmation belonging to someone else", async () => {
+    const { app, otpSender } = makeApp();
+    const requestA = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyA = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestA.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+    const initiateRes = await request(app)
+      .post("/auth/upi-ownership/initiate")
+      .set("Authorization", `Bearer ${verifyA.body.token}`)
+      .send({ upiId: "asha.rao@upi" });
+
+    const otherPhone = "+919876500001";
+    const requestB = await request(app).post("/auth/otp/request").send({ phoneNumber: otherPhone });
+    const verifyB = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestB.body.requestId, code: otpSender.lastCodeSentTo(otherPhone)! });
+
+    const res = await request(app)
+      .get(`/auth/upi-ownership/${initiateRes.body.confirmationId}`)
+      .set("Authorization", `Bearer ${verifyB.body.token}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 401 without a bearer token", async () => {
+    const { app } = makeApp();
+    const res = await request(app).post("/auth/upi-ownership/initiate").send({ upiId: "asha.rao@upi" });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("POST /auth/complete-profile", () => {
   const PROFILE = {
     name: "Asha Rao",
@@ -306,12 +403,13 @@ describe("POST /auth/complete-profile", () => {
   };
 
   it("stores the profile and marks the user onboarded (ADR 0012)", async () => {
-    const { app, otpSender } = makeApp();
+    const { app, otpSender, paymentProvider } = makeApp();
     const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
     const verifyOtpRes = await request(app)
       .post("/auth/otp/verify")
       .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
     expect(verifyOtpRes.body.user.isOnboarded).toBe(false);
+    await proveUpiOwnership(app, verifyOtpRes.body.token, paymentProvider, PROFILE.upiId);
 
     const res = await request(app)
       .post("/auth/complete-profile")
@@ -362,6 +460,41 @@ describe("POST /auth/complete-profile", () => {
     const { app } = makeApp();
     const res = await request(app).post("/auth/complete-profile").send(PROFILE);
     expect(res.status).toBe(401);
+  });
+
+  // Closes the gap where completeProfile previously trusted a prior
+  // client-side check rather than enforcing it itself (ticket #38, ADR
+  // 0014) — a direct API call skipping /auth/upi-ownership entirely must
+  // still be rejected.
+  it("returns 400 when UPI ownership was never confirmed (server-side enforcement, ticket #38)", async () => {
+    const { app, otpSender } = makeApp();
+    const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyOtpRes = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+
+    const res = await request(app)
+      .post("/auth/complete-profile")
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`)
+      .send(PROFILE);
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when the ownership confirmation was for a different UPI ID than submitted", async () => {
+    const { app, otpSender, paymentProvider } = makeApp();
+    const requestRes = await request(app).post("/auth/otp/request").send({ phoneNumber: PHONE });
+    const verifyOtpRes = await request(app)
+      .post("/auth/otp/verify")
+      .send({ requestId: requestRes.body.requestId, code: otpSender.lastCodeSentTo(PHONE)! });
+    await proveUpiOwnership(app, verifyOtpRes.body.token, paymentProvider, "someone-else@upi");
+
+    const res = await request(app)
+      .post("/auth/complete-profile")
+      .set("Authorization", `Bearer ${verifyOtpRes.body.token}`)
+      .send(PROFILE);
+
+    expect(res.status).toBe(400);
   });
 });
 

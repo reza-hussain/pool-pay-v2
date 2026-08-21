@@ -2,15 +2,20 @@ import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import type { AuthService } from "./auth-service.js";
+import { UPI_OWNERSHIP_CHECK_AMOUNT_PAISE } from "./auth-service.js";
 import {
   IdentityVerificationFailedError,
   InvalidOtpCodeError,
   InvalidPhoneNumberError,
+  InvalidUpiIdError,
   OtpAlreadyUsedError,
   OtpExpiredError,
   OtpNotFoundError,
   ProfileIncompleteError,
   UnderageError,
+  UnknownUpiOwnershipConfirmationError,
+  UpiOwnershipUnconfirmedError,
+  UserNotFoundError,
   type User,
 } from "./types.js";
 import { InvalidPanNumberError } from "./identity-provider.js";
@@ -49,6 +54,10 @@ const verifyUpiIdSchema = z.object({
   upiId: z.string().trim().min(1),
 });
 
+const initiateUpiOwnershipSchema = z.object({
+  upiId: z.string().trim().min(1),
+});
+
 // Onboarding's profile-setup step (CONTEXT.md, ADR 0012) — dateOfBirth comes
 // in as "YYYY-MM-DD" (a date, not a timestamp) since time-of-day is never
 // relevant to the age gate.
@@ -83,6 +92,16 @@ export function createAuthRouter(authService: AuthService, jwtSecret: string): R
   // A real VerifyPay call is a real penny-drop in production — this bounds
   // both cost and abuse (e.g. probing arbitrary VPAs for their bank name).
   const verifyUpiIdLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // A real UPI collect request is real money movement (ticket #38) — bounds
+  // both cost and abuse (spamming someone else's VPA with collect requests)
+  // more tightly than the penny-drop-only verifyUpiIdLimiter.
+  const upiOwnershipLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 5,
     standardHeaders: true,
@@ -197,6 +216,62 @@ export function createAuthRouter(authService: AuthService, jwtSecret: string): R
     },
   );
 
+  // Ticket #38 (ADR 0014) — starts the real ~₹1 UPI collect-request
+  // ownership check. Called only after the client's own verify-upi-id
+  // (penny drop) already passed for this exact text.
+  router.post(
+    "/upi-ownership/initiate",
+    requireAuth(jwtSecret),
+    upiOwnershipLimiter,
+    async (req: AuthenticatedRequest, res, next) => {
+      const parsed = initiateUpiOwnershipSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "upiId is required" });
+        return;
+      }
+
+      try {
+        const confirmation = await authService.initiateUpiOwnershipCheck(
+          req.userId as string,
+          parsed.data.upiId,
+        );
+        res.status(200).json({
+          confirmationId: confirmation.id,
+          amountPaise: UPI_OWNERSHIP_CHECK_AMOUNT_PAISE,
+          status: confirmation.status,
+        });
+      } catch (error) {
+        if (error instanceof UserNotFoundError) {
+          res.status(404).json({ error: error.message });
+          return;
+        }
+        next(error);
+      }
+    },
+  );
+
+  // Mobile onboarding polls this while showing "Waiting for you to
+  // approve…" (ticket #38) until status leaves PENDING.
+  router.get(
+    "/upi-ownership/:confirmationId",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      try {
+        const confirmation = await authService.getUpiOwnershipStatus(
+          req.userId as string,
+          req.params.confirmationId,
+        );
+        res.status(200).json({ status: confirmation.status });
+      } catch (error) {
+        if (error instanceof UnknownUpiOwnershipConfirmationError) {
+          res.status(404).json({ error: error.message });
+          return;
+        }
+        next(error);
+      }
+    },
+  );
+
   // Onboarding's profile-setup step (CONTEXT.md, ADR 0012) — mandatory,
   // one-time, blocks reaching Home. Every field but avatarUrl is required.
   router.post(
@@ -219,7 +294,11 @@ export function createAuthRouter(authService: AuthService, jwtSecret: string): R
         });
         res.status(200).json({ user: publicUser(user) });
       } catch (error) {
-        if (error instanceof UnderageError) {
+        if (
+          error instanceof UnderageError ||
+          error instanceof InvalidUpiIdError ||
+          error instanceof UpiOwnershipUnconfirmedError
+        ) {
           res.status(400).json({ error: error.message });
           return;
         }

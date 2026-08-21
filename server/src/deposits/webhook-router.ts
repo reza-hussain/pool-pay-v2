@@ -1,5 +1,7 @@
 import { Router, type Request } from "express";
 import type { DepositService } from "./deposit-service.js";
+import { UnknownDepositReferenceError } from "./types.js";
+import type { AuthService } from "../auth/auth-service.js";
 import type { PaymentProvider } from "../payments/types.js";
 
 type RequestWithRawBody = Request & { rawBody?: Buffer };
@@ -11,7 +13,16 @@ type RequestWithRawBody = Request & { rawBody?: Buffer };
 // raw request body — see CashfreePaymentProvider and app.ts's rawBody
 // capture. The fake provider's version of this check always passes, so dev/
 // test traffic is unaffected.
-export function createDepositWebhookRouter(depositService: DepositService, paymentProvider: PaymentProvider): Router {
+//
+// Also resolves ticket #38's UPI ownership collect requests (ADR 0014) —
+// both Deposits and ownership checks are Cashfree Orders underneath, so the
+// same PAYMENT_SUCCESS_WEBHOOK callback covers either, distinguished only by
+// which service recognizes the providerRef.
+export function createDepositWebhookRouter(
+  depositService: DepositService,
+  authService: AuthService,
+  paymentProvider: PaymentProvider,
+): Router {
   const router = Router();
 
   router.post("/cashfree/deposits", async (req, res) => {
@@ -26,9 +37,17 @@ export function createDepositWebhookRouter(depositService: DepositService, payme
       try {
         await depositService.confirmDeposit(event.providerRef, event.amountPaise);
       } catch (error) {
-        // Retrying won't fix an unknown reference or a Pool/Member that no
-        // longer qualifies — log it and ack anyway so Cashfree stops retrying.
-        console.error("Deposit webhook confirmation failed", error);
+        if (error instanceof UnknownDepositReferenceError) {
+          try {
+            await authService.confirmUpiOwnership(event.providerRef, event.amountPaise);
+          } catch (ownershipError) {
+            console.error("UPI ownership webhook confirmation failed", ownershipError);
+          }
+        } else {
+          // Retrying won't fix a Pool/Member that no longer qualifies — log
+          // it and ack anyway so Cashfree stops retrying.
+          console.error("Deposit webhook confirmation failed", error);
+        }
       }
     }
 

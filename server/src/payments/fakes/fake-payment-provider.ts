@@ -4,6 +4,7 @@ import type {
   PaymentProvider,
   SpendConfirmation,
   TransferConfirmation,
+  UpiCollectRequest,
   VpaVerificationResult,
 } from "../types.js";
 
@@ -19,6 +20,7 @@ export interface SimulatedDeposit extends DepositWebhookEvent {
 
 export class FakePaymentProvider implements PaymentProvider {
   private intents = new Map<string, DepositIntent>();
+  private collectRequests = new Map<string, UpiCollectRequest>();
 
   async createDepositIntent(
     poolId: string,
@@ -92,6 +94,41 @@ export class FakePaymentProvider implements PaymentProvider {
       .map((word) => word[0].toUpperCase() + word.slice(1))
       .join(" ");
     return { verified: true, accountHolderName: accountHolderName || null };
+  }
+
+  async initiateUpiOwnershipCollectRequest(
+    vpa: string,
+    amountPaise: number,
+    _customerId: string,
+    _customerPhone: string,
+  ): Promise<UpiCollectRequest> {
+    const request: UpiCollectRequest = { id: `collect_${nextId++}`, vpa, amountPaise };
+    this.collectRequests.set(request.id, request);
+    return request;
+  }
+
+  // Test-only: simulates the person approving (or the webhook otherwise
+  // confirming) the named collect request — shaped like a parsed webhook
+  // event so it can feed the same webhook route/AuthService.confirmUpiOwnership
+  // path as a real Cashfree callback would.
+  simulateOwnershipConfirmation(collectRequestId: string, amountPaise: number): DepositWebhookEvent {
+    const request = this.collectRequests.get(collectRequestId);
+    if (!request) {
+      throw new Error(`Unknown UPI ownership collect request: ${collectRequestId}`);
+    }
+    return { providerRef: collectRequestId, amountPaise, status: "SUCCESS" };
+  }
+
+  async refundUpiOwnershipCollectRequest(_vpa: string, _amountPaise: number): Promise<{ id: string }> {
+    return { id: `ownership_refund_${nextId++}` };
+  }
+
+  // Test-only: for router/HTTP-level tests that only see AuthService's
+  // public initiate response (no providerRef) — finds the most recent
+  // collect request raised for vpa, the same way FakeOtpSender.lastCodeSentTo
+  // lets a test recover an OTP it was never handed directly.
+  lastCollectRequestFor(vpa: string): UpiCollectRequest | undefined {
+    return [...this.collectRequests.values()].reverse().find((request) => request.vpa === vpa);
   }
 
   // No real signature to check — every other ticket's tests call the webhook
