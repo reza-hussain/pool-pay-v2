@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -542,9 +542,18 @@ export default function App() {
   // #24 ("authenticateAsync() is required on every app foreground/launch").
   // The initial launch case is covered by the bootstrap effect above, not
   // here — this only fires on a background→active transition.
+  const previousAppState = useRef(AppState.currentState);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active' && session && appLockEnabled) {
+      // Only a genuine background→active transition means the user left and
+      // came back. Presenting the native Face ID/Touch ID sheet itself takes
+      // the app to 'inactive' (not 'background') and back to 'active' — if
+      // that transition also relocked, a successful unlock would immediately
+      // get clobbered by this listener re-setting locked=true, and LockScreen's
+      // auto-prompt-on-mount would fire again, looping the prompt forever (#42).
+      const cameFromBackground = previousAppState.current === 'background';
+      previousAppState.current = nextState;
+      if (nextState === 'active' && cameFromBackground && session && appLockEnabled) {
         isBiometricAuthAvailable().then((available) => {
           if (available) {
             setLocked(true);
