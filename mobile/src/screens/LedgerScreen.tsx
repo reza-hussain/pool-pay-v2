@@ -1,16 +1,10 @@
-import { useEffect, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
-import { getLedger, type LedgerEntry } from "../api/ledgerClient";
+import { usePolledLedger, type LedgerEntry } from "../api/ledgerClient";
 import { paiseToRupeeLabel } from "../lib/money";
 import { formatTimestamp } from "../lib/time";
 import { colors, radii, spacing, type } from "../theme/tokens";
-
-// No websocket/SSE infra exists in this codebase — "without a manual refresh"
-// (AC3) is satisfied by polling while this screen is open, matching the REST
-// pattern used everywhere else here rather than adding new infrastructure.
-const POLL_INTERVAL_MS = 4000;
 
 function entryLabel(entry: LedgerEntry, sessionUserId: string): string {
   switch (entry.type) {
@@ -27,7 +21,11 @@ function entryLabel(entry: LedgerEntry, sessionUserId: string): string {
   }
 }
 
-function EntryRow({ entry, sessionUserId }: { entry: LedgerEntry; sessionUserId: string }) {
+// Exported so PoolDetailScreen can render the same row for its "Recent
+// activity" preview instead of rebuilding this rendering — the ticket that
+// added it explicitly reuses this screen's data-fetching, and reusing the
+// row markup too keeps the two surfaces visually identical.
+export function EntryRow({ entry, sessionUserId }: { entry: LedgerEntry; sessionUserId: string }) {
   const isInflow = entry.type === "DEPOSIT";
   return (
     <View style={styles.row}>
@@ -60,29 +58,7 @@ export function LedgerScreen({
   pool: Pool;
   onCancel: () => void;
 }) {
-  const [entries, setEntries] = useState<LedgerEntry[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    function fetchLedger() {
-      getLedger(session.token, pool.id)
-        .then((result) => {
-          if (!cancelled) setEntries(result);
-        })
-        .catch((err) => {
-          if (!cancelled) setError(err instanceof Error ? err.message : "Something went wrong");
-        });
-    }
-
-    fetchLedger();
-    const interval = setInterval(fetchLedger, POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [pool.id, session.token]);
+  const { entries, error } = usePolledLedger(session.token, pool.id);
 
   return (
     <View style={styles.container}>
