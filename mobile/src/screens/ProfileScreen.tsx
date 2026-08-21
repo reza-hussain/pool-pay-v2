@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
+import { useFocusEffect } from "@react-navigation/native";
 import { Screen } from "../components/Screen";
 import type { StoredSession } from "../api/session";
 import { persistAppLockEnabled } from "../api/session";
@@ -50,9 +51,16 @@ export function ProfileScreen({
 }) {
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
 
-  useEffect(() => {
-    isBiometricAuthAvailable().then(setBiometricsAvailable);
-  }, []);
+  // Re-checked on every focus, not just mount: the bottom-tab navigator keeps
+  // this screen mounted after its first visit, so a mount-only check would
+  // never notice the user enrolling Face ID in system Settings after
+  // visiting this tab once — the toggle would stay disabled forever with no
+  // way to tell why (#41).
+  useFocusEffect(
+    useCallback(() => {
+      isBiometricAuthAvailable().then(setBiometricsAvailable);
+    }, [])
+  );
 
   async function handleToggleAppLock() {
     const next = !appLockEnabled;
