@@ -21,6 +21,11 @@ const envSchema = z.object({
   // Verification Suite product, sharing one credential pair.
   CASHFREE_VERIFICATION_CLIENT_ID: z.string().optional(),
   CASHFREE_VERIFICATION_CLIENT_SECRET: z.string().optional(),
+  // Secure ID's Public Key 2FA (docs.cashfree.com/secure-id) — this dev
+  // environment's egress IP isn't whitelisted for Verification Suite, so
+  // without this every /upi/penny-drop and /pan call is rejected outright.
+  // Optional: unset falls back to relying on IP whitelisting alone.
+  CASHFREE_VERIFICATION_PUBLIC_KEY: z.string().optional(),
   // The Pool Pay merchant's own registered UPI ID — fixed per account, not
   // generated per transaction. Shown to Members as "Pay to UPI ID" alongside
   // the per-transaction QR (see CashfreePaymentProvider).
