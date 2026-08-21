@@ -1,11 +1,40 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import { verifyIdentity, AuthApiError } from "../api/authClient";
 import type { StoredSession } from "../api/session";
 import { Screen } from "../components/Screen";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
 const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+
+function ConsentCheckbox({ checked, onToggle }: { checked: boolean; onToggle: () => void }) {
+  return (
+    <Pressable
+      style={styles.consentRow}
+      onPress={onToggle}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+    >
+      <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+        {checked ? (
+          <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+            <Path
+              d="M5 12.5l4.5 4.5L19 7.5"
+              stroke={colors.cream}
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </Svg>
+        ) : null}
+      </View>
+      <Text style={styles.consentText}>
+        I consent to Pool Pay verifying my PAN details to confirm my identity as an Organizer.
+      </Text>
+    </Pressable>
+  );
+}
 
 // Becoming an Organizer requires full identity verification; joining as a
 // Member only ever needed the phone verification already done at signup
@@ -22,6 +51,7 @@ export function VerifyIdentityScreen({
   onCancel: () => void;
 }) {
   const [panNumber, setPanNumber] = useState("");
+  const [consented, setConsented] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,12 +100,14 @@ export function VerifyIdentityScreen({
           />
         </View>
 
+        <ConsentCheckbox checked={consented} onToggle={() => setConsented((c) => !c)} />
+
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Pressable
-          style={[styles.button, !panValid && styles.buttonDisabled]}
+          style={[styles.button, (!panValid || !consented) && styles.buttonDisabled]}
           onPress={handleVerify}
-          disabled={loading || !panValid}
+          disabled={loading || !panValid || !consented}
         >
           {loading ? (
             <ActivityIndicator color={colors.paper} />
@@ -128,6 +160,31 @@ const styles = StyleSheet.create({
     color: colors.ink900,
     marginTop: 5,
     padding: 0,
+  },
+  consentRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: spacing.s4,
+    gap: spacing.s3,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: radii.sm,
+    borderWidth: 1.5,
+    borderColor: colors.lineStrong,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  checkboxChecked: {
+    backgroundColor: colors.ink900,
+    borderColor: colors.ink900,
+  },
+  consentText: {
+    ...type.body,
+    color: colors.ink400,
+    flex: 1,
   },
   error: {
     ...type.body,
