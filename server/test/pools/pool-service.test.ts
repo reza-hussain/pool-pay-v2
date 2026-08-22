@@ -2,16 +2,20 @@ import { describe, expect, it } from "vitest";
 import { PoolService } from "../../src/pools/pool-service.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
+import { InMemoryInvitationRepository } from "../../src/invitations/fakes/in-memory-invitation-repository.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { NotificationService } from "../../src/notifications/notification-service.js";
 import { InMemoryNotificationRepository } from "../../src/notifications/fakes/in-memory-notification-repository.js";
 import {
+  InvalidOrganizerShareAmountError,
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
   MaxActivePoolsExceededError,
+  MissingOrganizerShareAmountError,
   MissingPerPersonAmountError,
   NotPoolOrganizerError,
   OrganizerNotVerifiedError,
+  UnexpectedOrganizerShareAmountError,
   UnexpectedPerPersonAmountError,
 } from "../../src/pools/types.js";
 import { PoolNotFoundError } from "../../src/memberships/types.js";
@@ -21,6 +25,7 @@ const ORGANIZER_ID = "user_1";
 function makePoolService() {
   const poolRepository = new InMemoryPoolRepository();
   const membershipRepository = new InMemoryMembershipRepository();
+  const invitationRepository = new InMemoryInvitationRepository();
   const userRepository = new InMemoryUserRepository();
   userRepository.seedVerifiedUser(ORGANIZER_ID);
   const notificationRepository = new InMemoryNotificationRepository();
@@ -30,8 +35,16 @@ function makePoolService() {
     membershipRepository,
     userRepository,
     notificationService,
+    invitationRepository,
   });
-  return { poolService, poolRepository, membershipRepository, userRepository, notificationRepository };
+  return {
+    poolService,
+    poolRepository,
+    membershipRepository,
+    invitationRepository,
+    userRepository,
+    notificationRepository,
+  };
 }
 
 describe("PoolService.createPool", () => {
@@ -144,6 +157,7 @@ describe("PoolService.createPool", () => {
   it("rejects an unverified user (ticket #12)", async () => {
     const poolRepository = new InMemoryPoolRepository();
     const membershipRepository = new InMemoryMembershipRepository();
+    const invitationRepository = new InMemoryInvitationRepository();
     const userRepository = new InMemoryUserRepository();
     const notificationService = new NotificationService({
       notificationRepository: new InMemoryNotificationRepository(),
@@ -154,6 +168,7 @@ describe("PoolService.createPool", () => {
       membershipRepository,
       userRepository,
       notificationService,
+      invitationRepository,
     });
 
     await expect(
@@ -202,6 +217,119 @@ describe("PoolService.createPool", () => {
     await expect(
       poolService.createPool(ORGANIZER_ID, { name: "Pool 4", type: "OPEN" }),
     ).resolves.toMatchObject({ name: "Pool 4" });
+  });
+});
+
+describe("PoolService.createPool — Custom Split Pool (ticket #58)", () => {
+  it("creates a Custom Split Pool with no per-person amount", async () => {
+    const { poolService } = makePoolService();
+
+    const pool = await poolService.createPool(ORGANIZER_ID, {
+      name: "Uneven Dinner",
+      type: "CUSTOM_SPLIT",
+      organizerShareAmountPaise: 30000,
+    });
+
+    expect(pool.type).toBe("CUSTOM_SPLIT");
+    expect(pool.perPersonAmountPaise).toBeNull();
+    expect(pool.state).toBe("ACTIVE");
+  });
+
+  it("creates a self-addressed pending Invitation for the Organizer at the assigned amount", async () => {
+    const { poolService, invitationRepository } = makePoolService();
+
+    const pool = await poolService.createPool(ORGANIZER_ID, {
+      name: "Uneven Dinner",
+      type: "CUSTOM_SPLIT",
+      organizerShareAmountPaise: 30000,
+    });
+
+    const invitation = await invitationRepository.findPendingByPoolAndInvitee(pool.id, ORGANIZER_ID);
+    expect(invitation).toMatchObject({
+      poolId: pool.id,
+      inviteeUserId: ORGANIZER_ID,
+      assignedAmountPaise: 30000,
+      state: "PENDING",
+    });
+  });
+
+  it("does not create a Membership for the Organizer until payment is confirmed", async () => {
+    const { poolService, membershipRepository } = makePoolService();
+
+    const pool = await poolService.createPool(ORGANIZER_ID, {
+      name: "Uneven Dinner",
+      type: "CUSTOM_SPLIT",
+      organizerShareAmountPaise: 30000,
+    });
+
+    expect(await membershipRepository.find(pool.id, ORGANIZER_ID)).toBeNull();
+  });
+
+  it("rejects a Custom Split Pool with no Organizer share amount", async () => {
+    const { poolService } = makePoolService();
+
+    await expect(
+      poolService.createPool(ORGANIZER_ID, { name: "Uneven Dinner", type: "CUSTOM_SPLIT" }),
+    ).rejects.toThrow(MissingOrganizerShareAmountError);
+  });
+
+  it("rejects a zero, negative, or non-integer Organizer share amount", async () => {
+    const { poolService } = makePoolService();
+
+    await expect(
+      poolService.createPool(ORGANIZER_ID, {
+        name: "Uneven Dinner",
+        type: "CUSTOM_SPLIT",
+        organizerShareAmountPaise: 0,
+      }),
+    ).rejects.toThrow(InvalidOrganizerShareAmountError);
+    await expect(
+      poolService.createPool(ORGANIZER_ID, {
+        name: "Uneven Dinner",
+        type: "CUSTOM_SPLIT",
+        organizerShareAmountPaise: -500,
+      }),
+    ).rejects.toThrow(InvalidOrganizerShareAmountError);
+    await expect(
+      poolService.createPool(ORGANIZER_ID, {
+        name: "Uneven Dinner",
+        type: "CUSTOM_SPLIT",
+        organizerShareAmountPaise: 100.5,
+      }),
+    ).rejects.toThrow(InvalidOrganizerShareAmountError);
+  });
+
+  it("rejects a Custom Split Pool that also sets perPersonAmountPaise", async () => {
+    const { poolService } = makePoolService();
+
+    await expect(
+      poolService.createPool(ORGANIZER_ID, {
+        name: "Uneven Dinner",
+        type: "CUSTOM_SPLIT",
+        organizerShareAmountPaise: 30000,
+        perPersonAmountPaise: 30000,
+      }),
+    ).rejects.toThrow(UnexpectedPerPersonAmountError);
+  });
+
+  it("rejects an organizerShareAmountPaise on an Equal Split or Open Pool", async () => {
+    const { poolService } = makePoolService();
+
+    await expect(
+      poolService.createPool(ORGANIZER_ID, {
+        name: "Goa Trip",
+        type: "EQUAL_SPLIT",
+        perPersonAmountPaise: 100000,
+        organizerShareAmountPaise: 100000,
+      }),
+    ).rejects.toThrow(UnexpectedOrganizerShareAmountError);
+    await expect(
+      poolService.createPool(ORGANIZER_ID, {
+        name: "Flat 3B Rent",
+        type: "OPEN",
+        organizerShareAmountPaise: 100000,
+      }),
+    ).rejects.toThrow(UnexpectedOrganizerShareAmountError);
   });
 });
 

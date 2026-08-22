@@ -4,12 +4,15 @@ import type { PoolService } from "./pool-service.js";
 import type { MembershipService } from "../memberships/membership-service.js";
 import { requireAuth, type AuthenticatedRequest } from "../auth/require-auth.js";
 import {
+  InvalidOrganizerShareAmountError,
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
   MaxActivePoolsExceededError,
+  MissingOrganizerShareAmountError,
   MissingPerPersonAmountError,
   NotPoolOrganizerError,
   OrganizerNotVerifiedError,
+  UnexpectedOrganizerShareAmountError,
   UnexpectedPerPersonAmountError,
 } from "./types.js";
 import {
@@ -22,8 +25,9 @@ import {
 
 const createPoolSchema = z.object({
   name: z.string(),
-  type: z.enum(["EQUAL_SPLIT", "OPEN"]),
+  type: z.enum(["EQUAL_SPLIT", "OPEN", "CUSTOM_SPLIT"]),
   perPersonAmountPaise: z.number().optional(),
+  organizerShareAmountPaise: z.number().optional(),
 });
 
 const joinByCodeSchema = z.object({
@@ -61,7 +65,10 @@ export function createPoolsRouter(
         error instanceof InvalidPoolNameError ||
         error instanceof MissingPerPersonAmountError ||
         error instanceof UnexpectedPerPersonAmountError ||
-        error instanceof InvalidPerPersonAmountError
+        error instanceof InvalidPerPersonAmountError ||
+        error instanceof MissingOrganizerShareAmountError ||
+        error instanceof UnexpectedOrganizerShareAmountError ||
+        error instanceof InvalidOrganizerShareAmountError
       ) {
         res.status(400).json({ error: error.message });
         return;

@@ -39,14 +39,17 @@ model User {
   refunds        Refund[]
   refundVotes    RefundVote[]
   notifications  Notification[]
+  invitations    Invitation[]
 }
 
 model Pool {
   id     String @id @default(cuid())
   name   String
-  // "EQUAL_SPLIT" | "OPEN" — string, not a Prisma enum, since the sqlite connector doesn't support enums.
+  // "EQUAL_SPLIT" | "OPEN" | "CUSTOM_SPLIT" — string, not a Prisma enum, since the sqlite connector doesn't support enums.
   type   String
-  // Required (and positive) for EQUAL_SPLIT, always null for OPEN. In paise (1 INR = 100 paise) to avoid float money bugs.
+  // Required (and positive) for EQUAL_SPLIT, always null for OPEN and
+  // CUSTOM_SPLIT — a Custom Split Pool's per-person amount lives on each
+  // Invitation instead, since it's individually assigned (ADR 0016).
   perPersonAmountPaise Int?
   // "ACTIVE" | "LOCKED" | "CLOSED"
   state       String   @default("ACTIVE")
@@ -55,6 +58,7 @@ model Pool {
   createdAt   DateTime @default(now())
   // Six-digit code for manual Pool joining. An Invite Link is just this Pool's
   // id embedded in a deep link — no separate stored field needed for that.
+  // Unused by Custom Split Pools, which join exclusively via Invitation.
   joinCode    String       @unique
   memberships    Membership[]
   deposits       Deposit[]
@@ -64,8 +68,36 @@ model Pool {
   refunds        Refund[]
   refundVotes    RefundVote[]
   notifications  Notification[]
+  invitations    Invitation[]
 
   @@index([organizerId])
+}
+
+// A Custom Split Pool's join-and-pay mechanism (ADR 0016, CONTEXT.md): one
+// Invitation per invitee, carrying the individually assigned amount they
+// must pay in full before a Membership is created for them. The Organizer's
+// own share (ticket #58) is a self-addressed Invitation created alongside
+// the Pool, gating Pool creation until they pay it just like anyone else.
+model Invitation {
+  id            String @id @default(cuid())
+  poolId        String
+  pool          Pool   @relation(fields: [poolId], references: [id])
+  inviteeUserId String
+  invitee       User   @relation(fields: [inviteeUserId], references: [id])
+  // In paise. Individually assigned by the Organizer — not shared with any
+  // other Invitation on the same Pool, unlike Pool.perPersonAmountPaise.
+  assignedAmountPaise Int
+  // "PENDING" | "PAID" | "CANCELLED" | "EXPIRED"
+  state         String    @default("PENDING")
+  // Opaque token for the phone-bound Invitation link (ticket #61) — unused
+  // by the self-addressed Invitation created at Pool creation (ticket #58).
+  token         String    @unique
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  paidAt        DateTime?
+
+  @@index([poolId])
+  @@index([poolId, inviteeUserId])
 }
 
 model Deposit {

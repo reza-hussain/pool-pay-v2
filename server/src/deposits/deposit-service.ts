@@ -1,5 +1,5 @@
 import { PoolNotFoundError } from "../memberships/types.js";
-import type { MembershipRepository } from "../memberships/types.js";
+import type { MembershipRepository, MembershipRole } from "../memberships/types.js";
 import { getPoolBalance } from "../pools/pool-balance.js";
 import type { Pool, PoolRepository } from "../pools/types.js";
 import type { DepositIntent, PaymentProvider } from "../payments/types.js";
@@ -9,6 +9,12 @@ import type { RefundRepository } from "../closure/types.js";
 import { UserNotFoundError, type UserRepository } from "../auth/types.js";
 import { formatRupees } from "../lib/format-money.js";
 import type { NotificationService } from "../notifications/notification-service.js";
+import {
+  InvitationAmountMismatchError,
+  InvitationNotFoundError,
+  type Invitation,
+  type InvitationRepository,
+} from "../invitations/types.js";
 import {
   InvalidDepositAmountError,
   NotAMemberError,
@@ -38,6 +44,10 @@ export interface DepositServiceOptions {
   // real customer phone per order.
   userRepository: UserRepository;
   notificationService: NotificationService;
+  // Custom Split Pools (ADR 0016) source the fixed deposit amount from the
+  // caller's own pending Invitation rather than Pool.perPersonAmountPaise,
+  // and confirming that deposit is what creates their Membership.
+  invitationRepository: InvitationRepository;
 }
 
 export class DepositService {
@@ -51,6 +61,7 @@ export class DepositService {
   private readonly paymentProvider: PaymentProvider;
   private readonly userRepository: UserRepository;
   private readonly notificationService: NotificationService;
+  private readonly invitationRepository: InvitationRepository;
 
   constructor(options: DepositServiceOptions) {
     this.poolRepository = options.poolRepository;
@@ -63,6 +74,7 @@ export class DepositService {
     this.paymentProvider = options.paymentProvider;
     this.userRepository = options.userRepository;
     this.notificationService = options.notificationService;
+    this.invitationRepository = options.invitationRepository;
   }
 
   async createDepositIntent(poolId: string, userId: string): Promise<DepositIntent> {
@@ -73,7 +85,21 @@ export class DepositService {
     if (pool.type === "OPEN") {
       throw new OpenPoolDepositsRetiredError();
     }
-    const fixedAmountPaise = pool.type === "EQUAL_SPLIT" ? pool.perPersonAmountPaise : null;
+
+    let fixedAmountPaise: number | null;
+    if (pool.type === "EQUAL_SPLIT") {
+      fixedAmountPaise = pool.perPersonAmountPaise;
+    } else {
+      // CUSTOM_SPLIT — the fixed amount comes from the caller's own
+      // Invitation, not the Pool — Pool.perPersonAmountPaise stays null for
+      // CUSTOM_SPLIT (ADR 0016).
+      const invitation = await this.invitationRepository.findPendingByPoolAndInvitee(poolId, userId);
+      if (!invitation) {
+        throw new InvitationNotFoundError();
+      }
+      fixedAmountPaise = invitation.assignedAmountPaise;
+    }
+
     const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new UserNotFoundError();
@@ -126,13 +152,41 @@ export class DepositService {
       throw new PoolNotAcceptingDepositsError();
     }
 
-    const membership = await this.membershipRepository.find(pending.poolId, pending.userId);
-    if (!membership) {
-      throw new NotAMemberError();
+    // For CUSTOM_SPLIT, this confirmation is what creates the Membership
+    // (ADR 0016) — there's deliberately no existing-Membership precondition
+    // to check going in, unlike every other Pool type.
+    let newMemberRole: MembershipRole | null = null;
+    let invitationToMarkPaid: Invitation | null = null;
+    if (pool.type === "CUSTOM_SPLIT") {
+      const invitation = await this.invitationRepository.findPendingByPoolAndInvitee(
+        pending.poolId,
+        pending.userId,
+      );
+      if (!invitation) {
+        throw new InvitationNotFoundError();
+      }
+      // Exact match only — a shortfall or overage is rejected outright, not
+      // recorded (unlike Equal Split's unenforced amount).
+      if (amountPaise !== invitation.assignedAmountPaise) {
+        throw new InvitationAmountMismatchError();
+      }
+      newMemberRole = pending.userId === pool.organizerId ? "ORGANIZER" : "MEMBER";
+      invitationToMarkPaid = invitation;
+    } else {
+      const membership = await this.membershipRepository.find(pending.poolId, pending.userId);
+      if (!membership) {
+        throw new NotAMemberError();
+      }
     }
 
     const deposit = await this.depositRepository.create(pending.poolId, pending.userId, amountPaise);
     await this.pendingDepositRepository.markConsumed(providerRef, deposit.id);
+
+    if (newMemberRole) {
+      await this.membershipRepository.create(pending.poolId, pending.userId, newMemberRole);
+      await this.invitationRepository.markPaid(invitationToMarkPaid!.id);
+    }
+
     await this.notifyDeposit(pool, deposit);
     return deposit;
   }

@@ -7,6 +7,7 @@ import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/
 import { InMemoryRefundRepository } from "../../src/closure/fakes/in-memory-refund-repository.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
+import { InMemoryInvitationRepository } from "../../src/invitations/fakes/in-memory-invitation-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { NotificationService } from "../../src/notifications/notification-service.js";
@@ -18,6 +19,7 @@ import {
   PoolNotAcceptingDepositsError,
   UnknownDepositReferenceError,
 } from "../../src/deposits/types.js";
+import { InvitationAmountMismatchError, InvitationNotFoundError } from "../../src/invitations/types.js";
 import { PoolNotFoundError } from "../../src/memberships/types.js";
 
 const ORGANIZER_ID = "user_organizer";
@@ -26,6 +28,7 @@ const MEMBER_ID = "user_member";
 async function makeService() {
   const poolRepository = new InMemoryPoolRepository();
   const membershipRepository = new InMemoryMembershipRepository();
+  const invitationRepository = new InMemoryInvitationRepository();
   const depositRepository = new InMemoryDepositRepository();
   const pendingDepositRepository = new InMemoryPendingDepositRepository();
   const spendRepository = new InMemorySpendRepository();
@@ -54,6 +57,7 @@ async function makeService() {
     paymentProvider,
     userRepository,
     notificationService,
+    invitationRepository,
   });
 
   const equalSplitPool = await poolRepository.create(ORGANIZER_ID, {
@@ -68,6 +72,12 @@ async function makeService() {
     perPersonAmountPaise: null,
     joinCode: "222222",
   });
+  const customSplitPool = await poolRepository.create(ORGANIZER_ID, {
+    name: "Uneven Dinner",
+    type: "CUSTOM_SPLIT",
+    perPersonAmountPaise: null,
+    joinCode: "333333",
+  });
   await membershipRepository.create(equalSplitPool.id, MEMBER_ID, "MEMBER");
   await membershipRepository.create(openPool.id, MEMBER_ID, "MEMBER");
 
@@ -75,6 +85,7 @@ async function makeService() {
     depositService,
     poolRepository,
     membershipRepository,
+    invitationRepository,
     depositRepository,
     pendingDepositRepository,
     spendRepository,
@@ -85,6 +96,7 @@ async function makeService() {
     notificationRepository,
     equalSplitPool,
     openPool,
+    customSplitPool,
   };
 }
 
@@ -98,6 +110,10 @@ async function deposit(
 ) {
   const intent = await depositService.createDepositIntent(poolId, userId);
   return depositService.confirmDeposit(intent.id, amountPaise);
+}
+
+function futureDate(days = 7): Date {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
 // Open Pool deposits are retired at createDepositIntent (ticket #59), so this
@@ -134,6 +150,31 @@ describe("DepositService.createDepositIntent", () => {
     await expect(
       depositService.createDepositIntent("does-not-exist", MEMBER_ID),
     ).rejects.toThrow(PoolNotFoundError);
+  });
+});
+
+describe("DepositService.createDepositIntent — Custom Split Pool (ticket #58)", () => {
+  it("locks the amount from the caller's pending Invitation", async () => {
+    const { depositService, invitationRepository, customSplitPool } = await makeService();
+    await invitationRepository.create({
+      poolId: customSplitPool.id,
+      inviteeUserId: ORGANIZER_ID,
+      assignedAmountPaise: 30000,
+      token: "token_1",
+      expiresAt: futureDate(),
+    });
+
+    const intent = await depositService.createDepositIntent(customSplitPool.id, ORGANIZER_ID);
+
+    expect(intent.fixedAmountPaise).toBe(30000);
+  });
+
+  it("throws InvitationNotFoundError when the caller has no pending Invitation", async () => {
+    const { depositService, customSplitPool } = await makeService();
+
+    await expect(
+      depositService.createDepositIntent(customSplitPool.id, ORGANIZER_ID),
+    ).rejects.toThrow(InvitationNotFoundError);
   });
 });
 
@@ -257,6 +298,89 @@ describe("DepositService.confirmDeposit", () => {
     await expect(
       depositService.confirmDeposit(intent.id, 100000, { userId: "user_stranger" }),
     ).rejects.toThrow(UnknownDepositReferenceError);
+  });
+});
+
+describe("DepositService.confirmDeposit — Custom Split Pool (ticket #58)", () => {
+  async function makeServiceWithInvitation(assignedAmountPaise = 30000) {
+    const service = await makeService();
+    const invitation = await service.invitationRepository.create({
+      poolId: service.customSplitPool.id,
+      inviteeUserId: ORGANIZER_ID,
+      assignedAmountPaise,
+      token: "token_1",
+      expiresAt: futureDate(),
+    });
+    return { ...service, invitation };
+  }
+
+  it("creates the Membership and Deposit together, and marks the Invitation paid, on an exact match", async () => {
+    const { depositService, membershipRepository, invitationRepository, customSplitPool } =
+      await makeServiceWithInvitation(30000);
+
+    const created = await deposit(depositService, customSplitPool.id, ORGANIZER_ID, 30000);
+
+    expect(created.amountPaise).toBe(30000);
+    const membership = await membershipRepository.find(customSplitPool.id, ORGANIZER_ID);
+    expect(membership).toMatchObject({ poolId: customSplitPool.id, userId: ORGANIZER_ID, role: "ORGANIZER" });
+    const paidInvitation = await invitationRepository.findPendingByPoolAndInvitee(
+      customSplitPool.id,
+      ORGANIZER_ID,
+    );
+    expect(paidInvitation).toBeNull();
+  });
+
+  it("makes the Organizer the Pool's sole Member", async () => {
+    const { depositService, membershipRepository, customSplitPool } = await makeServiceWithInvitation(30000);
+
+    await deposit(depositService, customSplitPool.id, ORGANIZER_ID, 30000);
+
+    const members = await membershipRepository.listByPool(customSplitPool.id);
+    expect(members).toHaveLength(1);
+    expect(members[0]).toMatchObject({ userId: ORGANIZER_ID, role: "ORGANIZER" });
+  });
+
+  it("rejects a mismatched amount outright — no Membership, no shortfall recorded", async () => {
+    const { depositService, membershipRepository, depositRepository, customSplitPool } =
+      await makeServiceWithInvitation(30000);
+    const intent = await depositService.createDepositIntent(customSplitPool.id, ORGANIZER_ID);
+
+    await expect(depositService.confirmDeposit(intent.id, 20000)).rejects.toThrow(
+      InvitationAmountMismatchError,
+    );
+
+    expect(await membershipRepository.find(customSplitPool.id, ORGANIZER_ID)).toBeNull();
+    expect(await depositRepository.sumByPoolAndUser(customSplitPool.id, ORGANIZER_ID)).toBe(0);
+  });
+
+  it("rejects an overpayment outright too", async () => {
+    const { depositService, customSplitPool } = await makeServiceWithInvitation(30000);
+    const intent = await depositService.createDepositIntent(customSplitPool.id, ORGANIZER_ID);
+
+    await expect(depositService.confirmDeposit(intent.id, 40000)).rejects.toThrow(
+      InvitationAmountMismatchError,
+    );
+  });
+
+  it("throws InvitationNotFoundError when confirming with no pending Invitation at all", async () => {
+    const { depositService, pendingDepositRepository, customSplitPool } = await makeService();
+    // Simulates a deposit intent created before any Invitation existed (or
+    // after it was already consumed) — confirmDeposit re-checks regardless
+    // of what createDepositIntent allowed.
+    const pending = await pendingDepositRepository.create("ref_orphan", customSplitPool.id, ORGANIZER_ID);
+
+    await expect(depositService.confirmDeposit(pending.providerRef, 30000)).rejects.toThrow(
+      InvitationNotFoundError,
+    );
+  });
+
+  it("blocks paying again once the Invitation has already been paid", async () => {
+    const { depositService, customSplitPool } = await makeServiceWithInvitation(30000);
+    await deposit(depositService, customSplitPool.id, ORGANIZER_ID, 30000);
+
+    await expect(
+      depositService.createDepositIntent(customSplitPool.id, ORGANIZER_ID),
+    ).rejects.toThrow(InvitationNotFoundError);
   });
 });
 
