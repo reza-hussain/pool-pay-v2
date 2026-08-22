@@ -32,7 +32,7 @@ describe("isVerifiedPanResponse", () => {
     ).toBe(false);
   });
 
-  it("rejects when name_match_result is missing", () => {
-    expect(isVerifiedPanResponse({ valid: true, pan_status: "VALID" })).toBe(false);
+  it("accepts a valid PAN when name_match_result is missing (Cashfree's sandbox never returns it)", () => {
+    expect(isVerifiedPanResponse({ valid: true, pan_status: "VALID" })).toBe(true);
   });
 });
