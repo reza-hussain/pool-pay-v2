@@ -15,6 +15,7 @@ import { InMemoryNotificationRepository } from "../../src/notifications/fakes/in
 import {
   InvalidDepositAmountError,
   NotAMemberError,
+  OpenPoolDepositsRetiredError,
   PoolNotAcceptingDepositsError,
   UnknownDepositReferenceError,
 } from "../../src/deposits/types.js";
@@ -115,6 +116,21 @@ function futureDate(days = 7): Date {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
+// Open Pool deposits are retired at createDepositIntent (ticket #59), so this
+// bypasses it to simulate a pending intent that was already in flight before
+// that rule shipped — confirmDeposit itself still has to complete it.
+async function confirmLegacyOpenPoolDeposit(
+  depositService: DepositService,
+  pendingDepositRepository: InMemoryPendingDepositRepository,
+  poolId: string,
+  userId: string,
+  amountPaise: number,
+) {
+  const providerRef = `legacy-${poolId}-${userId}-${amountPaise}`;
+  await pendingDepositRepository.create(providerRef, poolId, userId);
+  return depositService.confirmDeposit(providerRef, amountPaise);
+}
+
 describe("DepositService.createDepositIntent", () => {
   it("locks the amount for an Equal Split Pool", async () => {
     const { depositService, equalSplitPool } = await makeService();
@@ -122,10 +138,11 @@ describe("DepositService.createDepositIntent", () => {
     expect(intent.fixedAmountPaise).toBe(100000);
   });
 
-  it("leaves the amount open for an Open Pool", async () => {
+  it("rejects starting a new Deposit into an Open Pool", async () => {
     const { depositService, openPool } = await makeService();
-    const intent = await depositService.createDepositIntent(openPool.id, MEMBER_ID);
-    expect(intent.fixedAmountPaise).toBeNull();
+    await expect(depositService.createDepositIntent(openPool.id, MEMBER_ID)).rejects.toThrow(
+      OpenPoolDepositsRetiredError,
+    );
   });
 
   it("throws PoolNotFoundError for an unknown pool", async () => {
@@ -196,27 +213,27 @@ describe("DepositService.confirmDeposit", () => {
   });
 
   it("has no expected/shortfall for an Open Pool", async () => {
-    const { depositService, openPool } = await makeService();
+    const { depositService, pendingDepositRepository, openPool } = await makeService();
 
-    await deposit(depositService, openPool.id, MEMBER_ID, 25000);
+    await confirmLegacyOpenPoolDeposit(depositService, pendingDepositRepository, openPool.id, MEMBER_ID, 25000);
 
     const summary = await depositService.getContributionSummary(openPool.id, MEMBER_ID);
     expect(summary).toEqual({ contributedPaise: 25000, expectedPaise: null, shortfallPaise: null });
   });
 
   it("rejects a non-positive amount", async () => {
-    const { depositService, openPool } = await makeService();
-    await expect(deposit(depositService, openPool.id, MEMBER_ID, 0)).rejects.toThrow(
+    const { depositService, equalSplitPool } = await makeService();
+    await expect(deposit(depositService, equalSplitPool.id, MEMBER_ID, 0)).rejects.toThrow(
       InvalidDepositAmountError,
     );
-    await expect(deposit(depositService, openPool.id, MEMBER_ID, -500)).rejects.toThrow(
+    await expect(deposit(depositService, equalSplitPool.id, MEMBER_ID, -500)).rejects.toThrow(
       InvalidDepositAmountError,
     );
   });
 
   it("rejects a non-integer amount", async () => {
-    const { depositService, openPool } = await makeService();
-    await expect(deposit(depositService, openPool.id, MEMBER_ID, 100.5)).rejects.toThrow(
+    const { depositService, equalSplitPool } = await makeService();
+    await expect(deposit(depositService, equalSplitPool.id, MEMBER_ID, 100.5)).rejects.toThrow(
       InvalidDepositAmountError,
     );
   });
@@ -229,20 +246,35 @@ describe("DepositService.confirmDeposit", () => {
   });
 
   it("rejects a deposit from a non-Member", async () => {
-    const { depositService, openPool } = await makeService();
-    await expect(deposit(depositService, openPool.id, "user_stranger", 1000)).rejects.toThrow(
+    const { depositService, equalSplitPool } = await makeService();
+    await expect(deposit(depositService, equalSplitPool.id, "user_stranger", 1000)).rejects.toThrow(
       NotAMemberError,
     );
   });
 
   it("rejects a deposit into a Pool that isn't Active", async () => {
-    const { depositService, poolRepository, openPool } = await makeService();
-    const intent = await depositService.createDepositIntent(openPool.id, MEMBER_ID);
-    (await poolRepository.findById(openPool.id))!.state = "LOCKED";
+    const { depositService, poolRepository, equalSplitPool } = await makeService();
+    const intent = await depositService.createDepositIntent(equalSplitPool.id, MEMBER_ID);
+    (await poolRepository.findById(equalSplitPool.id))!.state = "LOCKED";
 
     await expect(depositService.confirmDeposit(intent.id, 1000)).rejects.toThrow(
       PoolNotAcceptingDepositsError,
     );
+  });
+
+  it("still allows a Deposit intent already in flight for an Open Pool to complete", async () => {
+    const { depositService, pendingDepositRepository, openPool } = await makeService();
+
+    const result = await confirmLegacyOpenPoolDeposit(
+      depositService,
+      pendingDepositRepository,
+      openPool.id,
+      MEMBER_ID,
+      25000,
+    );
+
+    expect(result.amountPaise).toBe(25000);
+    expect(await depositService.getPoolBalance(openPool.id)).toBe(25000);
   });
 
   it("is idempotent — confirming the same reference twice returns the same Deposit, not a double-credit", async () => {
@@ -354,19 +386,19 @@ describe("DepositService.confirmDeposit — Custom Split Pool (ticket #58)", () 
 
 describe("DepositService.confirmDeposit notifications", () => {
   it("notifies every other current Member, but not the depositor", async () => {
-    const { depositService, membershipRepository, userRepository, notificationRepository, openPool } =
+    const { depositService, membershipRepository, userRepository, notificationRepository, equalSplitPool } =
       await makeService();
     userRepository.seedVerifiedUser(MEMBER_ID, undefined, { name: "Kabir" });
-    await membershipRepository.create(openPool.id, ORGANIZER_ID, "ORGANIZER");
+    await membershipRepository.create(equalSplitPool.id, ORGANIZER_ID, "ORGANIZER");
 
-    await deposit(depositService, openPool.id, MEMBER_ID, 25000);
+    await deposit(depositService, equalSplitPool.id, MEMBER_ID, 25000);
 
     const organizerNotifications = await notificationRepository.listByUser(ORGANIZER_ID);
     expect(organizerNotifications).toHaveLength(1);
     expect(organizerNotifications[0]).toMatchObject({
-      poolId: openPool.id,
+      poolId: equalSplitPool.id,
       type: "DEPOSIT_RECEIVED",
-      message: "Kabir deposited ₹250 into Flat 3B Rent",
+      message: "Kabir deposited ₹250 into Goa Trip",
     });
     expect(await notificationRepository.listByUser(MEMBER_ID)).toHaveLength(0);
   });
@@ -400,10 +432,17 @@ describe("DepositService.confirmDeposit notifications", () => {
   });
 
   it("does not send POOL_FULLY_FUNDED for an Open Pool", async () => {
-    const { depositService, membershipRepository, notificationRepository, openPool } = await makeService();
+    const { depositService, membershipRepository, notificationRepository, pendingDepositRepository, openPool } =
+      await makeService();
     await membershipRepository.create(openPool.id, ORGANIZER_ID, "ORGANIZER");
 
-    await deposit(depositService, openPool.id, MEMBER_ID, 999999999);
+    await confirmLegacyOpenPoolDeposit(
+      depositService,
+      pendingDepositRepository,
+      openPool.id,
+      MEMBER_ID,
+      999999999,
+    );
 
     const organizerNotifications = await notificationRepository.listByUser(ORGANIZER_ID);
     expect(organizerNotifications.some((n) => n.type === "POOL_FULLY_FUNDED")).toBe(false);
@@ -412,30 +451,30 @@ describe("DepositService.confirmDeposit notifications", () => {
 
 describe("DepositService.getPoolBalance", () => {
   it("subtracts Spends (amount + fee) from total deposited", async () => {
-    const { depositService, spendRepository, openPool } = await makeService();
+    const { depositService, spendRepository, equalSplitPool } = await makeService();
 
-    await deposit(depositService, openPool.id, MEMBER_ID, 100000);
-    await spendRepository.create(openPool.id, ORGANIZER_ID, "merchant@upi", 30000, 300);
+    await deposit(depositService, equalSplitPool.id, MEMBER_ID, 100000);
+    await spendRepository.create(equalSplitPool.id, ORGANIZER_ID, "merchant@upi", 30000, 300);
 
-    expect(await depositService.getPoolBalance(openPool.id)).toBe(100000 - 30000 - 300);
+    expect(await depositService.getPoolBalance(equalSplitPool.id)).toBe(100000 - 30000 - 300);
   });
 
   it("subtracts Reimbursements from total deposited", async () => {
-    const { depositService, reimbursementRepository, openPool } = await makeService();
+    const { depositService, reimbursementRepository, equalSplitPool } = await makeService();
 
-    await deposit(depositService, openPool.id, MEMBER_ID, 100000);
-    await reimbursementRepository.create(openPool.id, MEMBER_ID, "member@upi", 20000);
+    await deposit(depositService, equalSplitPool.id, MEMBER_ID, 100000);
+    await reimbursementRepository.create(equalSplitPool.id, MEMBER_ID, "member@upi", 20000);
 
-    expect(await depositService.getPoolBalance(openPool.id)).toBe(100000 - 20000);
+    expect(await depositService.getPoolBalance(equalSplitPool.id)).toBe(100000 - 20000);
   });
 
   it("subtracts Refunds from total deposited", async () => {
-    const { depositService, refundRepository, openPool } = await makeService();
+    const { depositService, refundRepository, equalSplitPool } = await makeService();
 
-    await deposit(depositService, openPool.id, MEMBER_ID, 100000);
-    await refundRepository.create(openPool.id, MEMBER_ID, "member@fakebank", 40000);
+    await deposit(depositService, equalSplitPool.id, MEMBER_ID, 100000);
+    await refundRepository.create(equalSplitPool.id, MEMBER_ID, "member@fakebank", 40000);
 
-    expect(await depositService.getPoolBalance(openPool.id)).toBe(100000 - 40000);
+    expect(await depositService.getPoolBalance(equalSplitPool.id)).toBe(100000 - 40000);
   });
 });
 

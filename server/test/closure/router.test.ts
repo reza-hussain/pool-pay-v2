@@ -57,7 +57,7 @@ async function makeApp() {
   const createRes = await request(app)
     .post("/pools")
     .set("Authorization", bearerFor(ORGANIZER_ID))
-    .send({ name: "Goa Trip", type: "OPEN" });
+    .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
   const pool = createRes.body.pool as { id: string };
 
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
@@ -174,5 +174,76 @@ describe("POST /pools/:poolId/close", () => {
       .set("Authorization", bearerFor(ORGANIZER_ID))
       .send({ merchantRef: "merchant@upi", amountPaise: 1000 });
     expect(spendRes.status).toBe(400);
+  });
+});
+
+describe("Closing an existing (retired) Open Pool", () => {
+  it("still closes and refunds pro-rata, even though it can no longer accept new Deposits", async () => {
+    const userRepository = new InMemoryUserRepository();
+    userRepository.seedVerifiedUser(ORGANIZER_ID, undefined, { upiId: `${ORGANIZER_ID}@upi` });
+    userRepository.seedVerifiedUser(MEMBER_ID, undefined, { upiId: `${MEMBER_ID}@upi` });
+    const authService = new AuthService({
+      userRepository,
+      otpStore: new InMemoryOtpStore(),
+      otpSender: new FakeOtpSender(),
+      identityProvider: new FakeIdentityProvider(),
+    });
+    const {
+      poolService,
+      membershipService,
+      depositService,
+      spendService,
+      reimbursementService,
+      ledgerService,
+      closureService,
+      voteService,
+      analyticsService,
+      notificationService,
+      activityService,
+      pendingDepositRepository,
+    } = makeTestServices({ userRepository });
+    const app = createApp({
+      authService,
+      poolService,
+      membershipService,
+      depositService,
+      spendService,
+      reimbursementService,
+      ledgerService,
+      closureService,
+      voteService,
+      analyticsService,
+      notificationService,
+      activityService,
+      jwtSecret: JWT_SECRET,
+    });
+
+    const createRes = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ name: "Flat 3B Rent", type: "OPEN" });
+    const openPool = createRes.body.pool as { id: string };
+    await request(app).post(`/pools/${openPool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+
+    // Open Pool Deposits are retired at createDepositIntent (ticket #59), so
+    // this bypasses it to seed the Deposit this Open Pool already held before
+    // that rule shipped — exactly the money Closure still needs to refund.
+    await pendingDepositRepository.create("legacy-ref", openPool.id, MEMBER_ID);
+    await depositService.confirmDeposit("legacy-ref", 60000);
+
+    const res = await request(app)
+      .post(`/pools/${openPool.id}/close`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.pool.state).toBe("CLOSED");
+    expect(res.body.refundTotalPaise).toBe(60000);
+    expect(res.body.refunds).toHaveLength(1);
+    expect(res.body.refunds[0]).toMatchObject({ memberId: MEMBER_ID, amountPaise: 60000 });
+
+    const depositAttempt = await request(app)
+      .get(`/pools/${openPool.id}/deposit-intent`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+    expect(depositAttempt.status).toBe(400);
   });
 });

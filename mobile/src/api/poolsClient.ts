@@ -15,7 +15,7 @@ export interface Pool {
 
 export interface CreatePoolInput {
   name: string;
-  type: "EQUAL_SPLIT" | "OPEN";
+  type: "EQUAL_SPLIT";
   perPersonAmountPaise?: number;
 }
 

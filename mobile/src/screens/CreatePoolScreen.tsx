@@ -13,7 +13,6 @@ import { Screen } from "../components/Screen";
 import { rupeesToPaise } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
-type PoolType = "EQUAL_SPLIT" | "OPEN";
 type Step = "details" | "share";
 
 export function CreatePoolScreen({
@@ -27,7 +26,6 @@ export function CreatePoolScreen({
 }) {
   const [step, setStep] = useState<Step>("details");
   const [name, setName] = useState("");
-  const [poolType, setPoolType] = useState<PoolType>("EQUAL_SPLIT");
   const [shareRupees, setShareRupees] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,23 +36,17 @@ export function CreatePoolScreen({
       return;
     }
     setError(null);
-    if (poolType === "EQUAL_SPLIT") {
-      setStep("share");
-    } else {
-      void submit();
-    }
+    setStep("share");
   }
 
   async function submit() {
     setError(null);
     setLoading(true);
     try {
-      const perPersonAmountPaise =
-        poolType === "EQUAL_SPLIT" ? rupeesToPaise(shareRupees) : undefined;
       const pool = await createPool(session.token, {
         name: name.trim(),
-        type: poolType,
-        perPersonAmountPaise,
+        type: "EQUAL_SPLIT",
+        perPersonAmountPaise: rupeesToPaise(shareRupees),
       });
       onCreated(pool);
     } catch (err) {
@@ -116,7 +108,7 @@ export function CreatePoolScreen({
         <Pressable onPress={onCancel}>
           <Text style={styles.back}>{"‹"}</Text>
         </Pressable>
-        <Text style={styles.eyebrow}>Step 1 of {poolType === "EQUAL_SPLIT" ? 2 : 1}</Text>
+        <Text style={styles.eyebrow}>Step 1 of 2</Text>
         <View style={{ width: 24 }} />
       </View>
       <Text style={styles.screenTitle}>Name your Pool</Text>
@@ -132,55 +124,17 @@ export function CreatePoolScreen({
         />
       </View>
 
-      <Text style={styles.formLabel}>Pool type</Text>
-      <TypeCard
-        title="Equal Split Pool"
-        description="Set one amount. Everyone deposits the same share."
-        selected={poolType === "EQUAL_SPLIT"}
-        onPress={() => setPoolType("EQUAL_SPLIT")}
-      />
-      <TypeCard
-        title="Open Pool"
-        description="No fixed amount — contribute whatever, whenever."
-        selected={poolType === "OPEN"}
-        onPress={() => setPoolType("OPEN")}
-      />
-
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Pressable style={styles.primaryButton} onPress={handleContinue} disabled={loading}>
         {loading ? (
           <ActivityIndicator color={colors.paper} />
         ) : (
-          <Text style={styles.primaryButtonText}>
-            {poolType === "EQUAL_SPLIT" ? "Continue" : "Create Pool"}
-          </Text>
+          <Text style={styles.primaryButtonText}>Continue</Text>
         )}
       </Pressable>
     </View>
     </Screen>
-  );
-}
-
-function TypeCard({
-  title,
-  description,
-  selected,
-  onPress,
-}: {
-  title: string;
-  description: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      style={[styles.typeCard, selected && styles.typeCardSelected]}
-      onPress={onPress}
-    >
-      <Text style={styles.typeCardTitle}>{title}</Text>
-      <Text style={styles.typeCardDescription}>{description}</Text>
-    </Pressable>
   );
 }
 
@@ -228,32 +182,6 @@ const styles = StyleSheet.create({
     color: colors.ink900,
     marginTop: 5,
     padding: 0,
-  },
-  formLabel: {
-    ...type.label,
-    marginTop: spacing.s4,
-    marginBottom: spacing.s3,
-  },
-  typeCard: {
-    borderWidth: 1.5,
-    borderColor: colors.lineStrong,
-    borderRadius: radii.md,
-    padding: spacing.s3,
-    marginBottom: spacing.s3,
-  },
-  typeCardSelected: {
-    borderColor: colors.ink900,
-    borderWidth: 2,
-    backgroundColor: colors.selectedFill,
-  },
-  typeCardTitle: {
-    ...type.bodyBold,
-    fontSize: 14,
-    color: colors.ink900,
-  },
-  typeCardDescription: {
-    ...type.caption,
-    marginTop: 3,
   },
   primaryButton: {
     height: 48,

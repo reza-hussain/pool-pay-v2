@@ -18,6 +18,7 @@ import {
 import {
   InvalidDepositAmountError,
   NotAMemberError,
+  OpenPoolDepositsRetiredError,
   PoolNotAcceptingDepositsError,
   UnknownDepositReferenceError,
   type ContributionSummary,
@@ -81,20 +82,22 @@ export class DepositService {
     if (!pool) {
       throw new PoolNotFoundError();
     }
+    if (pool.type === "OPEN") {
+      throw new OpenPoolDepositsRetiredError();
+    }
 
     let fixedAmountPaise: number | null;
     if (pool.type === "EQUAL_SPLIT") {
       fixedAmountPaise = pool.perPersonAmountPaise;
-    } else if (pool.type === "CUSTOM_SPLIT") {
-      // The fixed amount comes from the caller's own Invitation, not the
-      // Pool — Pool.perPersonAmountPaise stays null for CUSTOM_SPLIT (ADR 0016).
+    } else {
+      // CUSTOM_SPLIT — the fixed amount comes from the caller's own
+      // Invitation, not the Pool — Pool.perPersonAmountPaise stays null for
+      // CUSTOM_SPLIT (ADR 0016).
       const invitation = await this.invitationRepository.findPendingByPoolAndInvitee(poolId, userId);
       if (!invitation) {
         throw new InvitationNotFoundError();
       }
       fixedAmountPaise = invitation.assignedAmountPaise;
-    } else {
-      fixedAmountPaise = null;
     }
 
     const user = await this.userRepository.findById(userId);

@@ -56,7 +56,7 @@ async function makeApp() {
   const createRes = await request(app)
     .post("/pools")
     .set("Authorization", bearerFor(ORGANIZER_ID))
-    .send({ name: "Goa Trip", type: "OPEN" });
+    .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
 
   return { app, pool: createRes.body.pool as { id: string; joinCode: string } };
 }
@@ -249,7 +249,7 @@ describe("GET /pools/:poolId/members", () => {
     const createRes = await request(app)
       .post("/pools")
       .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ name: "Goa Trip", type: "OPEN" });
+      .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
 
     const res = await request(app)
       .get(`/pools/${createRes.body.pool.id}/members`)
