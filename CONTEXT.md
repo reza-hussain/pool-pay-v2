@@ -25,7 +25,7 @@ The two ways a person joins an Equal Split Pool as a Member: an open shareable l
 _Avoid_: Invite code (ambiguous between the two mechanisms — use the full term)
 
 **Equal Split Pool**:
-A Pool where the Organizer sets a fixed per-person contribution amount, and every Member is expected to contribute exactly that share.
+A Pool where the Organizer sets a fixed per-person contribution amount, and every Member is expected to contribute exactly that share. Unlike Custom Split, a Member isn't limited to one Deposit — repeat Deposits over time are how an Equal Split Pool now covers ongoing/recurring use cases (e.g. apartment/roommate expenses), the role the retired Open Pool used to serve.
 _Avoid_: Fixed pool
 
 **Custom Split Pool**:
@@ -33,11 +33,11 @@ A Pool where the Organizer assigns each Member their own fixed contribution amou
 _Avoid_: Open pool (retired term — previously meant freeform, unassigned contributions, which this app no longer supports), Flexible pool, ongoing pool
 
 **Invitation**:
-The Organizer's request for one specific, already-registered person (looked up by phone number) to join a Custom Split Pool, carrying the fixed amount the Organizer has assigned them. Delivered as an in-app notification and/or a shareable link — but unlike Invite Link/Pool Code, this link is bound to that one phone number: opening it while signed in as anyone else fails with an invalid-invite error. Becomes a Membership only once the invitee pays the assigned amount in full. The Organizer can cancel a pending Invitation any time before payment (no in-place editing — cancel and send a new one instead); the Organizer also picks an expiry duration from presets, after which an unpaid Invitation lapses exactly as if cancelled. Sending new Invitations is blocked while the Pool is Locked.
+The Organizer's request for one specific, already-registered person (looked up by phone number) to join a Custom Split Pool, carrying the fixed amount the Organizer has assigned them. Delivered as an in-app notification and/or a shareable link — but unlike Invite Link/Pool Code, this link is bound to that one phone number: opening it while signed in as anyone else fails with an invalid-invite error. Becomes a Membership only once the invitee pays the assigned amount in full. The Organizer can cancel a pending Invitation any time before payment (no in-place editing — cancel and send a new one instead); the Organizer also picks an expiry duration from presets, after which an unpaid Invitation lapses exactly as if cancelled. Sending new Invitations is blocked while the Pool is Locked, and Locking the Pool also voids any Invitation still pending at that moment, the same as a cancel — an unpaid Invitation is a deferred Deposit, and letting one complete after Locking would inject money the Pool's Locked-state totals never accounted for.
 _Avoid_: Invite (too generic — collides with Invite Link/Pool Code, a different mechanism)
 
 **Locked** (Pool state):
-A Pool state, set only by the Organizer, in which no Member (including the Organizer) can make further deposits. Applies to both Equal Split and Custom Split Pools. Lets an Organizer fully fund a Pool alone and shut out further contributions, or simply stop collection once a Pool has enough. For a Custom Split Pool, Locking also blocks sending any new invites — an invite is a promise of a future Deposit, so it doesn't make sense to leave that open while blocking the Deposit itself.
+A Pool state, set only by the Organizer, in which no Member (including the Organizer) can make further deposits. Applies to both Equal Split and Custom Split Pools. Lets an Organizer fully fund a Pool alone and shut out further contributions, or simply stop collection once a Pool has enough. For a Custom Split Pool, Locking also blocks sending any new invites and voids any Invitation still pending — an invite is a promise of a future Deposit, so it doesn't make sense to leave that open, or let one still resolve, while blocking the Deposit itself.
 _Avoid_: Closed (reserved for the Pool's end-of-life state, a separate concept)
 
 **Deposit**:
