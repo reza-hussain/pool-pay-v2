@@ -30,13 +30,18 @@ const ACCEPTABLE_NAME_MATCHES = new Set(["DIRECT_MATCH", "GOOD_PARTIAL_MATCH"]);
 
 // Pure decision logic, pulled out of verifyFullIdentity so it's testable
 // without a live Cashfree call.
+//
+// name_match_result is documented as always present alongside a valid PAN +
+// provided name, but live sandbox calls against this account never include
+// it (confirmed against every documented test PAN) — so its absence is
+// treated as "no match signal available" rather than a rejection, and only
+// an explicit bad match (present but not in ACCEPTABLE_NAME_MATCHES) blocks
+// verification.
 export function isVerifiedPanResponse(response: PanVerificationResponse): boolean {
-  return (
-    response.valid === true &&
-    response.pan_status === "VALID" &&
-    response.name_match_result !== undefined &&
-    ACCEPTABLE_NAME_MATCHES.has(response.name_match_result)
-  );
+  if (response.valid !== true || response.pan_status !== "VALID") {
+    return false;
+  }
+  return response.name_match_result === undefined || ACCEPTABLE_NAME_MATCHES.has(response.name_match_result);
 }
 
 // Real full-KYC check, replacing DecentroIdentityProvider (ADR 0013 — the

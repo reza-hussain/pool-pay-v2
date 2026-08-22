@@ -13,7 +13,8 @@
     "test:contract": "vitest run --config vitest.contract.config.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "verify-upi": "tsx scripts/verify-upi.ts"
+    "verify-upi": "tsx scripts/verify-upi.ts",
+    "verify-pan": "tsx scripts/verify-pan.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
