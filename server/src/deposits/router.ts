@@ -6,6 +6,7 @@ import { PoolNotFoundError } from "../memberships/types.js";
 import {
   InvalidDepositAmountError,
   NotAMemberError,
+  OpenPoolDepositsRetiredError,
   PoolNotAcceptingDepositsError,
   UnknownDepositReferenceError,
 } from "./types.js";
@@ -31,6 +32,10 @@ export function createDepositsRouter(depositService: DepositService, jwtSecret: 
       } catch (error) {
         if (error instanceof PoolNotFoundError) {
           res.status(404).json({ error: error.message });
+          return;
+        }
+        if (error instanceof OpenPoolDepositsRetiredError) {
+          res.status(400).json({ error: error.message });
           return;
         }
         next(error);

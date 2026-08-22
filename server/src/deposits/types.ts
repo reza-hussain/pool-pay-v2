@@ -62,6 +62,17 @@ export class PoolNotAcceptingDepositsError extends Error {
   }
 }
 
+// Open Pool is retired for new Deposits (ticket #59) — thrown only when
+// starting a new Deposit (createDepositIntent). A Deposit intent already in
+// flight before this rule shipped still confirms normally, since the Member
+// may already have paid via UPI outside our system by the time it's checked.
+export class OpenPoolDepositsRetiredError extends Error {
+  constructor() {
+    super("Open Pools no longer accept new Deposits — close this Pool for a refund instead");
+    this.name = "OpenPoolDepositsRetiredError";
+  }
+}
+
 export class NotAMemberError extends Error {
   constructor() {
     super("You must join this Pool before depositing");

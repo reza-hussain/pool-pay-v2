@@ -12,6 +12,7 @@ import type { NotificationService } from "../notifications/notification-service.
 import {
   InvalidDepositAmountError,
   NotAMemberError,
+  OpenPoolDepositsRetiredError,
   PoolNotAcceptingDepositsError,
   UnknownDepositReferenceError,
   type ContributionSummary,
@@ -68,6 +69,9 @@ export class DepositService {
     const pool = await this.poolRepository.findById(poolId);
     if (!pool) {
       throw new PoolNotFoundError();
+    }
+    if (pool.type === "OPEN") {
+      throw new OpenPoolDepositsRetiredError();
     }
     const fixedAmountPaise = pool.type === "EQUAL_SPLIT" ? pool.perPersonAmountPaise : null;
     const user = await this.userRepository.findById(userId);
