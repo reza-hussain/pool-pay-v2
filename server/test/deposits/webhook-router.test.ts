@@ -187,7 +187,7 @@ describe("POST /webhooks/cashfree/deposits", () => {
     expect(await depositService.getPoolBalance(pool.id)).toBe(100000);
   });
 
-  // Ticket #38 (ADR 0014) — the same Cashfree Orders webhook also resolves
+  // Ticket #38 (ADR 0015) — the same Cashfree Orders webhook also resolves
   // UPI ownership collect requests raised by /auth/upi-ownership/initiate,
   // distinguished from a deposit only by which providerRef it recognizes.
   it("falls back to confirming a UPI ownership collect request the deposit service doesn't recognize", async () => {

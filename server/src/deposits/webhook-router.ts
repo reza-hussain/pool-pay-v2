@@ -14,7 +14,7 @@ type RequestWithRawBody = Request & { rawBody?: Buffer };
 // capture. The fake provider's version of this check always passes, so dev/
 // test traffic is unaffected.
 //
-// Also resolves ticket #38's UPI ownership collect requests (ADR 0014) —
+// Also resolves ticket #38's UPI ownership collect requests (ADR 0015) —
 // both Deposits and ownership checks are Cashfree Orders underneath, so the
 // same PAYMENT_SUCCESS_WEBHOOK callback covers either, distinguished only by
 // which service recognizes the providerRef.

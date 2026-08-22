@@ -55,7 +55,7 @@ export interface SubscribeResult {
   user: PublicUser;
 }
 
-// UPI ownership proof-of-control (ticket #38, ADR 0014) — a real ~₹1 UPI
+// UPI ownership proof-of-control (ticket #38, ADR 0015) — a real ~₹1 UPI
 // collect request the person approves from their own UPI app, real-world
 // proof they control the typed UPI ID. Call only after verifyUpiId's penny
 // drop already passed for this exact text.

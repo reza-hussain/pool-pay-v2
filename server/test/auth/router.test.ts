@@ -58,7 +58,7 @@ function makeApp() {
   return { app, otpSender, paymentProvider };
 }
 
-// Ticket #38 (ADR 0014) — drives a full ownership proof-of-control through
+// Ticket #38 (ADR 0015) — drives a full ownership proof-of-control through
 // the real HTTP surface: initiate the collect request, then simulate
 // Cashfree's webhook confirming it, the same two calls the mobile client and
 // Cashfree respectively make.
@@ -464,7 +464,7 @@ describe("POST /auth/complete-profile", () => {
 
   // Closes the gap where completeProfile previously trusted a prior
   // client-side check rather than enforcing it itself (ticket #38, ADR
-  // 0014) — a direct API call skipping /auth/upi-ownership entirely must
+  // 0015) — a direct API call skipping /auth/upi-ownership entirely must
   // still be rejected.
   it("returns 400 when UPI ownership was never confirmed (server-side enforcement, ticket #38)", async () => {
     const { app, otpSender } = makeApp();

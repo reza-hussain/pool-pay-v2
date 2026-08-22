@@ -27,11 +27,11 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // How often to poll while awaiting the person's UPI-app approval — the
 // server itself times a PENDING check out after ~2 min (ticket #38, ADR
-// 0014), so this is just the poll cadence, not the deadline.
+// 0015), so this is just the poll cadence, not the deadline.
 const UPI_OWNERSHIP_POLL_MS = 3000;
 
 // A real bank-account lookup (ADR 0012) plus a real UPI collect-request
-// ownership proof (ticket #38, ADR 0014) — status tracks the outcome for
+// ownership proof (ticket #38, ADR 0015) — status tracks the outcome for
 // whichever UPI ID string was last checked; editing the field afterward
 // resets this back to "idle" since neither check applies to the new text.
 type UpiVerificationStatus =
@@ -86,7 +86,7 @@ export function ProfileSetupScreen({
   }
 
   // Penny-drop pre-check (ADR 0012), then — only if it passes — starts the
-  // real ~₹1 UPI collect-request ownership proof (ticket #38, ADR 0014).
+  // real ~₹1 UPI collect-request ownership proof (ticket #38, ADR 0015).
   // Also the Retry handler for either step failing, so a retry always
   // re-confirms the account is still real before asking for another
   // approval.

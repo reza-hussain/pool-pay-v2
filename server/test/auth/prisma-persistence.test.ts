@@ -136,7 +136,7 @@ describe("PrismaOtpStore", () => {
   });
 });
 
-describe("PrismaUpiOwnershipConfirmationRepository (ticket #38, ADR 0014)", () => {
+describe("PrismaUpiOwnershipConfirmationRepository (ticket #38, ADR 0015)", () => {
   it("creates a PENDING confirmation and finds it by id or providerRef", async () => {
     const userRepo = new PrismaUserRepository(prisma);
     const user = await userRepo.create("+919876543210");

@@ -50,7 +50,7 @@ export interface OtpSender {
 }
 
 // UPI ownership proof-of-control for Onboarding's Registered UPI ID (ticket
-// #38, ADR 0014) — Cashfree has no API to check phone/VPA linkage directly,
+// #38, ADR 0015) — Cashfree has no API to check phone/VPA linkage directly,
 // so a real ~₹1 UPI collect request stands in as real-world proof the person
 // controls the VPA they typed. PENDING until the webhook confirms or the
 // check times out; scoped to the exact (userId, upiId) pair it was raised
@@ -79,7 +79,7 @@ export interface UpiOwnershipConfirmationRepository {
   markConfirmed(providerRef: string): Promise<void>;
   markFailed(providerRef: string): Promise<void>;
   // Most recent CONFIRMED row for this exact (userId, upiId) pair — the
-  // check completeProfile relies on (ADR 0014).
+  // check completeProfile relies on (ADR 0015).
   findLatestConfirmed(userId: string, upiId: string): Promise<UpiOwnershipConfirmation | null>;
 }
 
@@ -151,7 +151,7 @@ export class UnderageError extends Error {
   }
 }
 
-// completeProfile's own penny-drop re-check (ADR 0014) — closes the gap
+// completeProfile's own penny-drop re-check (ADR 0015) — closes the gap
 // where completeProfile previously trusted a prior client-side verify-upi-id
 // call rather than re-verifying server-side.
 export class InvalidUpiIdError extends Error {
@@ -161,7 +161,7 @@ export class InvalidUpiIdError extends Error {
   }
 }
 
-// completeProfile's ownership-proof gate (ticket #38, ADR 0014) — thrown
+// completeProfile's ownership-proof gate (ticket #38, ADR 0015) — thrown
 // when there's no CONFIRMED UpiOwnershipConfirmation on file for the exact
 // (userId, upiId) pair being submitted: the collect request was never sent,
 // is still pending, was declined, or timed out.

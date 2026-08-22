@@ -28,7 +28,7 @@ import {
 // v1 is India-only (ADR 0003) — Indian mobile numbers are 10 digits starting with 6-9.
 const INDIAN_PHONE_NUMBER_PATTERN = /^\+91[6-9]\d{9}$/;
 const OTP_TTL_MS = 10 * 60 * 1000;
-// Ticket #38 (ADR 0014) — small enough that nobody minds fronting it for the
+// Ticket #38 (ADR 0015) — small enough that nobody minds fronting it for the
 // ~seconds-to-minutes it takes Cashfree to confirm and this service to
 // refund it, real enough to require an actual approval in their UPI app.
 export const UPI_OWNERSHIP_CHECK_AMOUNT_PAISE = 100;
@@ -45,7 +45,7 @@ export interface AuthServiceOptions {
   // src/index.ts needs to pass the real Cashfree-backed one explicitly.
   paymentProvider?: PaymentProvider;
   // Optional (defaults to an in-memory fake) for the same reason — only
-  // src/index.ts needs the Prisma-backed one (ticket #38, ADR 0014).
+  // src/index.ts needs the Prisma-backed one (ticket #38, ADR 0015).
   upiOwnershipConfirmationRepository?: UpiOwnershipConfirmationRepository;
   now?: () => Date;
   generateCode?: () => string;
@@ -151,7 +151,7 @@ export class AuthService {
     return this.paymentProvider.verifyVpa(vpa);
   }
 
-  // Ticket #38 (ADR 0014) — starts the real UPI collect-request
+  // Ticket #38 (ADR 0015) — starts the real UPI collect-request
   // proof-of-control. Called only after the client's own verifyUpiId (penny
   // drop) already passed for this text; raises a real ~₹1 request against
   // vpa via the configured PaymentProvider and records it PENDING so a later
@@ -209,7 +209,7 @@ export class AuthService {
   //
   // Re-checks both the penny-drop (verifyVpa) and the ownership
   // collect-request confirmation itself, rather than trusting the client's
-  // prior verify-upi-id/upi-ownership calls (ticket #38, ADR 0014) — a
+  // prior verify-upi-id/upi-ownership calls (ticket #38, ADR 0015) — a
   // direct API call bypassing the client UI would otherwise skip both.
   async completeProfile(userId: string, input: CompleteProfileInput): Promise<User> {
     if (ageInYears(input.dateOfBirth, this.now()) < 18) {

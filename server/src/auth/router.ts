@@ -216,7 +216,7 @@ export function createAuthRouter(authService: AuthService, jwtSecret: string): R
     },
   );
 
-  // Ticket #38 (ADR 0014) — starts the real ~₹1 UPI collect-request
+  // Ticket #38 (ADR 0015) — starts the real ~₹1 UPI collect-request
   // ownership check. Called only after the client's own verify-upi-id
   // (penny drop) already passed for this exact text.
   router.post(

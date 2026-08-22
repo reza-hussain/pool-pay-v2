@@ -48,7 +48,7 @@ export interface VpaVerificationResult {
 }
 
 // A real UPI collect request raised against a specific VPA (ticket #38, ADR
-// 0014) — proof-of-control for Onboarding's Registered UPI ID, since
+// 0015) — proof-of-control for Onboarding's Registered UPI ID, since
 // Cashfree has no API to check phone/VPA linkage directly. Unlike
 // DepositIntent's QR (payer scans, amount not guaranteed), this pushes a
 // request notification straight to the named VPA's UPI app for the exact

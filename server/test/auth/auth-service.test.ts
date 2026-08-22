@@ -30,7 +30,7 @@ function makeAuthService(now = () => new Date("2026-07-09T00:00:00.000Z")) {
   return { authService, userRepository, otpStore, otpSender, identityProvider };
 }
 
-// Ticket #38 (ADR 0014) — completeProfile now requires a CONFIRMED
+// Ticket #38 (ADR 0015) — completeProfile now requires a CONFIRMED
 // UpiOwnershipConfirmation for the exact (userId, upiId) pair being
 // submitted; this drives the real initiate-then-webhook-confirm path
 // against AuthService directly, the same one /auth/upi-ownership and the
@@ -280,7 +280,7 @@ describe("AuthService.completeProfile", () => {
     expect(onboarded.isOnboarded).toBe(true);
   });
 
-  it("rejects a UPI ID that fails its own penny-drop re-check (ADR 0014)", async () => {
+  it("rejects a UPI ID that fails its own penny-drop re-check (ADR 0015)", async () => {
     const { authService, otpSender } = makeAuthService();
     const { requestId } = await authService.requestOtp(PHONE);
     const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
@@ -294,7 +294,7 @@ describe("AuthService.completeProfile", () => {
     ).rejects.toThrow(InvalidUpiIdError);
   });
 
-  it("rejects when the UPI ID's ownership was never confirmed (ticket #38, ADR 0014)", async () => {
+  it("rejects when the UPI ID's ownership was never confirmed (ticket #38, ADR 0015)", async () => {
     const { authService, otpSender } = makeAuthService();
     const { requestId } = await authService.requestOtp(PHONE);
     const { user } = await authService.verifyOtp(requestId, otpSender.lastCodeSentTo(PHONE)!);
@@ -322,7 +322,7 @@ describe("AuthService.completeProfile", () => {
   });
 });
 
-describe("AuthService UPI ownership check (ticket #38, ADR 0014)", () => {
+describe("AuthService UPI ownership check (ticket #38, ADR 0015)", () => {
   it("starts PENDING and moves to CONFIRMED once the collect request is confirmed", async () => {
     const { authService, otpSender } = makeAuthService();
     const { requestId } = await authService.requestOtp(PHONE);

@@ -193,7 +193,7 @@ export class CashfreePaymentProvider implements PaymentProvider {
     }
   }
 
-  // Ticket #38 (ADR 0014): same two-call Orders shape as createDepositIntent
+  // Ticket #38 (ADR 0015): same two-call Orders shape as createDepositIntent
   // (create order, then Order Pay), but channel "collect" with an explicit
   // upi_id targets a specific payer VPA instead of returning a QR — see
   // OrderSessionCollectResponse's caveat. Confirmation arrives later via the

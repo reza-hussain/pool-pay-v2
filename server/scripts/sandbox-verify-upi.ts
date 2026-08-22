@@ -1,6 +1,6 @@
 // Dev-only shortcut: drives a pending sandbox Cashfree "collect" order (a
 // Deposit or a ticket #38 UPI ownership check — both are Orders underneath,
-// see ADR 0014) through to confirmation without hand-crafting curl calls.
+// see ADR 0015) through to confirmation without hand-crafting curl calls.
 //
 // Cashfree's sandbox test VPAs (testsuccess@gocash etc.) don't auto-resolve
 // on this headless collect channel, and Cashfree can't deliver a webhook to
