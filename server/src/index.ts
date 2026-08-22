@@ -10,6 +10,7 @@ import { PoolService } from "./pools/pool-service.js";
 import { PrismaPoolRepository } from "./pools/prisma-pool-repository.js";
 import { MembershipService } from "./memberships/membership-service.js";
 import { PrismaMembershipRepository } from "./memberships/prisma-membership-repository.js";
+import { PrismaInvitationRepository } from "./invitations/prisma-invitation-repository.js";
 import { DepositService } from "./deposits/deposit-service.js";
 import { PrismaDepositRepository } from "./deposits/prisma-deposit-repository.js";
 import { PrismaPendingDepositRepository } from "./deposits/prisma-pending-deposit-repository.js";
@@ -70,6 +71,7 @@ const authService = new AuthService({
 
 const poolRepository = new PrismaPoolRepository(prisma);
 const membershipRepository = new PrismaMembershipRepository(prisma);
+const invitationRepository = new PrismaInvitationRepository(prisma);
 const depositRepository = new PrismaDepositRepository(prisma);
 const pendingDepositRepository = new PrismaPendingDepositRepository(prisma);
 const spendRepository = new PrismaSpendRepository(prisma);
@@ -84,6 +86,7 @@ const poolService = new PoolService({
   membershipRepository,
   userRepository,
   notificationService,
+  invitationRepository,
 });
 const membershipService = new MembershipService({ poolRepository, membershipRepository });
 const depositService = new DepositService({
@@ -97,6 +100,7 @@ const depositService = new DepositService({
   paymentProvider,
   userRepository,
   notificationService,
+  invitationRepository,
 });
 const spendService = new SpendService({
   poolRepository,

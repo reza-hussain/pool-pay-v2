@@ -197,3 +197,73 @@ describe("POST /pools/:poolId/deposits", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("Custom Split Pool creation gated on the Organizer's own payment (ticket #58)", () => {
+  async function createCustomSplitPool(app: Express, assignedAmountPaise = 30000) {
+    const res = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ name: "Uneven Dinner", type: "CUSTOM_SPLIT", organizerShareAmountPaise: assignedAmountPaise });
+    return res.body.pool as { id: string };
+  }
+
+  it("locks the deposit-intent amount to the Organizer's own assigned share", async () => {
+    const { app } = await makeApp();
+    const pool = await createCustomSplitPool(app, 30000);
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/deposit-intent`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.intent).toMatchObject({ poolId: pool.id, fixedAmountPaise: 30000 });
+  });
+
+  it("returns 404 for someone with no Invitation on the Pool", async () => {
+    const { app } = await makeApp();
+    const pool = await createCustomSplitPool(app, 30000);
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/deposit-intent`)
+      .set("Authorization", bearerFor("user_stranger"));
+
+    expect(res.status).toBe(404);
+  });
+
+  it("makes the Organizer the Pool's sole Member on an exact-match payment", async () => {
+    const { app } = await makeApp();
+    const pool = await createCustomSplitPool(app, 30000);
+    const depositIntentId = await getIntentId(app, pool.id, ORGANIZER_ID);
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/deposits`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ depositIntentId, amountPaise: 30000 });
+
+    expect(res.status).toBe(201);
+    expect(res.body.deposit).toMatchObject({ poolId: pool.id, userId: ORGANIZER_ID, amountPaise: 30000 });
+
+    const membersRes = await request(app)
+      .get(`/pools/${pool.id}/members`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(membersRes.body.members).toHaveLength(1);
+    expect(membersRes.body.members[0]).toMatchObject({ userId: ORGANIZER_ID, role: "ORGANIZER" });
+  });
+
+  it("rejects a payment that doesn't exactly match the assigned amount, without creating a Membership", async () => {
+    const { app } = await makeApp();
+    const pool = await createCustomSplitPool(app, 30000);
+    const depositIntentId = await getIntentId(app, pool.id, ORGANIZER_ID);
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/deposits`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ depositIntentId, amountPaise: 20000 });
+
+    expect(res.status).toBe(400);
+    const membersRes = await request(app)
+      .get(`/pools/${pool.id}/members`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(membersRes.body.members).toEqual([]);
+  });
+});

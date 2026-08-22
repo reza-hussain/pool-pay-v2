@@ -2,6 +2,7 @@ import { PoolService } from "../../src/pools/pool-service.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 import { MembershipService } from "../../src/memberships/membership-service.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
+import { InMemoryInvitationRepository } from "../../src/invitations/fakes/in-memory-invitation-repository.js";
 import { DepositService } from "../../src/deposits/deposit-service.js";
 import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-deposit-repository.js";
 import { InMemoryPendingDepositRepository } from "../../src/deposits/fakes/in-memory-pending-deposit-repository.js";
@@ -36,6 +37,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
   const poolRepository = new InMemoryPoolRepository();
   const userRepository = options?.userRepository ?? new InMemoryUserRepository();
   const membershipRepository = new InMemoryMembershipRepository();
+  const invitationRepository = new InMemoryInvitationRepository();
   const depositRepository = new InMemoryDepositRepository();
   const pendingDepositRepository = new InMemoryPendingDepositRepository();
   const spendRepository = new InMemorySpendRepository();
@@ -51,6 +53,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     membershipRepository,
     userRepository,
     notificationService,
+    invitationRepository,
   });
   const membershipService = new MembershipService({ poolRepository, membershipRepository });
   const depositService = new DepositService({
@@ -64,6 +67,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     paymentProvider,
     userRepository,
     notificationService,
+    invitationRepository,
   });
   const spendService = new SpendService({
     poolRepository,
@@ -131,6 +135,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     activityService,
     poolRepository,
     membershipRepository,
+    invitationRepository,
     userRepository,
     depositRepository,
     pendingDepositRepository,

@@ -1,15 +1,19 @@
-import { randomInt } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import type { MembershipRepository } from "../memberships/types.js";
 import { PoolNotFoundError } from "../memberships/types.js";
 import type { UserRepository } from "../auth/types.js";
 import type { NotificationService } from "../notifications/notification-service.js";
+import type { InvitationRepository } from "../invitations/types.js";
 import {
+  InvalidOrganizerShareAmountError,
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
   MaxActivePoolsExceededError,
+  MissingOrganizerShareAmountError,
   MissingPerPersonAmountError,
   NotPoolOrganizerError,
   OrganizerNotVerifiedError,
+  UnexpectedOrganizerShareAmountError,
   UnexpectedPerPersonAmountError,
   type CreatePoolInput,
   type Pool,
@@ -21,12 +25,20 @@ import {
 // #13, ADR 0011) — lifted entirely for a subscribed user.
 const FREE_TIER_MAX_ACTIVE_POOLS = 3;
 
+// How long the Organizer's self-addressed Invitation (ticket #58) stays
+// payable. Custom Split's real expiry-preset picker (ticket #62) governs
+// Invitations sent to other people; this one is never user-facing since
+// Pool creation blocks on it regardless of when it lapses.
+const ORGANIZER_INVITATION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+
 export interface PoolServiceOptions {
   poolRepository: PoolRepository;
   membershipRepository: MembershipRepository;
   userRepository: UserRepository;
   notificationService: NotificationService;
+  invitationRepository: InvitationRepository;
   generateJoinCode?: () => string;
+  generateInvitationToken?: () => string;
 }
 
 export class PoolService {
@@ -34,14 +46,18 @@ export class PoolService {
   private readonly membershipRepository: MembershipRepository;
   private readonly userRepository: UserRepository;
   private readonly notificationService: NotificationService;
+  private readonly invitationRepository: InvitationRepository;
   private readonly generateJoinCode: () => string;
+  private readonly generateInvitationToken: () => string;
 
   constructor(options: PoolServiceOptions) {
     this.poolRepository = options.poolRepository;
     this.membershipRepository = options.membershipRepository;
     this.userRepository = options.userRepository;
     this.notificationService = options.notificationService;
+    this.invitationRepository = options.invitationRepository;
     this.generateJoinCode = options.generateJoinCode ?? defaultGenerateJoinCode;
+    this.generateInvitationToken = options.generateInvitationToken ?? defaultGenerateInvitationToken;
   }
 
   async createPool(organizerId: string, input: CreatePoolInput): Promise<Pool> {
@@ -67,6 +83,9 @@ export class PoolService {
     let perPersonAmountPaise: number | null;
 
     if (input.type === "EQUAL_SPLIT") {
+      if (input.organizerShareAmountPaise !== undefined) {
+        throw new UnexpectedOrganizerShareAmountError();
+      }
       if (input.perPersonAmountPaise === undefined) {
         throw new MissingPerPersonAmountError();
       }
@@ -75,9 +94,24 @@ export class PoolService {
       }
       type = "EQUAL_SPLIT";
       perPersonAmountPaise = input.perPersonAmountPaise;
+    } else if (input.type === "CUSTOM_SPLIT") {
+      if (input.perPersonAmountPaise !== undefined) {
+        throw new UnexpectedPerPersonAmountError();
+      }
+      if (input.organizerShareAmountPaise === undefined) {
+        throw new MissingOrganizerShareAmountError();
+      }
+      if (!Number.isInteger(input.organizerShareAmountPaise) || input.organizerShareAmountPaise <= 0) {
+        throw new InvalidOrganizerShareAmountError();
+      }
+      type = "CUSTOM_SPLIT";
+      perPersonAmountPaise = null;
     } else {
       if (input.perPersonAmountPaise !== undefined) {
         throw new UnexpectedPerPersonAmountError();
+      }
+      if (input.organizerShareAmountPaise !== undefined) {
+        throw new UnexpectedOrganizerShareAmountError();
       }
       type = "OPEN";
       perPersonAmountPaise = null;
@@ -90,9 +124,22 @@ export class PoolService {
       joinCode: this.generateJoinCode(),
     });
 
-    // The Organizer is also a Member (CONTEXT.md) — the row backing that must
-    // exist as soon as the Pool does, before anyone else can join.
-    await this.membershipRepository.create(pool.id, organizerId, "ORGANIZER");
+    if (type === "CUSTOM_SPLIT") {
+      // Pool creation isn't done yet: the Organizer isn't a Member (and so
+      // can't invite anyone) until they pay this Invitation themselves —
+      // see DepositService.confirmDeposit (ADR 0016).
+      await this.invitationRepository.create({
+        poolId: pool.id,
+        inviteeUserId: organizerId,
+        assignedAmountPaise: input.organizerShareAmountPaise as number,
+        token: this.generateInvitationToken(),
+        expiresAt: new Date(Date.now() + ORGANIZER_INVITATION_EXPIRY_MS),
+      });
+    } else {
+      // The Organizer is also a Member (CONTEXT.md) — the row backing that must
+      // exist as soon as the Pool does, before anyone else can join.
+      await this.membershipRepository.create(pool.id, organizerId, "ORGANIZER");
+    }
 
     return pool;
   }
@@ -133,4 +180,8 @@ export class PoolService {
 
 function defaultGenerateJoinCode(): string {
   return String(randomInt(100000, 1000000));
+}
+
+function defaultGenerateInvitationToken(): string {
+  return randomBytes(24).toString("base64url");
 }

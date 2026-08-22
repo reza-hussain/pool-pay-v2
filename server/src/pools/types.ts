@@ -1,4 +1,4 @@
-export type PoolType = "EQUAL_SPLIT" | "OPEN";
+export type PoolType = "EQUAL_SPLIT" | "OPEN" | "CUSTOM_SPLIT";
 export type PoolState = "ACTIVE" | "LOCKED" | "CLOSED";
 
 export interface Pool {
@@ -19,6 +19,10 @@ export interface CreatePoolInput {
   name: string;
   type: PoolType;
   perPersonAmountPaise?: number;
+  // CUSTOM_SPLIT only — the Organizer's own assigned share, paid via a
+  // self-addressed Invitation before Pool creation finishes (ticket #58).
+  // Distinct from perPersonAmountPaise, which never applies to CUSTOM_SPLIT.
+  organizerShareAmountPaise?: number;
 }
 
 // The validated shape PoolService hands to a repository — always resolved to
@@ -63,6 +67,27 @@ export class InvalidPerPersonAmountError extends Error {
   constructor() {
     super("Per-person amount must be a positive whole number of paise");
     this.name = "InvalidPerPersonAmountError";
+  }
+}
+
+export class MissingOrganizerShareAmountError extends Error {
+  constructor() {
+    super("Custom Split Pools require the Organizer's own assigned share amount");
+    this.name = "MissingOrganizerShareAmountError";
+  }
+}
+
+export class InvalidOrganizerShareAmountError extends Error {
+  constructor() {
+    super("Organizer share amount must be a positive whole number of paise");
+    this.name = "InvalidOrganizerShareAmountError";
+  }
+}
+
+export class UnexpectedOrganizerShareAmountError extends Error {
+  constructor() {
+    super("Only Custom Split Pools take an Organizer share amount");
+    this.name = "UnexpectedOrganizerShareAmountError";
   }
 }
 

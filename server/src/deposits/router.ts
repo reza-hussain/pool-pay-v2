@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { DepositService } from "./deposit-service.js";
 import { requireAuth, type AuthenticatedRequest } from "../auth/require-auth.js";
 import { PoolNotFoundError } from "../memberships/types.js";
+import { InvitationAmountMismatchError, InvitationNotFoundError } from "../invitations/types.js";
 import {
   InvalidDepositAmountError,
   NotAMemberError,
@@ -29,7 +30,7 @@ export function createDepositsRouter(depositService: DepositService, jwtSecret: 
         );
         res.status(200).json({ intent });
       } catch (error) {
-        if (error instanceof PoolNotFoundError) {
+        if (error instanceof PoolNotFoundError || error instanceof InvitationNotFoundError) {
           res.status(404).json({ error: error.message });
           return;
         }
@@ -62,13 +63,18 @@ export function createDepositsRouter(depositService: DepositService, jwtSecret: 
         ]);
         res.status(201).json({ deposit, poolBalancePaise, contributionSummary });
       } catch (error) {
-        if (error instanceof PoolNotFoundError || error instanceof UnknownDepositReferenceError) {
+        if (
+          error instanceof PoolNotFoundError ||
+          error instanceof UnknownDepositReferenceError ||
+          error instanceof InvitationNotFoundError
+        ) {
           res.status(404).json({ error: error.message });
           return;
         }
         if (
           error instanceof InvalidDepositAmountError ||
-          error instanceof PoolNotAcceptingDepositsError
+          error instanceof PoolNotAcceptingDepositsError ||
+          error instanceof InvitationAmountMismatchError
         ) {
           res.status(400).json({ error: error.message });
           return;

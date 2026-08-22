@@ -140,6 +140,61 @@ describe("POST /pools", () => {
       .send({ name: "Pool 4", type: "OPEN" });
     expect(res.status).toBe(403);
   });
+
+  it("creates a Custom Split Pool with no per-person amount (ticket #58)", async () => {
+    const { app } = makeApp();
+
+    const res = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ name: "Uneven Dinner", type: "CUSTOM_SPLIT", organizerShareAmountPaise: 30000 });
+
+    expect(res.status).toBe(201);
+    expect(res.body.pool).toMatchObject({
+      name: "Uneven Dinner",
+      type: "CUSTOM_SPLIT",
+      perPersonAmountPaise: null,
+      state: "ACTIVE",
+      organizerId: ORGANIZER_ID,
+    });
+  });
+
+  it("does not list the Organizer as a Member of a Custom Split Pool before they pay", async () => {
+    const { app } = makeApp();
+    const createRes = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ name: "Uneven Dinner", type: "CUSTOM_SPLIT", organizerShareAmountPaise: 30000 });
+
+    const membersRes = await request(app)
+      .get(`/pools/${createRes.body.pool.id}/members`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(membersRes.body.members).toEqual([]);
+  });
+
+  it("returns 400 for a Custom Split Pool with no Organizer share amount", async () => {
+    const { app } = makeApp();
+    const res = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ name: "Uneven Dinner", type: "CUSTOM_SPLIT" });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for an Equal Split Pool that also sets organizerShareAmountPaise", async () => {
+    const { app } = makeApp();
+    const res = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({
+        name: "Goa Trip",
+        type: "EQUAL_SPLIT",
+        perPersonAmountPaise: 100000,
+        organizerShareAmountPaise: 100000,
+      });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe("POST /pools/:poolId/lock", () => {
