@@ -1,0 +1,11 @@
+# Reject Jupiter-style mandatory full-KYC onboarding; keep KYC scoped to Organizers
+
+A pitch modeled on neobank onboarding (Jupiter/Amica-style: Aadhaar-linked phone verification, Google sign-in, PAN + CKYC fetch, selfie liveness, then bank/UPI linking — all before reaching Home) was evaluated against the existing tiered-KYC model ([0007](./0007-tiered-kyc.md)). We rejected it: it would apply full identity verification to casual Members that [0007](./0007-tiered-kyc.md) deliberately exempts, and most of its individual steps don't survive contact with what Pool Pay's actual vendor (Cashfree) and regulatory position can support. The existing Organizer-only gate (`VerifyIdentityScreen`, PAN + name-match, triggered on first `CreatePool`) stays as the sole full-KYC surface, gaining only an explicit consent checkbox before the PAN check runs.
+
+## Considered and rejected
+
+- **Auto-fetching UPI IDs/bank accounts linked to a phone number**, to skip manual entry. No such API exists on Cashfree (confirmed via a sandbox probe during #38/PR #43); doing this for real would require Pool Pay becoming a UPI PSP with its own NPCI switch integration — a different order of scope entirely.
+- **Aadhaar-linked-phone verification via SMS/Call/Location permissions.** Doesn't actually verify Aadhaar linkage — only UIDAI e-KYC via a licensed AUA/KUA does that. It duplicates the OTP login that already exists, and a non-default SMS/dialer app requesting `READ_SMS`/`READ_CALL_LOG` on Android is against Play Store policy.
+- **Email verification via "Continue with Google."** Would be new OAuth infrastructure for a field (email) that [0012](./0012-registered-upi-id-at-onboarding.md) already deliberately leaves unverified. Email isn't load-bearing for the KYC/compliance goal this flow exists to serve.
+- **A CKYC-style "redirect to KYC / fetch details / confirm & update" screen.** No data source backs this — it's what the abandoned Decentro provider did (see the comment in `cashfree-identity-provider.ts`). Cashfree only exposes a direct PAN check, not a registry fetch.
+- **Selfie/liveness** stays deferred, per [0013](./0013-switch-baas-partner-to-cashfree.md) — no new Cashfree pricing information since that decision to justify reopening it.
