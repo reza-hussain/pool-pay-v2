@@ -13,7 +13,7 @@ export interface CashfreePaymentProviderConfig {
   env: "sandbox" | "production";
   pg: Pick<CashfreeClientConfig, "clientId" | "clientSecret">;
   payout: Pick<CashfreeClientConfig, "clientId" | "clientSecret">;
-  verification: Pick<CashfreeClientConfig, "clientId" | "clientSecret">;
+  verification: Pick<CashfreeClientConfig, "clientId" | "clientSecret" | "publicKey">;
   // Merchant's own registered UPI ID, shown as a fallback "Pay to UPI ID" text
   // alongside the QR — same role DecentroPaymentProviderConfig.virtualVpa
   // played; Cashfree's Orders API doesn't expose a single stable merchant VPA
@@ -40,14 +40,14 @@ interface StandardTransferResponse {
 
 // docs.cashfree.com's UPI penny-drop (POST /verification/upi/penny-drop) —
 // synchronous, unlike Decentro's VerifyPay which could come back PENDING and
-// need a status poll. Exact response field names beyond account_exists
-// weren't confirmed against a live sandbox call (the research pass found the
-// endpoint and request shape but not a full response example) — name_at_bank
-// follows Cashfree's naming convention on their bank-account-verification
-// sibling endpoint; confirm against real sandbox traffic before relying on it
-// for anything beyond display.
+// need a status poll. Confirmed against a live sandbox call: success looks
+// like { status: "VALID", name_at_bank: "TEST USER", ... }, not the
+// account_exists field this was originally guessed against (the research
+// pass found the endpoint and request shape but not a full response
+// example) — that guess meant every response was silently treated as
+// unverified regardless of what Cashfree actually returned.
 interface UpiPennyDropResponse {
-  account_exists?: boolean;
+  status?: string;
   name_at_bank?: string;
 }
 
@@ -147,13 +147,13 @@ export class CashfreePaymentProvider implements PaymentProvider {
         vpa,
         user_consent: {
           obtained: true,
-          type: "explicit",
+          type: "EXPLICIT",
           timestamp: new Date().toISOString(),
           purpose: "Pool Pay UPI ID verification",
         },
       });
 
-      if (response.account_exists) {
+      if (response.status === "VALID") {
         return { verified: true, accountHolderName: response.name_at_bank ?? null };
       }
       return { verified: false, accountHolderName: null };
