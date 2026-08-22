@@ -60,7 +60,7 @@ async function makeApp() {
   const createRes = await request(app)
     .post("/pools")
     .set("Authorization", bearerFor(ORGANIZER_ID))
-    .send({ name: "Goa Trip", type: "OPEN" });
+    .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
   const pool = createRes.body.pool as { id: string };
 
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_A));

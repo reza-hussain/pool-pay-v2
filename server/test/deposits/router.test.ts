@@ -87,6 +87,23 @@ describe("GET /pools/:poolId/deposit-intent", () => {
       .set("Authorization", bearerFor(MEMBER_ID));
     expect(res.status).toBe(404);
   });
+
+  it("returns 400 for an existing Open Pool — Open Pool deposits are retired", async () => {
+    const { app } = await makeApp();
+    const createRes = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ name: "Flat 3B Rent", type: "OPEN" });
+    const openPool = createRes.body.pool as { id: string };
+    await request(app).post(`/pools/${openPool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+
+    const res = await request(app)
+      .get(`/pools/${openPool.id}/deposit-intent`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/no longer accept new Deposits/i);
+  });
 });
 
 async function getIntentId(app: Express, poolId: string, userId: string): Promise<string> {

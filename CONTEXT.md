@@ -29,7 +29,7 @@ A Pool where the Organizer sets a fixed per-person contribution amount, and ever
 _Avoid_: Fixed pool
 
 **Open Pool**:
-A Pool with no fixed contribution amount — Members contribute whatever they want, whenever they want. The Pool balance is simply the running sum of contributions.
+A Pool with no fixed contribution amount — Members contribute whatever they want, whenever they want. The Pool balance is simply the running sum of contributions. Retired (ticket #59): no longer offered on the create-Pool screen, and an existing Open Pool no longer accepts new Deposits — it stays fully readable and can still be Closed for its pro-rata refund. Equal Split Pool (with repeat Deposits) is the fit for the ongoing/recurring use case Open Pool used to serve.
 _Avoid_: Flexible pool, ongoing pool
 
 **Locked** (Pool state):
