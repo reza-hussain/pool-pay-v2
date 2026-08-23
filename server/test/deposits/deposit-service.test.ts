@@ -116,6 +116,10 @@ function futureDate(days = 7): Date {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
+function pastDate(hoursAgo = 1): Date {
+  return new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
+}
+
 // Open Pool deposits are retired at createDepositIntent (ticket #59), so this
 // bypasses it to simulate a pending intent that was already in flight before
 // that rule shipped — confirmDeposit itself still has to complete it.
@@ -381,6 +385,117 @@ describe("DepositService.confirmDeposit — Custom Split Pool (ticket #58)", () 
     await expect(
       depositService.createDepositIntent(customSplitPool.id, ORGANIZER_ID),
     ).rejects.toThrow(InvitationNotFoundError);
+  });
+});
+
+describe("DepositService.confirmDeposit — Equal Split Organizer's first share (ADR-0017)", () => {
+  async function makeServiceWithOrganizerInvitation(assignedAmountPaise = 100000) {
+    const service = await makeService();
+    const invitation = await service.invitationRepository.create({
+      poolId: service.equalSplitPool.id,
+      inviteeUserId: ORGANIZER_ID,
+      assignedAmountPaise,
+      token: "token_equal_split_self",
+      expiresAt: futureDate(),
+    });
+    return { ...service, invitation };
+  }
+
+  it("creates the ORGANIZER Membership and marks the Invitation paid, on an exact match", async () => {
+    const { depositService, membershipRepository, invitationRepository, equalSplitPool } =
+      await makeServiceWithOrganizerInvitation();
+
+    const created = await deposit(depositService, equalSplitPool.id, ORGANIZER_ID, 100000);
+
+    expect(created.amountPaise).toBe(100000);
+    const membership = await membershipRepository.find(equalSplitPool.id, ORGANIZER_ID);
+    expect(membership).toMatchObject({ poolId: equalSplitPool.id, userId: ORGANIZER_ID, role: "ORGANIZER" });
+    expect(
+      await invitationRepository.findPendingByPoolAndInvitee(equalSplitPool.id, ORGANIZER_ID),
+    ).toBeNull();
+  });
+
+  it("stays amount-unenforced, unlike Custom Split's exact-match requirement", async () => {
+    const { depositService, membershipRepository, equalSplitPool } =
+      await makeServiceWithOrganizerInvitation(100000);
+
+    const result = await deposit(depositService, equalSplitPool.id, ORGANIZER_ID, 40000);
+
+    expect(result.amountPaise).toBe(40000);
+    expect(await membershipRepository.find(equalSplitPool.id, ORGANIZER_ID)).toMatchObject({
+      role: "ORGANIZER",
+    });
+  });
+
+  it("throws InvitationNotFoundError when the Organizer has no pending self-Invitation at all", async () => {
+    const { depositService, pendingDepositRepository, equalSplitPool } = await makeService();
+    const pending = await pendingDepositRepository.create("ref_orphan", equalSplitPool.id, ORGANIZER_ID);
+
+    await expect(depositService.confirmDeposit(pending.providerRef, 100000)).rejects.toThrow(
+      InvitationNotFoundError,
+    );
+  });
+
+  it("still requires a Membership for a non-Organizer depositor with no self-Invitation", async () => {
+    const { depositService, equalSplitPool } = await makeServiceWithOrganizerInvitation();
+
+    await expect(deposit(depositService, equalSplitPool.id, "user_stranger", 100000)).rejects.toThrow(
+      NotAMemberError,
+    );
+  });
+});
+
+describe("DepositService — lazy expiry of the Organizer's self-Invitation (ADR-0017)", () => {
+  it("rejects a Deposit confirmation once the self-Invitation has lapsed, and persists the Pool as EXPIRED", async () => {
+    const { depositService, poolRepository, invitationRepository, pendingDepositRepository } =
+      await makeService();
+    const lapsedPool = await poolRepository.create(ORGANIZER_ID, {
+      name: "Abandoned Trip",
+      type: "EQUAL_SPLIT",
+      perPersonAmountPaise: 100000,
+      joinCode: "999999",
+    });
+    await invitationRepository.create({
+      poolId: lapsedPool.id,
+      inviteeUserId: ORGANIZER_ID,
+      assignedAmountPaise: 100000,
+      token: "token_lapsed",
+      expiresAt: pastDate(),
+    });
+    const pending = await pendingDepositRepository.create("ref_lapsed", lapsedPool.id, ORGANIZER_ID);
+
+    await expect(depositService.confirmDeposit(pending.providerRef, 100000)).rejects.toThrow(
+      PoolNotAcceptingDepositsError,
+    );
+
+    expect((await poolRepository.findById(lapsedPool.id))!.state).toBe("EXPIRED");
+    expect(
+      await invitationRepository.findPendingByPoolAndInvitee(lapsedPool.id, ORGANIZER_ID),
+    ).toBeNull();
+  });
+
+  it("does not expire a Pool whose Organizer's self-Invitation hasn't lapsed yet", async () => {
+    const { depositService, poolRepository, invitationRepository, pendingDepositRepository } =
+      await makeService();
+    const pool = await poolRepository.create(ORGANIZER_ID, {
+      name: "Upcoming Trip",
+      type: "EQUAL_SPLIT",
+      perPersonAmountPaise: 100000,
+      joinCode: "888888",
+    });
+    await invitationRepository.create({
+      poolId: pool.id,
+      inviteeUserId: ORGANIZER_ID,
+      assignedAmountPaise: 100000,
+      token: "token_not_lapsed",
+      expiresAt: futureDate(),
+    });
+    const pending = await pendingDepositRepository.create("ref_ok", pool.id, ORGANIZER_ID);
+
+    await expect(depositService.confirmDeposit(pending.providerRef, 100000)).resolves.toMatchObject({
+      amountPaise: 100000,
+    });
+    expect((await poolRepository.findById(pool.id))!.state).toBe("ACTIVE");
   });
 });
 

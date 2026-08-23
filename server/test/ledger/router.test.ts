@@ -58,6 +58,16 @@ async function makeApp() {
     .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
   const pool = createRes.body.pool as { id: string };
 
+  // Pay the Organizer's own share so the Pool is unlocked for Add Members
+  // (ADR-0017) — this also adds one DEPOSIT entry to the ledger.
+  const organizerIntentRes = await request(app)
+    .get(`/pools/${pool.id}/deposit-intent`)
+    .set("Authorization", bearerFor(ORGANIZER_ID));
+  await request(app)
+    .post(`/pools/${pool.id}/deposits`)
+    .set("Authorization", bearerFor(ORGANIZER_ID))
+    .send({ depositIntentId: organizerIntentRes.body.intent.id, amountPaise: 100000 });
+
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
   const intentRes = await request(app)
     .get(`/pools/${pool.id}/deposit-intent`)
@@ -83,8 +93,12 @@ describe("GET /pools/:poolId/ledger", () => {
       .set("Authorization", bearerFor(MEMBER_ID));
 
     expect(res.status).toBe(200);
-    expect(res.body.entries).toHaveLength(1);
-    expect(res.body.entries[0]).toMatchObject({ type: "DEPOSIT", amountPaise: 100000 });
+    // Two DEPOSIT entries: the Organizer's own share (ADR-0017) plus this
+    // Member's.
+    expect(res.body.entries).toHaveLength(2);
+    expect(res.body.entries).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "DEPOSIT", amountPaise: 100000 })]),
+    );
   });
 
   it("returns the ledger for the Organizer too", async () => {
@@ -95,7 +109,7 @@ describe("GET /pools/:poolId/ledger", () => {
       .set("Authorization", bearerFor(ORGANIZER_ID));
 
     expect(res.status).toBe(200);
-    expect(res.body.entries).toHaveLength(1);
+    expect(res.body.entries).toHaveLength(2);
   });
 
   it("returns 403 for a non-Member", async () => {

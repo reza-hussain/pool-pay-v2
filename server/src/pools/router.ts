@@ -19,6 +19,7 @@ import {
   CannotRemoveOrganizerError,
   InvalidJoinCodeError,
   MemberNotFoundError,
+  PoolAwaitingPaymentError,
   PoolClosedError,
   PoolNotFoundError,
 } from "../memberships/types.js";
@@ -102,7 +103,11 @@ export function createPoolsRouter(
         );
         res.status(200).json({ membership });
       } catch (error) {
-        if (error instanceof InvalidJoinCodeError || error instanceof PoolClosedError) {
+        if (
+          error instanceof InvalidJoinCodeError ||
+          error instanceof PoolClosedError ||
+          error instanceof PoolAwaitingPaymentError
+        ) {
           res.status(400).json({ error: error.message });
           return;
         }
@@ -126,7 +131,7 @@ export function createPoolsRouter(
           res.status(404).json({ error: error.message });
           return;
         }
-        if (error instanceof PoolClosedError) {
+        if (error instanceof PoolClosedError || error instanceof PoolAwaitingPaymentError) {
           res.status(400).json({ error: error.message });
           return;
         }

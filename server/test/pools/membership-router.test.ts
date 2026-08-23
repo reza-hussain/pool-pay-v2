@@ -57,8 +57,20 @@ async function makeApp() {
     .post("/pools")
     .set("Authorization", bearerFor(ORGANIZER_ID))
     .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
+  const pool = createRes.body.pool as { id: string; joinCode: string };
 
-  return { app, pool: createRes.body.pool as { id: string; joinCode: string } };
+  // Pay the Organizer's own share so the Pool is unlocked for Add Members —
+  // this file exercises join/member-list/remove mechanics, not the payment
+  // gate itself (ADR-0017; see the dedicated describe block below for that).
+  const intentRes = await request(app)
+    .get(`/pools/${pool.id}/deposit-intent`)
+    .set("Authorization", bearerFor(ORGANIZER_ID));
+  await request(app)
+    .post(`/pools/${pool.id}/deposits`)
+    .set("Authorization", bearerFor(ORGANIZER_ID))
+    .send({ depositIntentId: intentRes.body.intent.id, amountPaise: 100000 });
+
+  return { app, pool };
 }
 
 function bearerFor(userId: string) {
@@ -225,11 +237,12 @@ describe("GET /pools/:poolId/members", () => {
       activityService,
       poolRepository,
       membershipRepository,
+      invitationRepository,
     } = makeTestServices({ userRepository });
     membershipRepository.listByPool = async () => {
       throw new Error("database is on fire");
     };
-    const membershipService = new MembershipService({ poolRepository, membershipRepository });
+    const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
     const app = createApp({
       authService,
       poolService,
@@ -348,5 +361,100 @@ describe("DELETE /pools/:poolId/members/:memberId", () => {
     const { app, pool } = await makeApp();
     const res = await request(app).delete(`/pools/${pool.id}/members/${MEMBER_ID}`);
     expect(res.status).toBe(401);
+  });
+});
+
+describe("Awaiting Payment gate (ADR-0017)", () => {
+  async function makeUnpaidApp() {
+    const userRepository = new InMemoryUserRepository();
+    userRepository.seedVerifiedUser(ORGANIZER_ID);
+    userRepository.seedVerifiedUser(MEMBER_ID);
+    const authService = new AuthService({
+      userRepository,
+      otpStore: new InMemoryOtpStore(),
+      otpSender: new FakeOtpSender(),
+      identityProvider: new FakeIdentityProvider(),
+    });
+    const {
+      poolService,
+      membershipService,
+      depositService,
+      spendService,
+      reimbursementService,
+      ledgerService,
+      closureService,
+      voteService,
+      analyticsService,
+      notificationService,
+      activityService,
+    } = makeTestServices({ userRepository });
+    const app = createApp({
+      authService,
+      poolService,
+      membershipService,
+      depositService,
+      spendService,
+      reimbursementService,
+      ledgerService,
+      closureService,
+      voteService,
+      analyticsService,
+      notificationService,
+      activityService,
+      jwtSecret: JWT_SECRET,
+    });
+
+    const createRes = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
+
+    return { app, pool: createRes.body.pool as { id: string; joinCode: string } };
+  }
+
+  it("POST /pools/:poolId/join returns 400 while the Organizer hasn't paid", async () => {
+    const { app, pool } = await makeUnpaidApp();
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/join`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /pools/join-by-code returns 400 while the Organizer hasn't paid", async () => {
+    const { app, pool } = await makeUnpaidApp();
+
+    const res = await request(app)
+      .post("/pools/join-by-code")
+      .set("Authorization", bearerFor(MEMBER_ID))
+      .send({ code: pool.joinCode });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /pools still includes the unpaid Pool for its Organizer", async () => {
+    const { app, pool } = await makeUnpaidApp();
+
+    const res = await request(app).get("/pools").set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.body.pools.map((p: { id: string }) => p.id)).toContain(pool.id);
+  });
+
+  it("unlocks joining once the Organizer pays their own share", async () => {
+    const { app, pool } = await makeUnpaidApp();
+    const intentRes = await request(app)
+      .get(`/pools/${pool.id}/deposit-intent`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    await request(app)
+      .post(`/pools/${pool.id}/deposits`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ depositIntentId: intentRes.body.intent.id, amountPaise: 100000 });
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/join`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(200);
   });
 });

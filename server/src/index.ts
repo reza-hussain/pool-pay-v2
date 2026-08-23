@@ -88,7 +88,7 @@ const poolService = new PoolService({
   notificationService,
   invitationRepository,
 });
-const membershipService = new MembershipService({ poolRepository, membershipRepository });
+const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
 const depositService = new DepositService({
   poolRepository,
   membershipRepository,

@@ -25,11 +25,12 @@ import {
 // #13, ADR 0011) — lifted entirely for a subscribed user.
 const FREE_TIER_MAX_ACTIVE_POOLS = 3;
 
-// How long the Organizer's self-addressed Invitation (ticket #58) stays
-// payable. Custom Split's real expiry-preset picker (ticket #62) governs
-// Invitations sent to other people; this one is never user-facing since
-// Pool creation blocks on it regardless of when it lapses.
-const ORGANIZER_INVITATION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+// How long the Organizer's self-addressed Invitation (ticket #58, extended
+// to Equal Split by ADR-0017) stays payable, for both Pool types. Custom
+// Split's real expiry-preset picker (ticket #62) governs Invitations sent to
+// other people. Unpaid past this window, the Invitation lapses and the Pool
+// moves to EXPIRED (lazy — see pool-expiry.ts, no background sweep).
+const ORGANIZER_INVITATION_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 export interface PoolServiceOptions {
   poolRepository: PoolRepository;
@@ -124,20 +125,25 @@ export class PoolService {
       joinCode: this.generateJoinCode(),
     });
 
-    if (type === "CUSTOM_SPLIT") {
+    if (type === "CUSTOM_SPLIT" || type === "EQUAL_SPLIT") {
       // Pool creation isn't done yet: the Organizer isn't a Member (and so
       // can't invite anyone) until they pay this Invitation themselves —
-      // see DepositService.confirmDeposit (ADR 0016).
+      // see DepositService.confirmDeposit (ADR 0016, extended to Equal
+      // Split by ADR-0017).
       await this.invitationRepository.create({
         poolId: pool.id,
         inviteeUserId: organizerId,
-        assignedAmountPaise: input.organizerShareAmountPaise as number,
+        assignedAmountPaise:
+          type === "CUSTOM_SPLIT"
+            ? (input.organizerShareAmountPaise as number)
+            : (perPersonAmountPaise as number),
         token: this.generateInvitationToken(),
         expiresAt: new Date(Date.now() + ORGANIZER_INVITATION_EXPIRY_MS),
       });
     } else {
-      // The Organizer is also a Member (CONTEXT.md) — the row backing that must
-      // exist as soon as the Pool does, before anyone else can join.
+      // OPEN — the Organizer is also a Member (CONTEXT.md) immediately;
+      // OPEN was never brought into the payment-gate mechanism (ADR-0017
+      // scopes it to Equal Split and Custom Split only).
       await this.membershipRepository.create(pool.id, organizerId, "ORGANIZER");
     }
 
@@ -170,11 +176,28 @@ export class PoolService {
   }
 
   async listPoolsForUser(userId: string): Promise<Pool[]> {
-    const memberships = await this.membershipRepository.listByUser(userId);
-    const pools = await Promise.all(
+    // Includes Pools the caller organizes even before they've paid their own
+    // share — creation "always succeeds immediately," and the Organizer
+    // lands on that Pool's Dashboard right away (ADR-0017), which no longer
+    // coincides with having a Membership for Equal Split/Custom Split.
+    const [organized, memberships] = await Promise.all([
+      this.poolRepository.listByOrganizer(userId),
+      this.membershipRepository.listByUser(userId),
+    ]);
+    const memberPools = await Promise.all(
       memberships.map((membership) => this.poolRepository.findById(membership.poolId)),
     );
-    return pools.filter((pool): pool is Pool => pool !== null);
+
+    const byId = new Map<string, Pool>();
+    for (const pool of organized) {
+      byId.set(pool.id, pool);
+    }
+    for (const pool of memberPools) {
+      if (pool) {
+        byId.set(pool.id, pool);
+      }
+    }
+    return [...byId.values()];
   }
 }
 

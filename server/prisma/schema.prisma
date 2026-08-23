@@ -51,7 +51,7 @@ model Pool {
   // CUSTOM_SPLIT — a Custom Split Pool's per-person amount lives on each
   // Invitation instead, since it's individually assigned (ADR 0016).
   perPersonAmountPaise Int?
-  // "ACTIVE" | "LOCKED" | "CLOSED"
+  // "ACTIVE" | "LOCKED" | "CLOSED" | "EXPIRED"
   state       String   @default("ACTIVE")
   organizerId String
   organizer   User     @relation(fields: [organizerId], references: [id])

@@ -333,6 +333,88 @@ describe("PoolService.createPool — Custom Split Pool (ticket #58)", () => {
   });
 });
 
+describe("PoolService.createPool — Equal Split Organizer payment gate (ADR-0017)", () => {
+  it("does not create a Membership for the Organizer until payment is confirmed", async () => {
+    const { poolService, membershipRepository } = makePoolService();
+
+    const pool = await poolService.createPool(ORGANIZER_ID, {
+      name: "Goa Trip",
+      type: "EQUAL_SPLIT",
+      perPersonAmountPaise: 100000,
+    });
+
+    expect(await membershipRepository.find(pool.id, ORGANIZER_ID)).toBeNull();
+  });
+
+  it("creates a self-addressed pending Invitation for the Organizer at the per-person amount", async () => {
+    const { poolService, invitationRepository } = makePoolService();
+
+    const pool = await poolService.createPool(ORGANIZER_ID, {
+      name: "Goa Trip",
+      type: "EQUAL_SPLIT",
+      perPersonAmountPaise: 100000,
+    });
+
+    const invitation = await invitationRepository.findPendingByPoolAndInvitee(pool.id, ORGANIZER_ID);
+    expect(invitation).toMatchObject({
+      poolId: pool.id,
+      inviteeUserId: ORGANIZER_ID,
+      assignedAmountPaise: 100000,
+      state: "PENDING",
+    });
+  });
+});
+
+describe("PoolService.createPool — self-Invitation expiry (ADR-0017)", () => {
+  it("expires the Organizer's self-Invitation 24 hours out for an Equal Split Pool", async () => {
+    const { poolService, invitationRepository } = makePoolService();
+    const before = Date.now();
+
+    const pool = await poolService.createPool(ORGANIZER_ID, {
+      name: "Goa Trip",
+      type: "EQUAL_SPLIT",
+      perPersonAmountPaise: 100000,
+    });
+
+    const invitation = await invitationRepository.findPendingByPoolAndInvitee(pool.id, ORGANIZER_ID);
+    const expiryMs = invitation!.expiresAt.getTime() - before;
+    expect(expiryMs).toBeGreaterThan(23.9 * 60 * 60 * 1000);
+    expect(expiryMs).toBeLessThan(24.1 * 60 * 60 * 1000);
+  });
+
+  it("expires the Organizer's self-Invitation 24 hours out for a Custom Split Pool too", async () => {
+    const { poolService, invitationRepository } = makePoolService();
+    const before = Date.now();
+
+    const pool = await poolService.createPool(ORGANIZER_ID, {
+      name: "Uneven Dinner",
+      type: "CUSTOM_SPLIT",
+      organizerShareAmountPaise: 30000,
+    });
+
+    const invitation = await invitationRepository.findPendingByPoolAndInvitee(pool.id, ORGANIZER_ID);
+    const expiryMs = invitation!.expiresAt.getTime() - before;
+    expect(expiryMs).toBeGreaterThan(23.9 * 60 * 60 * 1000);
+    expect(expiryMs).toBeLessThan(24.1 * 60 * 60 * 1000);
+  });
+});
+
+describe("PoolService.listPoolsForUser — Awaiting Payment (ADR-0017)", () => {
+  it("includes a Pool the caller organizes even before they've paid their own share", async () => {
+    const { poolService } = makePoolService();
+
+    const pool = await poolService.createPool(ORGANIZER_ID, {
+      name: "Goa Trip",
+      type: "EQUAL_SPLIT",
+      perPersonAmountPaise: 100000,
+    });
+
+    const pools = await poolService.listPoolsForUser(ORGANIZER_ID);
+
+    expect(pools.map((p) => p.id)).toContain(pool.id);
+  });
+});
+
 describe("PoolService.lockPool", () => {
   it("sets an ACTIVE Pool to LOCKED when called by the Organizer", async () => {
     const { poolService } = makePoolService();

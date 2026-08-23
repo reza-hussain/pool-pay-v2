@@ -55,7 +55,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     notificationService,
     invitationRepository,
   });
-  const membershipService = new MembershipService({ poolRepository, membershipRepository });
+  const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
   const depositService = new DepositService({
     poolRepository,
     membershipRepository,
