@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { poolTypeLabel, type Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
+import { listMyInvitations } from "../api/invitationsClient";
 import { Screen } from "../components/Screen";
 import { paiseToRupeeLabel } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
@@ -23,14 +25,32 @@ export function AwaitingPaymentScreen({
   onPayShare: () => void;
   onCancel: () => void;
 }) {
-  // Custom Split's own share amount lives on the Organizer's self-Invitation,
-  // not on the Pool — unknown here (getDepositIntent would show it, but that
-  // call is side-effecting server-side: it creates a real payment-provider
-  // order, so it must only fire once the Organizer actually taps to pay, on
-  // the Deposit screen, not just from viewing this Dashboard). The button
-  // shows a plain "Pay My Share" for Custom Split; the exact amount appears
-  // once Deposit's own intent fetch resolves.
-  const shareAmountPaise = pool.type === "EQUAL_SPLIT" ? pool.perPersonAmountPaise : null;
+  // The Organizer's own share (both Equal Split and Custom Split) is created
+  // as a self-Invitation at Pool creation (pool-service.ts) — read it via the
+  // non-side-effecting /invitations/mine listing rather than getDepositIntent,
+  // which is side-effecting server-side (it creates a real payment-provider
+  // order) and so must only fire once the Organizer actually taps to pay, on
+  // the Deposit screen, not just from viewing this Dashboard.
+  const [shareAmountPaise, setShareAmountPaise] = useState<number | null>(
+    pool.type === "EQUAL_SPLIT" ? pool.perPersonAmountPaise : null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    listMyInvitations(session.token)
+      .then((invitations) => {
+        if (cancelled) return;
+        const mine = invitations.find((i) => i.invitation.poolId === pool.id);
+        if (mine) setShareAmountPaise(mine.invitation.assignedAmountPaise);
+      })
+      .catch(() => {
+        // Non-critical — the button/row just falls back to no amount shown.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pool.id, session.token]);
+
   const isExpired =
     pool.state === "EXPIRED" ||
     (pool.state === "ACTIVE" && Date.now() - new Date(pool.createdAt).getTime() >= ORGANIZER_INVITATION_EXPIRY_MS);
@@ -80,8 +100,13 @@ export function AwaitingPaymentScreen({
             <Text style={styles.memberName}>{session.user.name ?? "You"}</Text>
             <Text style={styles.memberRole}>Organizer</Text>
           </View>
-          <View style={styles.pendingPill}>
-            <Text style={styles.pendingPillText}>Pending</Text>
+          <View style={styles.memberRight}>
+            {shareAmountPaise !== null ? (
+              <Text style={styles.memberAmount}>{paiseToRupeeLabel(shareAmountPaise)}</Text>
+            ) : null}
+            <View style={styles.pendingPill}>
+              <Text style={styles.pendingPillText}>Pending</Text>
+            </View>
           </View>
         </View>
 
@@ -161,6 +186,15 @@ const styles = StyleSheet.create({
   memberRole: {
     ...type.caption,
     marginTop: 2,
+  },
+  memberRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.s2,
+  },
+  memberAmount: {
+    ...type.bodyBold,
+    color: colors.ink900,
   },
   pendingPill: {
     backgroundColor: colors.flax100,

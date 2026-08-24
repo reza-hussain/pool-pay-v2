@@ -254,6 +254,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     height: 48,
+    alignSelf: "stretch",
     backgroundColor: colors.pumpkin500,
     borderRadius: radii.md,
     alignItems: "center",
