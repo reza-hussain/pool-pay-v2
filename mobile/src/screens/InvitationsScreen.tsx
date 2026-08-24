@@ -1,10 +1,11 @@
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
 import { listSentInvitations, type SentInvitation } from "../api/invitationsClient";
 import { Screen } from "../components/Screen";
+import { buildInvitationLink } from "../lib/inviteLink";
 import { paiseToRupeeLabel } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
@@ -31,7 +32,7 @@ function StatusPill({ state }: { state: SentInvitation["invitation"]["state"] })
   );
 }
 
-function InvitationRow({ sent }: { sent: SentInvitation }) {
+function InvitationRow({ sent, onShare }: { sent: SentInvitation; onShare?: (sent: SentInvitation) => void }) {
   return (
     <View style={styles.row}>
       <View style={styles.rowText}>
@@ -41,6 +42,11 @@ function InvitationRow({ sent }: { sent: SentInvitation }) {
       <View style={styles.rowEnd}>
         <Text style={styles.rowAmount}>{paiseToRupeeLabel(sent.invitation.assignedAmountPaise)}</Text>
         <StatusPill state={sent.invitation.state} />
+        {onShare ? (
+          <Pressable onPress={() => onShare(sent)} hitSlop={8}>
+            <Text style={styles.rowShare}>Share</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -71,6 +77,12 @@ export function InvitationsScreen({
   const pending = invitations.filter((i) => i.invitation.state === "PENDING");
   const resolved = invitations.filter((i) => i.invitation.state !== "PENDING");
 
+  async function shareInvitation(sent: SentInvitation) {
+    await Share.share({
+      message: `Pay your share for ${pool.name} on Pool Pay: ${buildInvitationLink(sent.invitation.token)}`,
+    });
+  }
+
   return (
     <Screen backgroundColor={colors.cream}>
       <View style={styles.container}>
@@ -97,7 +109,7 @@ export function InvitationsScreen({
                 {pending.map((sent, i) => (
                   <View key={sent.invitation.id}>
                     {i > 0 ? <View style={styles.divider} /> : null}
-                    <InvitationRow sent={sent} />
+                    <InvitationRow sent={sent} onShare={shareInvitation} />
                   </View>
                 ))}
               </View>
@@ -206,6 +218,11 @@ const styles = StyleSheet.create({
   rowAmount: {
     ...type.bodyBold,
     color: colors.ink900,
+  },
+  rowShare: {
+    ...type.caption,
+    color: colors.ink600,
+    marginTop: 2,
   },
   statusPill: {
     borderRadius: 999,
