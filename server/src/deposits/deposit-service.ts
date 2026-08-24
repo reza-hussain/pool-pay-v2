@@ -90,6 +90,7 @@ export class DepositService {
     pool = await expireIfLapsed(
       { poolRepository: this.poolRepository, invitationRepository: this.invitationRepository, membershipRepository: this.membershipRepository },
       pool,
+      this.now,
     );
     if (pool.type === "OPEN") {
       throw new OpenPoolDepositsRetiredError();
@@ -162,6 +163,7 @@ export class DepositService {
     pool = await expireIfLapsed(
       { poolRepository: this.poolRepository, invitationRepository: this.invitationRepository, membershipRepository: this.membershipRepository },
       pool,
+      this.now,
     );
     if (pool.state !== "ACTIVE") {
       throw new PoolNotAcceptingDepositsError();
