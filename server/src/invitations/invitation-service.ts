@@ -9,6 +9,7 @@ import { formatRupees } from "../lib/format-money.js";
 import {
   InvalidInvitationAmountError,
   InvitationAlreadyPendingError,
+  InvitationLinkNotFoundError,
   InviteeAlreadyMemberError,
   InviteeNotRegisteredError,
   isInvitationExpired,
@@ -139,18 +140,35 @@ export class InvitationService {
     const pending = await this.invitationRepository.listPendingByInvitee(userId);
     const stillPayable = pending.filter((invitation) => !isInvitationExpired(invitation, this.now()));
 
-    const results = await Promise.all(
-      stillPayable.map(async (invitation) => {
-        const pool = await this.poolRepository.findById(invitation.poolId);
-        if (!pool) {
-          return null;
-        }
-        const organizer = await this.userRepository.findById(pool.organizerId);
-        return { invitation, pool, organizerName: organizer?.name ?? null };
-      }),
-    );
-
+    const results = await Promise.all(stillPayable.map((invitation) => this.enrichForInvitee(invitation)));
     return results.filter((result): result is InvitationForInvitee => result !== null);
+  }
+
+  // Resolves the Organizer's shareable Invitation link (ticket #61). Bound
+  // to the one invitee it names: an unknown token and a token that exists
+  // but names someone else both throw the same InvitationLinkNotFoundError,
+  // so the response can never confirm an Invitation exists for anyone but
+  // its rightful invitee, let alone leak its assigned amount or Pool.
+  async getInvitationByToken(token: string, requesterId: string): Promise<InvitationForInvitee> {
+    const invitation = await this.invitationRepository.findByToken(token);
+    if (!invitation || invitation.inviteeUserId !== requesterId) {
+      throw new InvitationLinkNotFoundError();
+    }
+
+    const enriched = await this.enrichForInvitee(invitation);
+    if (!enriched) {
+      throw new InvitationLinkNotFoundError();
+    }
+    return enriched;
+  }
+
+  private async enrichForInvitee(invitation: Invitation): Promise<InvitationForInvitee | null> {
+    const pool = await this.poolRepository.findById(invitation.poolId);
+    if (!pool) {
+      return null;
+    }
+    const organizer = await this.userRepository.findById(pool.organizerId);
+    return { invitation, pool, organizerName: organizer?.name ?? null };
   }
 
   // Every Invitation ever sent for one Pool — the Organizer's management

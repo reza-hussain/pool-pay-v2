@@ -55,6 +55,11 @@ export class PrismaInvitationRepository implements InvitationRepository {
     });
     return rows.map(toInvitation);
   }
+
+  async findByToken(token: string): Promise<Invitation | null> {
+    const row = await this.prisma.invitation.findUnique({ where: { token } });
+    return row ? toInvitation(row) : null;
+  }
 }
 
 function toInvitation(row: {

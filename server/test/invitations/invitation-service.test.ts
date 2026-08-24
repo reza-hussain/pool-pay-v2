@@ -11,6 +11,7 @@ import { PoolNotFoundError } from "../../src/memberships/types.js";
 import {
   InvalidInvitationAmountError,
   InvitationAlreadyPendingError,
+  InvitationLinkNotFoundError,
   InviteeAlreadyMemberError,
   InviteeNotRegisteredError,
   OrganizerNotAMemberError,
@@ -227,5 +228,50 @@ describe("InvitationService.listSentInvitations", () => {
     await expect(invitationService.listSentInvitations("does-not-exist", ORGANIZER_ID)).rejects.toThrow(
       PoolNotFoundError,
     );
+  });
+});
+
+describe("InvitationService.getInvitationByToken", () => {
+  it("resolves the Invitation for its rightful invitee, enriched with Pool and Organizer name", async () => {
+    const { invitationService, pool } = await makeService();
+    const sent = await invitationService.sendInvitation(ORGANIZER_ID, pool.id, INVITEE_PHONE, 250000);
+
+    const resolved = await invitationService.getInvitationByToken(sent.token, INVITEE_ID);
+
+    expect(resolved.invitation.id).toBe(sent.id);
+    expect(resolved.invitation.assignedAmountPaise).toBe(250000);
+    expect(resolved.pool.name).toBe("Munnar Trip");
+    expect(resolved.organizerName).toBe("Rhea");
+  });
+
+  it("rejects a signed-in user other than the named invitee, without leaking Pool or amount", async () => {
+    const { invitationService, pool } = await makeService();
+    const sent = await invitationService.sendInvitation(ORGANIZER_ID, pool.id, INVITEE_PHONE, 250000);
+
+    await expect(invitationService.getInvitationByToken(sent.token, "user_stranger")).rejects.toThrow(
+      InvitationLinkNotFoundError,
+    );
+    // Even the Organizer who sent it can't open it as themselves — the link
+    // is bound to the invitee alone.
+    await expect(invitationService.getInvitationByToken(sent.token, ORGANIZER_ID)).rejects.toThrow(
+      InvitationLinkNotFoundError,
+    );
+  });
+
+  it("throws the same error for an unknown token as for a mismatched account", async () => {
+    const { invitationService } = await makeService();
+    await expect(invitationService.getInvitationByToken("not-a-real-token", INVITEE_ID)).rejects.toThrow(
+      InvitationLinkNotFoundError,
+    );
+  });
+
+  it("still resolves a lazily-expired Invitation for its rightful invitee", async () => {
+    let clock = new Date("2026-01-01T00:00:00Z");
+    const { invitationService, pool } = await makeService(() => clock);
+    const sent = await invitationService.sendInvitation(ORGANIZER_ID, pool.id, INVITEE_PHONE, 250000);
+
+    clock = new Date("2026-01-09T00:00:00Z"); // past the 7-day default expiry
+    const resolved = await invitationService.getInvitationByToken(sent.token, INVITEE_ID);
+    expect(resolved.invitation.id).toBe(sent.id);
   });
 });

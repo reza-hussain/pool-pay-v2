@@ -59,4 +59,8 @@ export class InMemoryInvitationRepository implements InvitationRepository {
       .filter((i) => i.poolId === poolId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
+
+  async findByToken(token: string): Promise<Invitation | null> {
+    return this.invitations.find((i) => i.token === token) ?? null;
+  }
 }
