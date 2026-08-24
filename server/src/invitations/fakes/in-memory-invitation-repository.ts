@@ -47,4 +47,16 @@ export class InMemoryInvitationRepository implements InvitationRepository {
     invitation.state = "EXPIRED";
     return invitation;
   }
+
+  async listPendingByInvitee(userId: string): Promise<Invitation[]> {
+    return this.invitations
+      .filter((i) => i.inviteeUserId === userId && i.state === "PENDING")
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async listByPool(poolId: string): Promise<Invitation[]> {
+    return this.invitations
+      .filter((i) => i.poolId === poolId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
 }

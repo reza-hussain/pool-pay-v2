@@ -6,7 +6,8 @@ export type NotificationType =
   | "DEPOSIT_RECEIVED"
   | "POOL_FULLY_FUNDED"
   | "POOL_LOCKED"
-  | "REFUND_PROCESSED";
+  | "REFUND_PROCESSED"
+  | "INVITATION_RECEIVED";
 
 export interface Notification {
   id: string;

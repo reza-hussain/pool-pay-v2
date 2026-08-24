@@ -98,6 +98,9 @@ model Invitation {
 
   @@index([poolId])
   @@index([poolId, inviteeUserId])
+  // Backs listPendingByInvitee (ticket #60) — an invitee's own list of
+  // Invitations still worth opening, across every Pool.
+  @@index([inviteeUserId, state])
 }
 
 model Deposit {

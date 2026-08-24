@@ -11,6 +11,7 @@ import { PrismaPoolRepository } from "./pools/prisma-pool-repository.js";
 import { MembershipService } from "./memberships/membership-service.js";
 import { PrismaMembershipRepository } from "./memberships/prisma-membership-repository.js";
 import { PrismaInvitationRepository } from "./invitations/prisma-invitation-repository.js";
+import { InvitationService } from "./invitations/invitation-service.js";
 import { DepositService } from "./deposits/deposit-service.js";
 import { PrismaDepositRepository } from "./deposits/prisma-deposit-repository.js";
 import { PrismaPendingDepositRepository } from "./deposits/prisma-pending-deposit-repository.js";
@@ -89,6 +90,13 @@ const poolService = new PoolService({
   invitationRepository,
 });
 const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
+const invitationService = new InvitationService({
+  invitationRepository,
+  poolRepository,
+  membershipRepository,
+  userRepository,
+  notificationService,
+});
 const depositService = new DepositService({
   poolRepository,
   membershipRepository,
@@ -167,6 +175,7 @@ const app = createApp({
   analyticsService,
   notificationService,
   activityService,
+  invitationService,
   jwtSecret: env.JWT_SECRET,
   paymentProvider,
 });

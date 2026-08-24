@@ -24,6 +24,8 @@ import type { NotificationService } from "./notifications/notification-service.j
 import { createNotificationsRouter } from "./notifications/router.js";
 import type { ActivityService } from "./activity/activity-service.js";
 import { createActivityRouter } from "./activity/router.js";
+import type { InvitationService } from "./invitations/invitation-service.js";
+import { createInvitationsRouter, createMyInvitationsRouter } from "./invitations/router.js";
 
 export interface AppDependencies {
   authService: AuthService;
@@ -38,6 +40,9 @@ export interface AppDependencies {
   analyticsService: AnalyticsService;
   notificationService: NotificationService;
   activityService: ActivityService;
+  // Optional so every other test file's createApp call is unaffected (same
+  // pattern as paymentProvider below) — only mounted when provided.
+  invitationService?: InvitationService;
   jwtSecret: string;
   // Deposit-confirmation webhook (ticket #15) — optional so every other
   // test file's createApp call is unaffected; only mounted when provided.
@@ -57,6 +62,7 @@ export function createApp({
   analyticsService,
   notificationService,
   activityService,
+  invitationService,
   jwtSecret,
   paymentProvider,
 }: AppDependencies): Express {
@@ -83,6 +89,10 @@ export function createApp({
   app.use("/analytics", createAnalyticsRouter(analyticsService, jwtSecret));
   app.use("/notifications", createNotificationsRouter(notificationService, jwtSecret));
   app.use("/activity", createActivityRouter(activityService, jwtSecret));
+  if (invitationService) {
+    app.use("/pools", createInvitationsRouter(invitationService, jwtSecret));
+    app.use("/invitations", createMyInvitationsRouter(invitationService, jwtSecret));
+  }
   if (paymentProvider) {
     app.use("/webhooks", createDepositWebhookRouter(depositService, paymentProvider));
   }

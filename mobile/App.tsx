@@ -38,9 +38,13 @@ import { MembersScreen } from './src/screens/MembersScreen';
 import { VerifyIdentityScreen } from './src/screens/VerifyIdentityScreen';
 import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
+import { InvitationsScreen } from './src/screens/InvitationsScreen';
+import { InviteByPhoneScreen } from './src/screens/InviteByPhoneScreen';
+import { InvitationScreen } from './src/screens/InvitationScreen';
 import { HomeTabIcon, ActivityTabIcon, AlertsTabIcon, ProfileTabIcon } from './src/components/TabBarIcons';
 import { colors, fontFamily } from './src/theme/tokens';
 import type { ClosureRefund } from './src/api/closureClient';
+import type { InvitationForInvitee } from './src/api/invitationsClient';
 import {
   clearSession,
   clearStaleDataFromPriorInstall,
@@ -89,6 +93,9 @@ type AppStackParamList = {
   Vote: { pool: Pool };
   Members: { pool: Pool };
   Analytics: undefined;
+  Invitations: { pool: Pool };
+  InviteByPhone: { pool: Pool };
+  InvitationDetail: { invitationForInvitee: InvitationForInvitee };
 };
 
 type AppTabParamList = {
@@ -195,6 +202,14 @@ function HomeRoute({ navigation }: HomeRouteProps) {
             navigation.navigate('Members', { pool: organizerControlsPool });
             setOrganizerControlsPool(null);
           }}
+          onManageInvitations={
+            organizerControlsPool.type === 'CUSTOM_SPLIT'
+              ? () => {
+                  navigation.navigate('Invitations', { pool: organizerControlsPool });
+                  setOrganizerControlsPool(null);
+                }
+              : undefined
+          }
           onClosePool={() => {
             navigation.navigate('CloseConfirm', { pool: organizerControlsPool });
             setOrganizerControlsPool(null);
@@ -218,9 +233,25 @@ function ProfileRoute() {
   );
 }
 
-function AlertsRoute() {
+// AlertsRoute lives inside AppTab but navigates to an AppStack sibling
+// (InvitationDetail) when an INVITATION_RECEIVED notification is tapped —
+// same composite-props reasoning as HomeRouteProps above.
+type AlertsRouteProps = CompositeScreenProps<
+  BottomTabScreenProps<AppTabParamList, 'Alerts'>,
+  NativeStackScreenProps<AppStackParamList>
+>;
+
+function AlertsRoute({ navigation }: AlertsRouteProps) {
   const { session, setUnreadAlertsCount } = useSessionContext();
-  return <AlertsScreen session={session} onUnreadCountChange={setUnreadAlertsCount} />;
+  return (
+    <AlertsScreen
+      session={session}
+      onUnreadCountChange={setUnreadAlertsCount}
+      onOpenInvitation={(invitationForInvitee) =>
+        navigation.navigate('InvitationDetail', { invitationForInvitee })
+      }
+    />
+  );
 }
 
 function ActivityRoute() {
@@ -386,6 +417,14 @@ function PoolDetailRoute({
             navigation.navigate('Members', { pool });
             setOrganizerControlsOpen(false);
           }}
+          onManageInvitations={
+            pool.type === 'CUSTOM_SPLIT'
+              ? () => {
+                  navigation.navigate('Invitations', { pool });
+                  setOrganizerControlsOpen(false);
+                }
+              : undefined
+          }
           onClosePool={() => {
             navigation.navigate('CloseConfirm', { pool });
             setOrganizerControlsOpen(false);
@@ -492,6 +531,53 @@ function MembersRoute({ route, navigation }: NativeStackScreenProps<AppStackPara
   const { session } = useSessionContext();
   return (
     <MembersScreen session={session} pool={route.params.pool} onCancel={() => navigation.goBack()} />
+  );
+}
+
+function InvitationsRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'Invitations'>) {
+  const { session } = useSessionContext();
+  const pool = route.params.pool;
+  return (
+    <InvitationsScreen
+      session={session}
+      pool={pool}
+      onInvite={() => navigation.navigate('InviteByPhone', { pool })}
+      onCancel={() => navigation.goBack()}
+    />
+  );
+}
+
+function InviteByPhoneRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'InviteByPhone'>) {
+  const { session } = useSessionContext();
+  return (
+    <InviteByPhoneScreen
+      session={session}
+      pool={route.params.pool}
+      onSent={() => navigation.goBack()}
+      onCancel={() => navigation.goBack()}
+    />
+  );
+}
+
+function InvitationDetailRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'InvitationDetail'>) {
+  const { session } = useSessionContext();
+  const invitationForInvitee = route.params.invitationForInvitee;
+  return (
+    <InvitationScreen
+      session={session}
+      invitationForInvitee={invitationForInvitee}
+      onPay={() => navigation.navigate('Deposit', { pool: invitationForInvitee.pool })}
+      onCancel={() => navigation.goBack()}
+    />
   );
 }
 
@@ -705,6 +791,9 @@ export default function App() {
               <AppStack.Screen name="Vote" component={VoteRoute} />
               <AppStack.Screen name="Members" component={MembersRoute} />
               <AppStack.Screen name="Analytics" component={AnalyticsRoute} />
+              <AppStack.Screen name="Invitations" component={InvitationsRoute} />
+              <AppStack.Screen name="InviteByPhone" component={InviteByPhoneRoute} />
+              <AppStack.Screen name="InvitationDetail" component={InvitationDetailRoute} />
             </AppStack.Navigator>
           </SessionContext.Provider>
         )}
