@@ -19,6 +19,7 @@ const STATUS_LABEL: Record<SentInvitation["invitation"]["state"], string> = {
   PAID: "Paid",
   CANCELLED: "Cancelled",
   EXPIRED: "Expired",
+  VOIDED: "Voided",
 };
 
 const STATUS_STYLE: Record<SentInvitation["invitation"]["state"], { bg: string; text: string }> = {
@@ -26,6 +27,9 @@ const STATUS_STYLE: Record<SentInvitation["invitation"]["state"], { bg: string; 
   PAID: { bg: colors.green100, text: colors.green600 },
   CANCELLED: { bg: colors.ink100, text: colors.ink600 },
   EXPIRED: { bg: colors.danger100, text: colors.danger600 },
+  // Same neutral treatment as CANCELLED — voided-by-Lock is an organizer
+  // action closing the Invitation out before payment, not a failure state.
+  VOIDED: { bg: colors.ink100, text: colors.ink600 },
 };
 
 function StatusPill({ state }: { state: SentInvitation["invitation"]["state"] }) {

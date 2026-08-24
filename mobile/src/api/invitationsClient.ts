@@ -4,7 +4,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
 
 export class InvitationsApiError extends Error {}
 
-export type InvitationState = "PENDING" | "PAID" | "CANCELLED" | "EXPIRED";
+export type InvitationState = "PENDING" | "PAID" | "CANCELLED" | "EXPIRED" | "VOIDED";
 
 export type InvitationExpiryPreset = "24h" | "3d" | "7d";
 

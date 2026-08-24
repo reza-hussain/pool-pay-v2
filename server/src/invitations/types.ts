@@ -1,4 +1,4 @@
-export type InvitationState = "PENDING" | "PAID" | "CANCELLED" | "EXPIRED";
+export type InvitationState = "PENDING" | "PAID" | "CANCELLED" | "EXPIRED" | "VOIDED";
 
 // Small fixed set the Organizer picks from when sending an Invitation
 // (ticket #62) — exact values are implementation's choice per the issue.
@@ -57,6 +57,13 @@ export interface InvitationRepository {
   // confirming concurrently can't be clobbered back to CANCELLED — throws
   // InvitationNotCancellableError if the state has already moved on.
   markCancelled(id: string): Promise<Invitation>;
+  // Locking a Custom Split Pool voids every Invitation still PENDING on it
+  // (ticket #63) — a deferred Deposit that would otherwise inject money the
+  // Locked-state totals never accounted for. Conditional on state the same
+  // way markCancelled is: a payment confirming concurrently on one of these
+  // rows wins, and only the rows that actually flipped are returned, so the
+  // caller notifies exactly the invitees who were actually voided.
+  voidPendingByPool(poolId: string): Promise<Invitation[]>;
   // PENDING Invitations across every Pool for one invitee (ticket #60) — the
   // invitee's own list of Invitations still worth opening. Stays PENDING
   // even past expiresAt (lazy expiry, same as OtpRequest — no state
@@ -172,5 +179,15 @@ export class InvitationLinkNotFoundError extends Error {
   constructor() {
     super("This Invitation link isn't valid for your account");
     this.name = "InvitationLinkNotFoundError";
+  }
+}
+
+// Mirrors PoolNotAcceptingDepositsError on the Deposit side (ticket #63) —
+// a Locked (or Closed/Expired) Pool can't take on a new deferred Deposit
+// any more than it can take a Deposit directly.
+export class PoolNotAcceptingInvitationsError extends Error {
+  constructor() {
+    super("This Pool is not accepting new Invitations");
+    this.name = "PoolNotAcceptingInvitationsError";
   }
 }

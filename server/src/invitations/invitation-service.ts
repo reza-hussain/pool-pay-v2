@@ -18,6 +18,7 @@ import {
   InviteeNotRegisteredError,
   isInvitationExpired,
   OrganizerNotAMemberError,
+  PoolNotAcceptingInvitationsError,
   type Invitation,
   type InvitationExpiryPreset,
   type InvitationRepository,
@@ -87,6 +88,9 @@ export class InvitationService {
     }
     if (pool.type !== "CUSTOM_SPLIT") {
       throw new NotCustomSplitPoolError();
+    }
+    if (pool.state !== "ACTIVE") {
+      throw new PoolNotAcceptingInvitationsError();
     }
     if (!Number.isInteger(assignedAmountPaise) || assignedAmountPaise <= 0) {
       throw new InvalidInvitationAmountError();

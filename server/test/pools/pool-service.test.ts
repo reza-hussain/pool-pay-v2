@@ -469,6 +469,110 @@ describe("PoolService.lockPool", () => {
     });
     expect(await notificationRepository.listByUser(ORGANIZER_ID)).toHaveLength(0);
   });
+
+  it("voids every PENDING Invitation on a Custom Split Pool and notifies each invitee", async () => {
+    const { poolService, invitationRepository, notificationRepository } = makePoolService();
+    const pool = await poolService.createPool(ORGANIZER_ID, {
+      name: "Munnar Trip",
+      type: "CUSTOM_SPLIT",
+      organizerShareAmountPaise: 100000,
+    });
+    // The Organizer's own self-Invitation from Pool creation — pay it off so
+    // it isn't itself still PENDING for this test.
+    const [selfInvitation] = await invitationRepository.listByPool(pool.id);
+    await invitationRepository.markPaid(selfInvitation.id);
+
+    const inviteeA = await invitationRepository.create({
+      poolId: pool.id,
+      inviteeUserId: "user_invitee_a",
+      assignedAmountPaise: 50000,
+      token: "token_a",
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+    const inviteeB = await invitationRepository.create({
+      poolId: pool.id,
+      inviteeUserId: "user_invitee_b",
+      assignedAmountPaise: 75000,
+      token: "token_b",
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+
+    await poolService.lockPool(pool.id, ORGANIZER_ID);
+
+    expect((await invitationRepository.findById(inviteeA.id))?.state).toBe("VOIDED");
+    expect((await invitationRepository.findById(inviteeB.id))?.state).toBe("VOIDED");
+
+    const notificationsA = await notificationRepository.listByUser("user_invitee_a");
+    expect(notificationsA).toHaveLength(1);
+    expect(notificationsA[0]).toMatchObject({
+      poolId: pool.id,
+      type: "INVITATION_VOIDED",
+      message: "Your Invitation to Munnar Trip was voided because the Pool was locked",
+    });
+    const notificationsB = await notificationRepository.listByUser("user_invitee_b");
+    expect(notificationsB).toHaveLength(1);
+    expect(notificationsB[0].type).toBe("INVITATION_VOIDED");
+  });
+
+  it("leaves a PAID, CANCELLED, or EXPIRED Invitation untouched when locking", async () => {
+    const { poolService, invitationRepository, notificationRepository } = makePoolService();
+    const pool = await poolService.createPool(ORGANIZER_ID, {
+      name: "Munnar Trip",
+      type: "CUSTOM_SPLIT",
+      organizerShareAmountPaise: 100000,
+    });
+    const [selfInvitation] = await invitationRepository.listByPool(pool.id);
+    await invitationRepository.markPaid(selfInvitation.id);
+
+    const paid = await invitationRepository.create({
+      poolId: pool.id,
+      inviteeUserId: "user_paid",
+      assignedAmountPaise: 10000,
+      token: "token_paid",
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+    await invitationRepository.markPaid(paid.id);
+    const cancelled = await invitationRepository.create({
+      poolId: pool.id,
+      inviteeUserId: "user_cancelled",
+      assignedAmountPaise: 10000,
+      token: "token_cancelled",
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+    await invitationRepository.markCancelled(cancelled.id);
+    const expired = await invitationRepository.create({
+      poolId: pool.id,
+      inviteeUserId: "user_expired",
+      assignedAmountPaise: 10000,
+      token: "token_expired",
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+    await invitationRepository.markExpired(expired.id);
+
+    await poolService.lockPool(pool.id, ORGANIZER_ID);
+
+    expect((await invitationRepository.findById(paid.id))?.state).toBe("PAID");
+    expect((await invitationRepository.findById(cancelled.id))?.state).toBe("CANCELLED");
+    expect((await invitationRepository.findById(expired.id))?.state).toBe("EXPIRED");
+    expect(await notificationRepository.listByUser("user_paid")).toHaveLength(0);
+    expect(await notificationRepository.listByUser("user_cancelled")).toHaveLength(0);
+    expect(await notificationRepository.listByUser("user_expired")).toHaveLength(0);
+  });
+
+  it("does not void a still-PENDING Invitation when locking a non-Custom-Split Pool", async () => {
+    const { poolService, invitationRepository } = makePoolService();
+    const pool = await poolService.createPool(ORGANIZER_ID, {
+      name: "Goa Trip",
+      type: "EQUAL_SPLIT",
+      perPersonAmountPaise: 100000,
+    });
+    const [selfInvitation] = await invitationRepository.listByPool(pool.id);
+    expect(selfInvitation.state).toBe("PENDING");
+
+    await poolService.lockPool(pool.id, ORGANIZER_ID);
+
+    expect((await invitationRepository.findById(selfInvitation.id))?.state).toBe("PENDING");
+  });
 });
 
 describe("PoolService.listPoolsForUser", () => {
