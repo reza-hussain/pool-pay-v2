@@ -181,6 +181,22 @@ describe("DepositService.createDepositIntent — Custom Split Pool (ticket #58)"
       depositService.createDepositIntent(customSplitPool.id, ORGANIZER_ID),
     ).rejects.toThrow(InvitationNotFoundError);
   });
+
+  it("throws InvitationNotFoundError once the Invitation has been cancelled (ticket #62)", async () => {
+    const { depositService, invitationRepository, customSplitPool } = await makeService();
+    const invitation = await invitationRepository.create({
+      poolId: customSplitPool.id,
+      inviteeUserId: ORGANIZER_ID,
+      assignedAmountPaise: 30000,
+      token: "token_1",
+      expiresAt: futureDate(),
+    });
+    await invitationRepository.markCancelled(invitation.id);
+
+    await expect(
+      depositService.createDepositIntent(customSplitPool.id, ORGANIZER_ID),
+    ).rejects.toThrow(InvitationNotFoundError);
+  });
 });
 
 describe("DepositService.confirmDeposit", () => {
