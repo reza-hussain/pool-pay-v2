@@ -173,4 +173,34 @@ describe("PrismaInvitationRepository", () => {
 
     expect(all.map((i) => i.id).sort()).toEqual([pending.id, paidInvitation.id].sort());
   });
+
+  it("finds an Invitation by id, or returns null", async () => {
+    const repo = new PrismaInvitationRepository(prisma);
+    const invitation = await repo.create({
+      poolId,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 30000,
+      token: "token_1",
+      expiresAt: futureDate(),
+    });
+
+    await expect(repo.findById(invitation.id)).resolves.toMatchObject({ assignedAmountPaise: 30000 });
+    await expect(repo.findById("does-not-exist")).resolves.toBeNull();
+  });
+
+  it("marks an Invitation cancelled", async () => {
+    const repo = new PrismaInvitationRepository(prisma);
+    const invitation = await repo.create({
+      poolId,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 30000,
+      token: "token_1",
+      expiresAt: futureDate(),
+    });
+
+    const cancelled = await repo.markCancelled(invitation.id);
+
+    expect(cancelled.state).toBe("CANCELLED");
+    await expect(repo.findPendingByPoolAndInvitee(poolId, organizerId)).resolves.toBeNull();
+  });
 });

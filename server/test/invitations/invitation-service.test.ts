@@ -10,7 +10,10 @@ import { NotCustomSplitPoolError, NotPoolOrganizerError } from "../../src/pools/
 import { PoolNotFoundError } from "../../src/memberships/types.js";
 import {
   InvalidInvitationAmountError,
+  InvalidInvitationExpiryPresetError,
   InvitationAlreadyPendingError,
+  InvitationNotCancellableError,
+  InvitationRecordNotFoundError,
   InviteeAlreadyMemberError,
   InviteeNotRegisteredError,
   OrganizerNotAMemberError,
@@ -159,6 +162,37 @@ describe("InvitationService.sendInvitation", () => {
     ).rejects.toThrow(InvitationAlreadyPendingError);
   });
 
+  it("applies the given expiry preset to expiresAt", async () => {
+    const clock = new Date("2026-01-01T00:00:00Z");
+    const { invitationService, pool } = await makeService(() => clock);
+
+    const invitation = await invitationService.sendInvitation(
+      ORGANIZER_ID,
+      pool.id,
+      INVITEE_PHONE,
+      250000,
+      "24h",
+    );
+
+    expect(invitation.expiresAt.getTime()).toBe(clock.getTime() + 24 * 60 * 60 * 1000);
+  });
+
+  it("defaults to a 7-day expiry when no preset is given", async () => {
+    const clock = new Date("2026-01-01T00:00:00Z");
+    const { invitationService, pool } = await makeService(() => clock);
+
+    const invitation = await invitationService.sendInvitation(ORGANIZER_ID, pool.id, INVITEE_PHONE, 250000);
+
+    expect(invitation.expiresAt.getTime()).toBe(clock.getTime() + 7 * 24 * 60 * 60 * 1000);
+  });
+
+  it("rejects an invalid expiry preset", async () => {
+    const { invitationService, pool } = await makeService();
+    await expect(
+      invitationService.sendInvitation(ORGANIZER_ID, pool.id, INVITEE_PHONE, 250000, "9d" as never),
+    ).rejects.toThrow(InvalidInvitationExpiryPresetError);
+  });
+
   it("allows a fresh Invitation once the prior one has lazily expired", async () => {
     let clock = new Date("2026-01-01T00:00:00Z");
     const { invitationService, pool } = await makeService(() => clock);
@@ -227,5 +261,80 @@ describe("InvitationService.listSentInvitations", () => {
     await expect(invitationService.listSentInvitations("does-not-exist", ORGANIZER_ID)).rejects.toThrow(
       PoolNotFoundError,
     );
+  });
+});
+
+describe("InvitationService.cancelInvitation", () => {
+  it("cancels a pending Invitation", async () => {
+    const { invitationService, pool } = await makeService();
+    const invitation = await invitationService.sendInvitation(ORGANIZER_ID, pool.id, INVITEE_PHONE, 250000);
+
+    const cancelled = await invitationService.cancelInvitation(ORGANIZER_ID, pool.id, invitation.id);
+
+    expect(cancelled.state).toBe("CANCELLED");
+  });
+
+  it("throws PoolNotFoundError for an unknown pool", async () => {
+    const { invitationService } = await makeService();
+    await expect(
+      invitationService.cancelInvitation(ORGANIZER_ID, "does-not-exist", "invitation_1"),
+    ).rejects.toThrow(PoolNotFoundError);
+  });
+
+  it("rejects a non-Organizer requester", async () => {
+    const { invitationService, pool } = await makeService();
+    const invitation = await invitationService.sendInvitation(ORGANIZER_ID, pool.id, INVITEE_PHONE, 250000);
+
+    await expect(
+      invitationService.cancelInvitation("user_stranger", pool.id, invitation.id),
+    ).rejects.toThrow(NotPoolOrganizerError);
+  });
+
+  it("throws InvitationRecordNotFoundError for an unknown invitation id", async () => {
+    const { invitationService, pool } = await makeService();
+    await expect(
+      invitationService.cancelInvitation(ORGANIZER_ID, pool.id, "does-not-exist"),
+    ).rejects.toThrow(InvitationRecordNotFoundError);
+  });
+
+  it("throws InvitationRecordNotFoundError for an invitation belonging to a different pool", async () => {
+    const { invitationService, pool, poolRepository, membershipRepository } = await makeService();
+    const otherPool = await poolRepository.create(ORGANIZER_ID, {
+      name: "Other Pool",
+      type: "CUSTOM_SPLIT",
+      perPersonAmountPaise: null,
+      joinCode: "888888",
+    });
+    await membershipRepository.create(otherPool.id, ORGANIZER_ID, "ORGANIZER");
+    const invitation = await invitationService.sendInvitation(
+      ORGANIZER_ID,
+      otherPool.id,
+      INVITEE_PHONE,
+      250000,
+    );
+
+    await expect(
+      invitationService.cancelInvitation(ORGANIZER_ID, pool.id, invitation.id),
+    ).rejects.toThrow(InvitationRecordNotFoundError);
+  });
+
+  it("throws InvitationNotCancellableError for an already-paid Invitation", async () => {
+    const { invitationService, pool, invitationRepository } = await makeService();
+    const invitation = await invitationService.sendInvitation(ORGANIZER_ID, pool.id, INVITEE_PHONE, 250000);
+    await invitationRepository.markPaid(invitation.id);
+
+    await expect(
+      invitationService.cancelInvitation(ORGANIZER_ID, pool.id, invitation.id),
+    ).rejects.toThrow(InvitationNotCancellableError);
+  });
+
+  it("throws InvitationNotCancellableError for an already-cancelled Invitation", async () => {
+    const { invitationService, pool } = await makeService();
+    const invitation = await invitationService.sendInvitation(ORGANIZER_ID, pool.id, INVITEE_PHONE, 250000);
+    await invitationService.cancelInvitation(ORGANIZER_ID, pool.id, invitation.id);
+
+    await expect(
+      invitationService.cancelInvitation(ORGANIZER_ID, pool.id, invitation.id),
+    ).rejects.toThrow(InvitationNotCancellableError);
   });
 });

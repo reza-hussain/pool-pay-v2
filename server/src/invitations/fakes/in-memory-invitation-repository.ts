@@ -48,6 +48,19 @@ export class InMemoryInvitationRepository implements InvitationRepository {
     return invitation;
   }
 
+  async markCancelled(id: string): Promise<Invitation> {
+    const invitation = this.invitations.find((i) => i.id === id);
+    if (!invitation) {
+      throw new Error(`Invitation ${id} not found`);
+    }
+    invitation.state = "CANCELLED";
+    return invitation;
+  }
+
+  async findById(id: string): Promise<Invitation | null> {
+    return this.invitations.find((i) => i.id === id) ?? null;
+  }
+
   async listPendingByInvitee(userId: string): Promise<Invitation[]> {
     return this.invitations
       .filter((i) => i.inviteeUserId === userId && i.state === "PENDING")

@@ -6,7 +6,10 @@ import { PoolNotFoundError } from "../memberships/types.js";
 import { NotCustomSplitPoolError, NotPoolOrganizerError } from "../pools/types.js";
 import {
   InvalidInvitationAmountError,
+  InvalidInvitationExpiryPresetError,
   InvitationAlreadyPendingError,
+  InvitationNotCancellableError,
+  InvitationRecordNotFoundError,
   InviteeAlreadyMemberError,
   InviteeNotRegisteredError,
   OrganizerNotAMemberError,
@@ -15,6 +18,7 @@ import {
 const sendInvitationSchema = z.object({
   phoneNumber: z.string(),
   assignedAmountPaise: z.number(),
+  expiryPreset: z.enum(["24h", "3d", "7d"]).optional(),
 });
 
 // Mounted at /pools — Organizer-only actions and views scoped to one Pool.
@@ -37,6 +41,7 @@ export function createInvitationsRouter(invitationService: InvitationService, jw
           req.params.poolId,
           parsed.data.phoneNumber,
           parsed.data.assignedAmountPaise,
+          parsed.data.expiryPreset,
         );
         res.status(201).json({ invitation });
       } catch (error) {
@@ -46,6 +51,7 @@ export function createInvitationsRouter(invitationService: InvitationService, jw
         }
         if (
           error instanceof InvalidInvitationAmountError ||
+          error instanceof InvalidInvitationExpiryPresetError ||
           error instanceof NotCustomSplitPoolError ||
           error instanceof InviteeAlreadyMemberError ||
           error instanceof InvitationAlreadyPendingError
@@ -75,6 +81,35 @@ export function createInvitationsRouter(invitationService: InvitationService, jw
       } catch (error) {
         if (error instanceof PoolNotFoundError) {
           res.status(404).json({ error: error.message });
+          return;
+        }
+        if (error instanceof NotPoolOrganizerError) {
+          res.status(403).json({ error: error.message });
+          return;
+        }
+        next(error);
+      }
+    },
+  );
+
+  router.delete(
+    "/:poolId/invitations/:invitationId",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      try {
+        await invitationService.cancelInvitation(
+          req.userId as string,
+          req.params.poolId,
+          req.params.invitationId,
+        );
+        res.status(204).send();
+      } catch (error) {
+        if (error instanceof PoolNotFoundError || error instanceof InvitationRecordNotFoundError) {
+          res.status(404).json({ error: error.message });
+          return;
+        }
+        if (error instanceof InvitationNotCancellableError) {
+          res.status(400).json({ error: error.message });
           return;
         }
         if (error instanceof NotPoolOrganizerError) {
