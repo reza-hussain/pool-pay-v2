@@ -7,6 +7,7 @@ import { NotCustomSplitPoolError, NotPoolOrganizerError } from "../pools/types.j
 import {
   InvalidInvitationAmountError,
   InvitationAlreadyPendingError,
+  InvitationLinkNotFoundError,
   InviteeAlreadyMemberError,
   InviteeNotRegisteredError,
   OrganizerNotAMemberError,
@@ -99,6 +100,25 @@ export function createMyInvitationsRouter(invitationService: InvitationService, 
       const invitations = await invitationService.listMyInvitations(req.userId as string);
       res.status(200).json({ invitations });
     } catch (error) {
+      next(error);
+    }
+  });
+
+  // Resolves the shareable Invitation link (ticket #61). 404 for both an
+  // unknown token and one that names a different signed-in user — see
+  // InvitationLinkNotFoundError.
+  router.get("/token/:token", requireAuth(jwtSecret), async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const invitationForInvitee = await invitationService.getInvitationByToken(
+        req.params.token,
+        req.userId as string,
+      );
+      res.status(200).json({ invitationForInvitee });
+    } catch (error) {
+      if (error instanceof InvitationLinkNotFoundError) {
+        res.status(404).json({ error: error.message });
+        return;
+      }
       next(error);
     }
   });

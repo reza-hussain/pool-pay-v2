@@ -173,4 +173,18 @@ describe("PrismaInvitationRepository", () => {
 
     expect(all.map((i) => i.id).sort()).toEqual([pending.id, paidInvitation.id].sort());
   });
+
+  it("finds an Invitation by its token, or returns null", async () => {
+    const repo = new PrismaInvitationRepository(prisma);
+    const invitation = await repo.create({
+      poolId,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 30000,
+      token: "token_unique_1",
+      expiresAt: futureDate(),
+    });
+
+    await expect(repo.findByToken("token_unique_1")).resolves.toMatchObject({ id: invitation.id });
+    await expect(repo.findByToken("no-such-token")).resolves.toBeNull();
+  });
 });
