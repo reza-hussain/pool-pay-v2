@@ -75,7 +75,12 @@ export function DepositScreen({
     );
   }
 
-  if (pool.type === "EQUAL_SPLIT") {
+  if (pool.type === "EQUAL_SPLIT" || pool.type === "CUSTOM_SPLIT") {
+    // Custom Split's fixed amount is per-Invitation, not on the Pool itself —
+    // intent.fixedAmountPaise carries it for both types (deposit-service.ts
+    // resolves it server-side); fall back to the Pool's own field only while
+    // the intent is still loading, which is only ever meaningful for Equal Split.
+    const fixedAmountPaise = intent?.fixedAmountPaise ?? pool.perPersonAmountPaise ?? 0;
     return (
       <Screen backgroundColor={colors.ink900}>
       <View style={styles.darkContainer}>
@@ -99,14 +104,14 @@ export function DepositScreen({
 
         <View style={styles.lockedBlock}>
           <Text style={styles.lockedCaption}>Amount locked for this Pool</Text>
-          <Text style={styles.lockedAmount}>{paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)}</Text>
+          <Text style={styles.lockedAmount}>{paiseToRupeeLabel(fixedAmountPaise)}</Text>
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Pressable
           style={styles.primaryButton}
-          onPress={() => confirmDeposit(pool.perPersonAmountPaise ?? 0)}
+          onPress={() => confirmDeposit(fixedAmountPaise)}
           disabled={loading || !intent}
         >
           {loading ? (

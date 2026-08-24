@@ -75,7 +75,11 @@ type AppStackParamList = {
   Invite: { pool: Pool };
   JoinPool: undefined;
   PoolDetail: { pool: Pool };
-  Deposit: { pool: Pool };
+  // thenInvite: paying unlocks the Dashboard for good (CONTEXT.md) — routed
+  // straight into Add Members on success, whether this Deposit is the
+  // Organizer's own first share (from CreatePool's Pay Now, or from the
+  // Awaiting Payment Dashboard's Pay My Share) or a regular one.
+  Deposit: { pool: Pool; thenInvite?: boolean };
   Spend: { pool: Pool };
   Reimburse: { pool: Pool };
   Ledger: { pool: Pool };
@@ -301,9 +305,17 @@ function CreatePoolRoute({ navigation }: NativeStackScreenProps<AppStackParamLis
   return (
     <CreatePoolScreen
       session={session}
-      onCreated={(pool) => {
+      onCreated={(pool, payNow) => {
         setPools((prev) => [pool, ...prev]);
-        navigation.replace('Invite', { pool });
+        // Pool creation always succeeds immediately, for both types
+        // (ADR-0017) — Pay Now pays the Organizer's own share inline before
+        // Invite; Pay Later lands on the locked Awaiting Payment Dashboard
+        // instead of routing straight to Invite.
+        if (payNow) {
+          navigation.replace('Deposit', { pool, thenInvite: true });
+        } else {
+          navigation.replace('PoolDetail', { pool });
+        }
       }}
       onCancel={() => navigation.goBack()}
     />
@@ -340,6 +352,7 @@ function PoolDetailRoute({
         pool={pool}
         onCancel={() => navigation.goBack()}
         onDeposit={() => navigation.navigate('Deposit', { pool })}
+        onPayOrganizerShare={() => navigation.replace('Deposit', { pool, thenInvite: true })}
         onViewLedger={() => navigation.navigate('Ledger', { pool })}
         onOpenOrganizerControls={() => setOrganizerControlsOpen(true)}
         onVoteToRefund={() => navigation.navigate('Vote', { pool })}
@@ -377,11 +390,12 @@ function PoolDetailRoute({
 
 function DepositRoute({ route, navigation }: NativeStackScreenProps<AppStackParamList, 'Deposit'>) {
   const { session } = useSessionContext();
+  const { pool, thenInvite } = route.params;
   return (
     <DepositScreen
       session={session}
-      pool={route.params.pool}
-      onDone={() => navigation.goBack()}
+      pool={pool}
+      onDone={() => (thenInvite ? navigation.replace('Invite', { pool }) : navigation.goBack())}
       onCancel={() => navigation.goBack()}
     />
   );

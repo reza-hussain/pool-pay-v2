@@ -1,13 +1,24 @@
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
 import { listMembers } from "../api/membersClient";
 import { usePolledLedger } from "../api/ledgerClient";
 import { EntryRow } from "./LedgerScreen";
+import { AwaitingPaymentScreen } from "./AwaitingPaymentScreen";
 import { Screen } from "../components/Screen";
 import { paiseToRupeeLabel } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
+
+// A Pool never returns to Awaiting Payment once unlocked (CONTEXT.md) — the
+// gate only ever applies to Equal Split/Custom Split, and only to the
+// Organizer, and only until they have a Membership (ADR-0016/0017).
+function organizerAwaitsOwnPayment(pool: Pool, sessionUserId: string): boolean {
+  return (
+    pool.organizerId === sessionUserId &&
+    (pool.type === "EQUAL_SPLIT" || pool.type === "CUSTOM_SPLIT")
+  );
+}
 
 // Only the most recent entries are previewed here — "See all" hands off to
 // the full (already-built) LedgerScreen for the complete, scrollable log.
@@ -18,6 +29,7 @@ export function PoolDetailScreen({
   pool,
   onCancel,
   onDeposit,
+  onPayOrganizerShare,
   onViewLedger,
   onOpenOrganizerControls,
   onVoteToRefund,
@@ -26,30 +38,59 @@ export function PoolDetailScreen({
   pool: Pool;
   onCancel: () => void;
   onDeposit: () => void;
+  // Only relevant while this Pool is gated Awaiting Payment (see below) — the
+  // Organizer's own pay-your-share action, distinct from a regular Deposit.
+  onPayOrganizerShare: () => void;
   onViewLedger: () => void;
   onOpenOrganizerControls: () => void;
   onVoteToRefund: () => void;
 }) {
   const isOrganizer = pool.organizerId === session.user.id;
-  const [memberCount, setMemberCount] = useState<number | null>(null);
+  const gateable = organizerAwaitsOwnPayment(pool, session.user.id);
+  // Membership presence is the single source of truth for whether the
+  // Organizer has paid their own share (ADR-0016/0017) — null while the
+  // first fetch is still in flight, so a gateable Pool never briefly flashes
+  // its normal Dashboard before the check resolves.
+  const [members, setMembers] = useState<Awaited<ReturnType<typeof listMembers>> | null>(null);
   const { entries, error: ledgerError } = usePolledLedger(session.token, pool.id);
 
   useEffect(() => {
     let cancelled = false;
-    // Pool has no memberCount field — derive it from the same members list
-    // MembersScreen already fetches, rather than adding a server field.
     listMembers(session.token, pool.id)
-      .then((members) => {
-        if (!cancelled) setMemberCount(members.length);
+      .then((fetched) => {
+        if (!cancelled) setMembers(fetched);
       })
       .catch(() => {
-        // Non-critical — the rest of the screen still renders without a count.
+        // Non-critical for the normal dashboard (it just renders without a
+        // member count) — but see the gateable-and-still-null case below.
       });
     return () => {
       cancelled = true;
     };
   }, [pool.id, session.token]);
 
+  if (gateable && members === null) {
+    return (
+      <Screen backgroundColor={colors.cream}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color={colors.ink600} />
+        </View>
+      </Screen>
+    );
+  }
+
+  if (gateable && !members!.some((m) => m.userId === pool.organizerId)) {
+    return (
+      <AwaitingPaymentScreen
+        session={session}
+        pool={pool}
+        onPayShare={onPayOrganizerShare}
+        onCancel={onCancel}
+      />
+    );
+  }
+
+  const memberCount = members?.length ?? null;
   const recentEntries = entries.slice(0, RECENT_ENTRIES_LIMIT);
 
   return (
@@ -70,11 +111,12 @@ export function PoolDetailScreen({
 
         <Text style={styles.title}>{pool.name}</Text>
         <Text style={styles.subtitle}>
-          {pool.type === "EQUAL_SPLIT" ? "Equal Split" : "Open Pool"}
+          {pool.type === "EQUAL_SPLIT" ? "Equal Split" : pool.type === "CUSTOM_SPLIT" ? "Custom Split" : "Open Pool"}
           {" · "}
           {isOrganizer ? "You're the Organizer" : "Member"}
           {pool.state === "LOCKED" ? " · Locked" : ""}
           {pool.state === "CLOSED" ? " · Closed" : ""}
+          {pool.state === "EXPIRED" ? " · Expired" : ""}
         </Text>
 
         <View style={styles.statsRow}>
@@ -83,9 +125,13 @@ export function PoolDetailScreen({
             <Text style={styles.statValue}>{memberCount ?? "···"}</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statLabel}>{pool.type === "EQUAL_SPLIT" ? "Per person" : "Share"}</Text>
+            <Text style={styles.statLabel}>{pool.type === "EQUAL_SPLIT" ? "Per person" : "Type"}</Text>
             <Text style={styles.statValue}>
-              {pool.type === "EQUAL_SPLIT" ? paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0) : "Open"}
+              {pool.type === "EQUAL_SPLIT"
+                ? paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)
+                : pool.type === "CUSTOM_SPLIT"
+                  ? "Custom"
+                  : "Open"}
             </Text>
           </View>
         </View>
@@ -129,6 +175,11 @@ export function PoolDetailScreen({
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   container: {
     flex: 1,
     backgroundColor: colors.cream,

@@ -110,6 +110,11 @@ function PoolCard({
               <Text style={styles.lockedPillText}>Locked</Text>
             </View>
           ) : null}
+          {pool.state === "EXPIRED" ? (
+            <View style={styles.lockedPill}>
+              <Text style={styles.lockedPillText}>Expired</Text>
+            </View>
+          ) : null}
           {isOrganizer ? (
             <Pressable
               hitSlop={8}
@@ -127,7 +132,9 @@ function PoolCard({
         <Text style={styles.cardType}>
           {pool.type === "EQUAL_SPLIT"
             ? `Equal Split · ${paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)} / person`
-            : "Open Pool"}
+            : pool.type === "CUSTOM_SPLIT"
+              ? "Custom Split"
+              : "Open Pool"}
         </Text>
         <View style={styles.cardBottomRowRight}>
           {!isOrganizer && pool.state !== "CLOSED" ? (
