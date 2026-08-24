@@ -60,6 +60,17 @@ async function makeApp() {
     .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
   const pool = createRes.body.pool as { id: string };
 
+  // Pay the Organizer's own share so the Pool is unlocked for Add Members
+  // (ADR-0017) — this also means the Organizer contributed 100000, refunded
+  // pro-rata just like any other Member on Closure.
+  const organizerIntentRes = await request(app)
+    .get(`/pools/${pool.id}/deposit-intent`)
+    .set("Authorization", bearerFor(ORGANIZER_ID));
+  await request(app)
+    .post(`/pools/${pool.id}/deposits`)
+    .set("Authorization", bearerFor(ORGANIZER_ID))
+    .send({ depositIntentId: organizerIntentRes.body.intent.id, amountPaise: 100000 });
+
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
   const intentRes = await request(app)
     .get(`/pools/${pool.id}/deposit-intent`)
@@ -85,10 +96,13 @@ describe("GET /pools/:poolId/close/preview", () => {
       .set("Authorization", bearerFor(ORGANIZER_ID));
 
     expect(res.status).toBe(200);
-    expect(res.body.refundTotalPaise).toBe(100000);
-    expect(res.body.refunds).toEqual([
-      { memberId: MEMBER_ID, contributedPaise: 100000, amountPaise: 100000 },
-    ]);
+    expect(res.body.refundTotalPaise).toBe(200000);
+    expect(res.body.refunds).toEqual(
+      expect.arrayContaining([
+        { memberId: MEMBER_ID, contributedPaise: 100000, amountPaise: 100000 },
+        { memberId: ORGANIZER_ID, contributedPaise: 100000, amountPaise: 100000 },
+      ]),
+    );
   });
 
   it("returns 403 for a non-Organizer", async () => {
@@ -118,9 +132,14 @@ describe("POST /pools/:poolId/close", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.pool.state).toBe("CLOSED");
-    expect(res.body.refundTotalPaise).toBe(100000);
-    expect(res.body.refunds).toHaveLength(1);
-    expect(res.body.refunds[0]).toMatchObject({ memberId: MEMBER_ID, amountPaise: 100000 });
+    expect(res.body.refundTotalPaise).toBe(200000);
+    expect(res.body.refunds).toHaveLength(2);
+    expect(res.body.refunds).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ memberId: MEMBER_ID, amountPaise: 100000 }),
+        expect.objectContaining({ memberId: ORGANIZER_ID, amountPaise: 100000 }),
+      ]),
+    );
   });
 
   it("returns 400 when closing an already-Closed Pool", async () => {

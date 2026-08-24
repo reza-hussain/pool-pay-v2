@@ -8,6 +8,7 @@ export function OrganizerControlsSheet({
   onLock,
   onTransferOut,
   onReimburse,
+  onAddMembers,
   onManageMembers,
   onClosePool,
   onClose,
@@ -16,6 +17,9 @@ export function OrganizerControlsSheet({
   onLock: () => Promise<void>;
   onTransferOut: () => void;
   onReimburse: () => void;
+  // Invite Link/Pool Code only exists for Equal Split (CONTEXT.md — Custom
+  // Split doesn't use this mechanism), so this row only ever renders then.
+  onAddMembers: () => void;
   onManageMembers: () => void;
   onClosePool: () => void;
   onClose: () => void;
@@ -70,6 +74,15 @@ export function OrganizerControlsSheet({
                 <Text style={styles.rowDescription}>Pay back a Member who spent out of pocket</Text>
               </View>
             </Pressable>
+
+            {pool.type === "EQUAL_SPLIT" ? (
+              <Pressable style={styles.row} onPress={onAddMembers}>
+                <View style={styles.rowText}>
+                  <Text style={styles.rowTitle}>Add Members</Text>
+                  <Text style={styles.rowDescription}>Share the Pool Code or an invite link</Text>
+                </View>
+              </Pressable>
+            ) : null}
 
             <Pressable style={styles.row} onPress={onManageMembers}>
               <View style={styles.rowText}>

@@ -31,6 +31,14 @@ export class PrismaInvitationRepository implements InvitationRepository {
     });
     return toInvitation(row);
   }
+
+  async markExpired(id: string): Promise<Invitation> {
+    const row = await this.prisma.invitation.update({
+      where: { id },
+      data: { state: "EXPIRED" },
+    });
+    return toInvitation(row);
+  }
 }
 
 function toInvitation(row: {

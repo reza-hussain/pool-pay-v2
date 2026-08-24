@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { MembershipService } from "../../src/memberships/membership-service.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
+import { InMemoryInvitationRepository } from "../../src/invitations/fakes/in-memory-invitation-repository.js";
 import {
   CannotRemoveOrganizerError,
   InvalidJoinCodeError,
   MemberNotFoundError,
+  PoolAwaitingPaymentError,
   PoolClosedError,
   PoolNotFoundError,
 } from "../../src/memberships/types.js";
@@ -17,7 +19,8 @@ const MEMBER_ID = "user_member";
 async function makeService() {
   const poolRepository = new InMemoryPoolRepository();
   const membershipRepository = new InMemoryMembershipRepository();
-  const membershipService = new MembershipService({ poolRepository, membershipRepository });
+  const invitationRepository = new InMemoryInvitationRepository();
+  const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
 
   const pool = await poolRepository.create(ORGANIZER_ID, {
     name: "Goa Trip",
@@ -25,8 +28,12 @@ async function makeService() {
     perPersonAmountPaise: null,
     joinCode: "123456",
   });
+  // OPEN Pool created directly via the repository, bypassing
+  // PoolService.createPool — seed the Organizer's Membership to match what
+  // that would have done, since joining now requires it (ADR-0017).
+  await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
 
-  return { membershipService, poolRepository, membershipRepository, pool };
+  return { membershipService, poolRepository, membershipRepository, invitationRepository, pool };
 }
 
 describe("MembershipService.joinByPoolId", () => {
@@ -83,6 +90,86 @@ describe("MembershipService.joinByCode", () => {
   });
 });
 
+describe("MembershipService — Awaiting Payment gate (ADR-0017)", () => {
+  const OTHER_ORGANIZER_ID = "user_awaiting_organizer";
+
+  async function makePoolAwaitingPayment() {
+    const poolRepository = new InMemoryPoolRepository();
+    const membershipRepository = new InMemoryMembershipRepository();
+    const invitationRepository = new InMemoryInvitationRepository();
+    const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
+
+    const pool = await poolRepository.create(OTHER_ORGANIZER_ID, {
+      name: "Goa Trip",
+      type: "EQUAL_SPLIT",
+      perPersonAmountPaise: 100000,
+      joinCode: "654321",
+    });
+    // No Membership for the Organizer yet — mirrors PoolService.createPool
+    // deferring it behind a self-Invitation (ADR-0017).
+    await invitationRepository.create({
+      poolId: pool.id,
+      inviteeUserId: OTHER_ORGANIZER_ID,
+      assignedAmountPaise: 100000,
+      token: "token_awaiting",
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
+
+    return { membershipService, poolRepository, membershipRepository, invitationRepository, pool };
+  }
+
+  it("rejects joinByPoolId while the Organizer hasn't paid their own share", async () => {
+    const { membershipService, pool } = await makePoolAwaitingPayment();
+
+    await expect(membershipService.joinByPoolId(MEMBER_ID, pool.id)).rejects.toThrow(
+      PoolAwaitingPaymentError,
+    );
+  });
+
+  it("rejects joinByCode the same way", async () => {
+    const { membershipService, pool } = await makePoolAwaitingPayment();
+
+    await expect(membershipService.joinByCode(MEMBER_ID, pool.joinCode)).rejects.toThrow(
+      PoolAwaitingPaymentError,
+    );
+  });
+
+  it("allows joining once the Organizer has a Membership", async () => {
+    const { membershipService, membershipRepository, pool } = await makePoolAwaitingPayment();
+    await membershipRepository.create(pool.id, OTHER_ORGANIZER_ID, "ORGANIZER");
+
+    const membership = await membershipService.joinByPoolId(MEMBER_ID, pool.id);
+
+    expect(membership).toMatchObject({ poolId: pool.id, userId: MEMBER_ID, role: "MEMBER" });
+  });
+
+  it("rejects joining once the self-Invitation has lapsed, lazily marking the Pool EXPIRED", async () => {
+    const poolRepository = new InMemoryPoolRepository();
+    const membershipRepository = new InMemoryMembershipRepository();
+    const invitationRepository = new InMemoryInvitationRepository();
+    const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
+    const pool = await poolRepository.create(OTHER_ORGANIZER_ID, {
+      name: "Abandoned Trip",
+      type: "EQUAL_SPLIT",
+      perPersonAmountPaise: 100000,
+      joinCode: "777777",
+    });
+    await invitationRepository.create({
+      poolId: pool.id,
+      inviteeUserId: OTHER_ORGANIZER_ID,
+      assignedAmountPaise: 100000,
+      token: "token_lapsed",
+      expiresAt: new Date(Date.now() - 60 * 60 * 1000),
+    });
+
+    await expect(membershipService.joinByPoolId(MEMBER_ID, pool.id)).rejects.toThrow(
+      PoolAwaitingPaymentError,
+    );
+
+    expect((await poolRepository.findById(pool.id))!.state).toBe("EXPIRED");
+  });
+});
+
 describe("MembershipService.listMembers", () => {
   it("lists every member of a Pool, including the Organizer", async () => {
     const { membershipService, membershipRepository, pool } = await makeService();
@@ -115,7 +202,9 @@ describe("MembershipService.removeMember", () => {
     const rejoined = await membershipService.joinByPoolId(MEMBER_ID, pool.id);
 
     expect(rejoined).toMatchObject({ poolId: pool.id, userId: MEMBER_ID });
-    expect(await membershipService.listMembers(pool.id)).toHaveLength(1);
+    // 2: the Organizer (seeded in makeService, mirroring PoolService.createPool
+    // for an OPEN Pool) plus the rejoined Member.
+    expect(await membershipService.listMembers(pool.id)).toHaveLength(2);
   });
 
   it("rejects removal by a non-Organizer", async () => {

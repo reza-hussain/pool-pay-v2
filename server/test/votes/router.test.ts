@@ -63,6 +63,16 @@ async function makeApp() {
     .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
   const pool = createRes.body.pool as { id: string };
 
+  // Pay the Organizer's own share so the Pool is unlocked for Add Members
+  // (ADR-0017) — this file exercises refund voting, not the payment gate.
+  const organizerIntentRes = await request(app)
+    .get(`/pools/${pool.id}/deposit-intent`)
+    .set("Authorization", bearerFor(ORGANIZER_ID));
+  await request(app)
+    .post(`/pools/${pool.id}/deposits`)
+    .set("Authorization", bearerFor(ORGANIZER_ID))
+    .send({ depositIntentId: organizerIntentRes.body.intent.id, amountPaise: 100000 });
+
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_A));
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_B));
   const intentRes = await request(app)

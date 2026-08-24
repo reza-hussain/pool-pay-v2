@@ -75,7 +75,12 @@ type AppStackParamList = {
   Invite: { pool: Pool };
   JoinPool: undefined;
   PoolDetail: { pool: Pool };
-  Deposit: { pool: Pool };
+  // isOrganizerShare: this Deposit is the Organizer's own first share (from
+  // CreatePool's Pay Now, or the Awaiting Payment Dashboard's Pay My Share)
+  // rather than a regular ongoing one — paying it unlocks the Dashboard for
+  // good (CONTEXT.md), so success lands there instead of just going back to
+  // wherever this screen was pushed from.
+  Deposit: { pool: Pool; isOrganizerShare?: boolean };
   Spend: { pool: Pool };
   Reimburse: { pool: Pool };
   Ledger: { pool: Pool };
@@ -180,6 +185,10 @@ function HomeRoute({ navigation }: HomeRouteProps) {
           }}
           onReimburse={() => {
             navigation.navigate('Reimburse', { pool: organizerControlsPool });
+            setOrganizerControlsPool(null);
+          }}
+          onAddMembers={() => {
+            navigation.navigate('Invite', { pool: organizerControlsPool });
             setOrganizerControlsPool(null);
           }}
           onManageMembers={() => {
@@ -301,9 +310,17 @@ function CreatePoolRoute({ navigation }: NativeStackScreenProps<AppStackParamLis
   return (
     <CreatePoolScreen
       session={session}
-      onCreated={(pool) => {
+      onCreated={(pool, payNow) => {
         setPools((prev) => [pool, ...prev]);
-        navigation.replace('Invite', { pool });
+        // Pool creation always succeeds immediately, for both types
+        // (ADR-0017). Pay Now pays the Organizer's own share inline, then
+        // both paths land on 'PoolDetail' — locked (Awaiting Payment) for
+        // Pay Later, unlocked for Pay Now once the Deposit resolves.
+        if (payNow) {
+          navigation.replace('Deposit', { pool, isOrganizerShare: true });
+        } else {
+          navigation.replace('PoolDetail', { pool });
+        }
       }}
       onCancel={() => navigation.goBack()}
     />
@@ -340,6 +357,7 @@ function PoolDetailRoute({
         pool={pool}
         onCancel={() => navigation.goBack()}
         onDeposit={() => navigation.navigate('Deposit', { pool })}
+        onPayOrganizerShare={() => navigation.replace('Deposit', { pool, isOrganizerShare: true })}
         onViewLedger={() => navigation.navigate('Ledger', { pool })}
         onOpenOrganizerControls={() => setOrganizerControlsOpen(true)}
         onVoteToRefund={() => navigation.navigate('Vote', { pool })}
@@ -360,6 +378,10 @@ function PoolDetailRoute({
             navigation.navigate('Reimburse', { pool });
             setOrganizerControlsOpen(false);
           }}
+          onAddMembers={() => {
+            navigation.navigate('Invite', { pool });
+            setOrganizerControlsOpen(false);
+          }}
           onManageMembers={() => {
             navigation.navigate('Members', { pool });
             setOrganizerControlsOpen(false);
@@ -377,11 +399,14 @@ function PoolDetailRoute({
 
 function DepositRoute({ route, navigation }: NativeStackScreenProps<AppStackParamList, 'Deposit'>) {
   const { session } = useSessionContext();
+  const { pool, isOrganizerShare } = route.params;
   return (
     <DepositScreen
       session={session}
-      pool={route.params.pool}
-      onDone={() => navigation.goBack()}
+      pool={pool}
+      onDone={() =>
+        isOrganizerShare ? navigation.replace('PoolDetail', { pool }) : navigation.goBack()
+      }
       onCancel={() => navigation.goBack()}
     />
   );

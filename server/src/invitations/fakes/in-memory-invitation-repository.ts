@@ -38,4 +38,13 @@ export class InMemoryInvitationRepository implements InvitationRepository {
     invitation.paidAt = new Date();
     return invitation;
   }
+
+  async markExpired(id: string): Promise<Invitation> {
+    const invitation = this.invitations.find((i) => i.id === id);
+    if (!invitation) {
+      throw new Error(`Invitation ${id} not found`);
+    }
+    invitation.state = "EXPIRED";
+    return invitation;
+  }
 }

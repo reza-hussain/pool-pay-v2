@@ -30,6 +30,9 @@ export interface InvitationRepository {
   // one is not a thing left to pay against.
   findPendingByPoolAndInvitee(poolId: string, inviteeUserId: string): Promise<Invitation | null>;
   markPaid(id: string): Promise<Invitation>;
+  // Lazy expiry only (ADR-0017) — called at the point something touches a
+  // Pool whose Organizer self-Invitation has lapsed, never by a sweep.
+  markExpired(id: string): Promise<Invitation>;
 }
 
 // Thrown when a Custom Split Pool deposit is attempted with no PENDING

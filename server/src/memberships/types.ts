@@ -54,3 +54,15 @@ export class CannotRemoveOrganizerError extends Error {
     this.name = "CannotRemoveOrganizerError";
   }
 }
+
+// The Dashboard's "Awaiting Payment" gate (ADR-0016, ADR-0017): the
+// Organizer hasn't paid their own share yet, so nobody — including someone
+// scanning the join code or invite link — can join this Pool. Also thrown
+// for a Pool that's since lapsed to EXPIRED, since that Organizer will never
+// have a Membership either.
+export class PoolAwaitingPaymentError extends Error {
+  constructor() {
+    super("This Pool isn't accepting Members until the Organizer pays their own share");
+    this.name = "PoolAwaitingPaymentError";
+  }
+}

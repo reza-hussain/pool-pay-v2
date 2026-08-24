@@ -12,6 +12,7 @@ import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provi
 import { PoolNotFoundError } from "../../src/memberships/types.js";
 import { MembershipService } from "../../src/memberships/membership-service.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
+import { InMemoryInvitationRepository } from "../../src/invitations/fakes/in-memory-invitation-repository.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { NotificationService } from "../../src/notifications/notification-service.js";
 import { InMemoryNotificationRepository } from "../../src/notifications/fakes/in-memory-notification-repository.js";
@@ -327,7 +328,12 @@ describe("ClosureService + a removed Member (ticket #11)", () => {
     const { closureService, poolRepository, depositRepository, userRepository, pool } =
       await makeService();
     const membershipRepository = new InMemoryMembershipRepository();
-    const membershipService = new MembershipService({ poolRepository, membershipRepository });
+    const invitationRepository = new InMemoryInvitationRepository();
+    const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
+    // OPEN Pool here is created directly via poolRepository, bypassing
+    // PoolService.createPool — seed the Organizer's Membership to match what
+    // that would have done, since joining now requires it (ADR-0017).
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
     seedUpi(userRepository, MEMBER_A);
     seedUpi(userRepository, MEMBER_B);
 

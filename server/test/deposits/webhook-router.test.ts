@@ -77,6 +77,17 @@ async function makeApp(webhookPaymentProvider?: PaymentProvider) {
     .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
   const pool = createRes.body.pool as { id: string };
 
+  // Pay the Organizer's own share so the Pool is unlocked for Add Members
+  // (ADR-0017) — this file exercises the webhook confirmation path, not the
+  // payment gate itself.
+  const organizerIntentRes = await request(app)
+    .get(`/pools/${pool.id}/deposit-intent`)
+    .set("Authorization", bearerFor(ORGANIZER_ID));
+  await request(app)
+    .post(`/pools/${pool.id}/deposits`)
+    .set("Authorization", bearerFor(ORGANIZER_ID))
+    .send({ depositIntentId: organizerIntentRes.body.intent.id, amountPaise: 100000 });
+
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
 
   return { app, pool, paymentProvider, depositService };
@@ -103,7 +114,8 @@ describe("POST /webhooks/cashfree/deposits", () => {
       .send({ providerRef: depositIntentId, amountPaise: 100000, status: "SUCCESS" });
 
     expect(res.status).toBe(200);
-    expect(await depositService.getPoolBalance(pool.id)).toBe(100000);
+    // 200000: the Organizer's own already-paid share plus this Deposit.
+    expect(await depositService.getPoolBalance(pool.id)).toBe(200000);
   });
 
   it("is idempotent against a retried callback", async () => {
@@ -114,7 +126,7 @@ describe("POST /webhooks/cashfree/deposits", () => {
     await request(app).post("/webhooks/cashfree/deposits").send(payload);
     await request(app).post("/webhooks/cashfree/deposits").send(payload);
 
-    expect(await depositService.getPoolBalance(pool.id)).toBe(100000);
+    expect(await depositService.getPoolBalance(pool.id)).toBe(200000);
   });
 
   it("doesn't double-credit when the self-report already confirmed the same reference", async () => {
@@ -130,7 +142,7 @@ describe("POST /webhooks/cashfree/deposits", () => {
       .post("/webhooks/cashfree/deposits")
       .send({ providerRef: depositIntentId, amountPaise: 100000, status: "SUCCESS" });
 
-    expect(await depositService.getPoolBalance(pool.id)).toBe(100000);
+    expect(await depositService.getPoolBalance(pool.id)).toBe(200000);
   });
 
   it("acks (200) even for an unrecognized payload, so the caller doesn't retry-storm", async () => {
@@ -155,7 +167,9 @@ describe("POST /webhooks/cashfree/deposits", () => {
       .post("/webhooks/cashfree/deposits")
       .send({ providerRef: depositIntentId, amountPaise: 100000, status: "FAILED" });
 
-    expect(await depositService.getPoolBalance(pool.id)).toBe(0);
+    // 100000, not 0: the Organizer's own already-paid share, unaffected by
+    // this FAILED webhook for the Member's separate deposit attempt.
+    expect(await depositService.getPoolBalance(pool.id)).toBe(100000);
   });
 
   it("rejects a call whose webhook signature doesn't verify", async () => {
@@ -178,6 +192,6 @@ describe("POST /webhooks/cashfree/deposits", () => {
       .send({ providerRef: depositIntentId, amountPaise: 100000, status: "SUCCESS" });
 
     expect(res.status).toBe(200);
-    expect(await depositService.getPoolBalance(pool.id)).toBe(100000);
+    expect(await depositService.getPoolBalance(pool.id)).toBe(200000);
   });
 });
