@@ -8,6 +8,7 @@ import type { ReimbursementRepository } from "../reimbursements/types.js";
 import type { RefundRepository } from "../closure/types.js";
 import { UserNotFoundError, type UserRepository } from "../auth/types.js";
 import { formatRupees } from "../lib/format-money.js";
+import { expireIfLapsed } from "../pools/pool-expiry.js";
 import type { NotificationService } from "../notifications/notification-service.js";
 import {
   InvitationAmountMismatchError,
@@ -82,10 +83,14 @@ export class DepositService {
   }
 
   async createDepositIntent(poolId: string, userId: string): Promise<DepositIntent> {
-    const pool = await this.poolRepository.findById(poolId);
+    let pool = await this.poolRepository.findById(poolId);
     if (!pool) {
       throw new PoolNotFoundError();
     }
+    pool = await expireIfLapsed(
+      { poolRepository: this.poolRepository, invitationRepository: this.invitationRepository, membershipRepository: this.membershipRepository },
+      pool,
+    );
     if (pool.type === "OPEN") {
       throw new OpenPoolDepositsRetiredError();
     }
@@ -150,17 +155,22 @@ export class DepositService {
       }
     }
 
-    const pool = await this.poolRepository.findById(pending.poolId);
+    let pool = await this.poolRepository.findById(pending.poolId);
     if (!pool) {
       throw new PoolNotFoundError();
     }
+    pool = await expireIfLapsed(
+      { poolRepository: this.poolRepository, invitationRepository: this.invitationRepository, membershipRepository: this.membershipRepository },
+      pool,
+    );
     if (pool.state !== "ACTIVE") {
       throw new PoolNotAcceptingDepositsError();
     }
 
-    // For CUSTOM_SPLIT, this confirmation is what creates the Membership
-    // (ADR 0016) — there's deliberately no existing-Membership precondition
-    // to check going in, unlike every other Pool type.
+    // For CUSTOM_SPLIT, and for the Equal Split Organizer's own first share
+    // (ADR-0017), this confirmation is what creates the Membership — there's
+    // deliberately no existing-Membership precondition to check going in,
+    // unlike every other case.
     let newMemberRole: MembershipRole | null = null;
     let invitationToMarkPaid: Invitation | null = null;
     if (pool.type === "CUSTOM_SPLIT") {
@@ -180,7 +190,20 @@ export class DepositService {
       invitationToMarkPaid = invitation;
     } else {
       const membership = await this.membershipRepository.find(pending.poolId, pending.userId);
-      if (!membership) {
+      if (!membership && pool.type === "EQUAL_SPLIT" && pending.userId === pool.organizerId) {
+        // The Organizer's own first share, gated the same way as Custom
+        // Split's self-Invitation (ADR-0017) — but Equal Split deposits stay
+        // amount-unenforced, same as every other Equal Split deposit.
+        const invitation = await this.invitationRepository.findPendingByPoolAndInvitee(
+          pending.poolId,
+          pending.userId,
+        );
+        if (!invitation) {
+          throw new InvitationNotFoundError();
+        }
+        newMemberRole = "ORGANIZER";
+        invitationToMarkPaid = invitation;
+      } else if (!membership) {
         throw new NotAMemberError();
       }
     }

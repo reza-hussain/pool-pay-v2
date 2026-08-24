@@ -36,6 +36,9 @@ export interface InvitationRepository {
   // one is not a thing left to pay against.
   findPendingByPoolAndInvitee(poolId: string, inviteeUserId: string): Promise<Invitation | null>;
   markPaid(id: string): Promise<Invitation>;
+  // Lazy expiry only (ADR-0017) — called at the point something touches a
+  // Pool whose Organizer self-Invitation has lapsed, never by a sweep.
+  markExpired(id: string): Promise<Invitation>;
   // PENDING Invitations across every Pool for one invitee (ticket #60) — the
   // invitee's own list of Invitations still worth opening. Stays PENDING
   // even past expiresAt (lazy expiry, same as OtpRequest — no state

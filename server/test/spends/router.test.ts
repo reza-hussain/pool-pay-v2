@@ -58,6 +58,16 @@ async function makeApp() {
     .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
   const pool = createRes.body.pool as { id: string };
 
+  // Pay the Organizer's own share so the Pool is unlocked for Add Members
+  // (ADR-0017).
+  const organizerIntentRes = await request(app)
+    .get(`/pools/${pool.id}/deposit-intent`)
+    .set("Authorization", bearerFor(ORGANIZER_ID));
+  await request(app)
+    .post(`/pools/${pool.id}/deposits`)
+    .set("Authorization", bearerFor(ORGANIZER_ID))
+    .send({ depositIntentId: organizerIntentRes.body.intent.id, amountPaise: 100000 });
+
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
   const intentRes = await request(app)
     .get(`/pools/${pool.id}/deposit-intent`)
@@ -91,7 +101,8 @@ describe("POST /pools/:poolId/spends", () => {
       amountPaise: 50000,
       feePaise: 500,
     });
-    expect(res.body.poolBalancePaise).toBe(100000 - 50000 - 500);
+    // 200000 base: the Organizer's own share (ADR-0017) plus the Member's.
+    expect(res.body.poolBalancePaise).toBe(200000 - 50000 - 500);
   });
 
   it("returns 403 for a non-Organizer", async () => {
@@ -105,10 +116,11 @@ describe("POST /pools/:poolId/spends", () => {
 
   it("returns 400 when the Spend would exceed the Pool's balance", async () => {
     const { app, pool } = await makeApp();
+    // Balance is 200000 (Organizer's own share, ADR-0017, plus the Member's).
     const res = await request(app)
       .post(`/pools/${pool.id}/spends`)
       .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ merchantRef: "merchant@upi", amountPaise: 100000 });
+      .send({ merchantRef: "merchant@upi", amountPaise: 200001 });
     expect(res.status).toBe(400);
   });
 

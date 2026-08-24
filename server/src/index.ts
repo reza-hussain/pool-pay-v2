@@ -89,7 +89,7 @@ const poolService = new PoolService({
   notificationService,
   invitationRepository,
 });
-const membershipService = new MembershipService({ poolRepository, membershipRepository });
+const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
 const invitationService = new InvitationService({
   invitationRepository,
   poolRepository,

@@ -102,6 +102,22 @@ describe("PrismaInvitationRepository", () => {
     await expect(repo.findPendingByPoolAndInvitee(poolId, organizerId)).resolves.toBeNull();
   });
 
+  it("marks an Invitation expired", async () => {
+    const repo = new PrismaInvitationRepository(prisma);
+    const invitation = await repo.create({
+      poolId,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 30000,
+      token: "token_1",
+      expiresAt: futureDate(),
+    });
+
+    const expired = await repo.markExpired(invitation.id);
+
+    expect(expired.state).toBe("EXPIRED");
+    await expect(repo.findPendingByPoolAndInvitee(poolId, organizerId)).resolves.toBeNull();
+  });
+
   it("lists PENDING Invitations for an invitee across every Pool, newest first", async () => {
     const repo = new PrismaInvitationRepository(prisma);
     const otherPool = await prisma.pool.create({

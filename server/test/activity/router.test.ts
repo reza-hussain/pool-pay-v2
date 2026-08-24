@@ -58,6 +58,16 @@ async function makeApp() {
     .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
   const pool = createRes.body.pool as { id: string };
 
+  // Pay the Organizer's own share so the Pool is unlocked for Add Members
+  // (ADR-0017) — this file exercises the Activity feed, not the payment gate.
+  const organizerIntentRes = await request(app)
+    .get(`/pools/${pool.id}/deposit-intent`)
+    .set("Authorization", bearerFor(ORGANIZER_ID));
+  await request(app)
+    .post(`/pools/${pool.id}/deposits`)
+    .set("Authorization", bearerFor(ORGANIZER_ID))
+    .send({ depositIntentId: organizerIntentRes.body.intent.id, amountPaise: 100000 });
+
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
   const intentRes = await request(app)
     .get(`/pools/${pool.id}/deposit-intent`)
@@ -81,14 +91,28 @@ describe("GET /activity", () => {
     const res = await request(app).get("/activity").set("Authorization", bearerFor(MEMBER_ID));
 
     expect(res.status).toBe(200);
-    expect(res.body.entries).toHaveLength(1);
-    expect(res.body.entries[0]).toMatchObject({
-      type: "DEPOSIT",
-      poolId: pool.id,
-      poolName: "Goa Trip",
-      amountPaise: 100000,
-      counterpartyName: "Maya",
-    });
+    // Two Deposits into this Pool: the Organizer's own share (paid to unlock
+    // the Dashboard, ADR-0017) and Maya's own — the feed includes both,
+    // self included (see ActivityService.entriesForPool).
+    expect(res.body.entries).toHaveLength(2);
+    expect(res.body.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "DEPOSIT",
+          poolId: pool.id,
+          poolName: "Goa Trip",
+          amountPaise: 100000,
+          counterpartyName: "Maya",
+        }),
+        expect.objectContaining({
+          type: "DEPOSIT",
+          poolId: pool.id,
+          poolName: "Goa Trip",
+          amountPaise: 100000,
+          counterpartyName: "Rhea",
+        }),
+      ]),
+    );
   });
 
   it("is empty for a user with no Pools", async () => {

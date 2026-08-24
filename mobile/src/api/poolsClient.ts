@@ -7,7 +7,10 @@ export interface Pool {
   name: string;
   type: "EQUAL_SPLIT" | "OPEN" | "CUSTOM_SPLIT";
   perPersonAmountPaise: number | null;
-  state: "ACTIVE" | "LOCKED" | "CLOSED";
+  // EXPIRED (ADR-0017): the Organizer's self-Invitation lapsed unpaid 24h
+  // after creation — terminal, distinct from Closed (no money was ever
+  // collected, so no refund logic applies).
+  state: "ACTIVE" | "LOCKED" | "CLOSED" | "EXPIRED";
   organizerId: string;
   createdAt: string;
   joinCode: string;
@@ -15,8 +18,25 @@ export interface Pool {
 
 export interface CreatePoolInput {
   name: string;
-  type: "EQUAL_SPLIT";
+  type: "EQUAL_SPLIT" | "CUSTOM_SPLIT";
   perPersonAmountPaise?: number;
+  // CUSTOM_SPLIT only — the Organizer's own assigned share, paid via a
+  // self-addressed Invitation before the Dashboard unlocks (ADR-0016/0017).
+  organizerShareAmountPaise?: number;
+}
+
+// Shared across every screen that displays a Pool's type as a short label
+// (PoolDetailScreen, PoolsHomeScreen, AwaitingPaymentScreen) so the three
+// type names live in exactly one place.
+export function poolTypeLabel(type: Pool["type"]): string {
+  switch (type) {
+    case "EQUAL_SPLIT":
+      return "Equal Split";
+    case "CUSTOM_SPLIT":
+      return "Custom Split";
+    case "OPEN":
+      return "Open Pool";
+  }
 }
 
 export async function listPools(token: string): Promise<Pool[]> {

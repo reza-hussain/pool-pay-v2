@@ -39,6 +39,15 @@ export class InMemoryInvitationRepository implements InvitationRepository {
     return invitation;
   }
 
+  async markExpired(id: string): Promise<Invitation> {
+    const invitation = this.invitations.find((i) => i.id === id);
+    if (!invitation) {
+      throw new Error(`Invitation ${id} not found`);
+    }
+    invitation.state = "EXPIRED";
+    return invitation;
+  }
+
   async listPendingByInvitee(userId: string): Promise<Invitation[]> {
     return this.invitations
       .filter((i) => i.inviteeUserId === userId && i.state === "PENDING")

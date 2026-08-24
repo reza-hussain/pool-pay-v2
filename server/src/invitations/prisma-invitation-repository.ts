@@ -32,6 +32,14 @@ export class PrismaInvitationRepository implements InvitationRepository {
     return toInvitation(row);
   }
 
+  async markExpired(id: string): Promise<Invitation> {
+    const row = await this.prisma.invitation.update({
+      where: { id },
+      data: { state: "EXPIRED" },
+    });
+    return toInvitation(row);
+  }
+
   async listPendingByInvitee(userId: string): Promise<Invitation[]> {
     const rows = await this.prisma.invitation.findMany({
       where: { inviteeUserId: userId, state: "PENDING" },

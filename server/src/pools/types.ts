@@ -1,5 +1,8 @@
 export type PoolType = "EQUAL_SPLIT" | "OPEN" | "CUSTOM_SPLIT";
-export type PoolState = "ACTIVE" | "LOCKED" | "CLOSED";
+// EXPIRED (ADR-0017): the Organizer's self-Invitation lapsed unpaid at
+// ORGANIZER_INVITATION_EXPIRY_MS. Terminal, like CLOSED, but reached without
+// ever collecting money — no refund logic applies.
+export type PoolState = "ACTIVE" | "LOCKED" | "CLOSED" | "EXPIRED";
 
 export interface Pool {
   id: string;

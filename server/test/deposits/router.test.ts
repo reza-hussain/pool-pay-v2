@@ -60,6 +60,17 @@ async function makeApp() {
     .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
   const pool = createRes.body.pool as { id: string };
 
+  // Pay the Organizer's own share so the Pool is unlocked for Add Members
+  // (ADR-0017) — this file exercises other Members' deposits, not the
+  // payment gate itself (see the dedicated describe block below for that).
+  const organizerIntentRes = await request(app)
+    .get(`/pools/${pool.id}/deposit-intent`)
+    .set("Authorization", bearerFor(ORGANIZER_ID));
+  await request(app)
+    .post(`/pools/${pool.id}/deposits`)
+    .set("Authorization", bearerFor(ORGANIZER_ID))
+    .send({ depositIntentId: organizerIntentRes.body.intent.id, amountPaise: 100000 });
+
   await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
 
   return { app, pool };
@@ -125,7 +136,9 @@ describe("POST /pools/:poolId/deposits", () => {
 
     expect(res.status).toBe(201);
     expect(res.body.deposit).toMatchObject({ poolId: pool.id, userId: MEMBER_ID, amountPaise: 100000 });
-    expect(res.body.poolBalancePaise).toBe(100000);
+    // 200000, not 100000: the Organizer's own share (paid to unlock the
+    // Pool, ADR-0017) is already in the balance before this Member deposits.
+    expect(res.body.poolBalancePaise).toBe(200000);
     expect(res.body.contributionSummary).toEqual({
       contributedPaise: 100000,
       expectedPaise: 100000,
@@ -191,7 +204,8 @@ describe("POST /pools/:poolId/deposits", () => {
       .send({ depositIntentId, amountPaise: 100000 });
 
     expect(second.status).toBe(201);
-    expect(second.body.poolBalancePaise).toBe(100000);
+    // 200000, not 100000: includes the Organizer's own already-paid share.
+    expect(second.body.poolBalancePaise).toBe(200000);
   });
 
   it("returns 400 for a non-positive amount", async () => {
