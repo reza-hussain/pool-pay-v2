@@ -2,13 +2,23 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
-import { InvitationsApiError, sendInvitation } from "../api/invitationsClient";
+import {
+  InvitationsApiError,
+  sendInvitation,
+  type InvitationExpiryPreset,
+} from "../api/invitationsClient";
 import { Screen } from "../components/Screen";
 import { rupeesToPaise } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
 // India-only v1 (ADR 0003) — Indian mobile numbers are 10 digits starting with 6-9.
 const NATIONAL_NUMBER_PATTERN = /^[6-9]\d{9}$/;
+
+const EXPIRY_PRESETS: { value: InvitationExpiryPreset; label: string }[] = [
+  { value: "24h", label: "24 hours" },
+  { value: "3d", label: "3 days" },
+  { value: "7d", label: "7 days" },
+];
 
 export function InviteByPhoneScreen({
   session,
@@ -23,6 +33,7 @@ export function InviteByPhoneScreen({
 }) {
   const [nationalNumber, setNationalNumber] = useState("");
   const [shareRupees, setShareRupees] = useState("");
+  const [expiryPreset, setExpiryPreset] = useState<InvitationExpiryPreset>("7d");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +44,13 @@ export function InviteByPhoneScreen({
     setError(null);
     setLoading(true);
     try {
-      await sendInvitation(session.token, pool.id, `+91${nationalNumber}`, rupeesToPaise(shareRupees));
+      await sendInvitation(
+        session.token,
+        pool.id,
+        `+91${nationalNumber}`,
+        rupeesToPaise(shareRupees),
+        expiryPreset,
+      );
       onSent();
     } catch (err) {
       setError(err instanceof InvitationsApiError ? err.message : "Something went wrong");
@@ -81,6 +98,23 @@ export function InviteByPhoneScreen({
             value={shareRupees}
             onChangeText={setShareRupees}
           />
+        </View>
+
+        <Text style={styles.fieldLabel}>Expires in</Text>
+        <View style={styles.chipRow}>
+          {EXPIRY_PRESETS.map((preset) => (
+            <Pressable
+              key={preset.value}
+              style={[styles.chip, preset.value === expiryPreset && styles.chipSelected]}
+              onPress={() => setExpiryPreset(preset.value)}
+            >
+              <Text
+                style={[styles.chipText, preset.value === expiryPreset && styles.chipTextSelected]}
+              >
+                {preset.label}
+              </Text>
+            </Pressable>
+          ))}
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -160,6 +194,32 @@ const styles = StyleSheet.create({
   hint: {
     ...type.caption,
     marginTop: spacing.s2,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.s2,
+    marginTop: spacing.s2,
+    marginBottom: spacing.s3,
+  },
+  chip: {
+    borderWidth: 1.5,
+    borderColor: colors.lineStrong,
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: spacing.s4,
+  },
+  chipSelected: {
+    backgroundColor: colors.ink900,
+    borderColor: colors.ink900,
+  },
+  chipText: {
+    ...type.bodyBold,
+    fontSize: 12.5,
+    color: colors.ink900,
+  },
+  chipTextSelected: {
+    color: colors.cream,
   },
   primaryButton: {
     height: 48,

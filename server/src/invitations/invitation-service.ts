@@ -8,21 +8,22 @@ import type { NotificationService } from "../notifications/notification-service.
 import { formatRupees } from "../lib/format-money.js";
 import {
   InvalidInvitationAmountError,
+  InvalidInvitationExpiryPresetError,
   InvitationAlreadyPendingError,
+  InvitationNotCancellableError,
+  InvitationRecordNotFoundError,
+  INVITATION_EXPIRY_PRESET_MS,
   InvitationLinkNotFoundError,
   InviteeAlreadyMemberError,
   InviteeNotRegisteredError,
   isInvitationExpired,
   OrganizerNotAMemberError,
   type Invitation,
+  type InvitationExpiryPreset,
   type InvitationRepository,
 } from "./types.js";
 
-// Fixed default until ticket #62 adds the Organizer-facing expiry-preset
-// picker — matches PoolService's ORGANIZER_INVITATION_EXPIRY_MS so every
-// Invitation (self-addressed or sent to someone else) lapses on the same
-// schedule until presets exist.
-const DEFAULT_INVITATION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_INVITATION_EXPIRY_PRESET: InvitationExpiryPreset = "7d";
 
 export interface InvitationServiceOptions {
   invitationRepository: InvitationRepository;
@@ -75,6 +76,7 @@ export class InvitationService {
     poolId: string,
     phoneNumber: string,
     assignedAmountPaise: number,
+    expiryPreset: InvitationExpiryPreset = DEFAULT_INVITATION_EXPIRY_PRESET,
   ): Promise<Invitation> {
     const pool = await this.poolRepository.findById(poolId);
     if (!pool) {
@@ -88,6 +90,10 @@ export class InvitationService {
     }
     if (!Number.isInteger(assignedAmountPaise) || assignedAmountPaise <= 0) {
       throw new InvalidInvitationAmountError();
+    }
+    const expiryMs = INVITATION_EXPIRY_PRESET_MS[expiryPreset];
+    if (!expiryMs) {
+      throw new InvalidInvitationExpiryPresetError();
     }
 
     // The Organizer isn't a Member (hasn't paid their own share) until their
@@ -118,7 +124,7 @@ export class InvitationService {
       inviteeUserId: invitee.id,
       assignedAmountPaise,
       token: this.generateInvitationToken(),
-      expiresAt: new Date(this.now().getTime() + DEFAULT_INVITATION_EXPIRY_MS),
+      expiresAt: new Date(this.now().getTime() + expiryMs),
     });
 
     const organizer = await this.userRepository.findById(organizerId);
@@ -194,6 +200,28 @@ export class InvitationService {
       }),
     );
     return results;
+  }
+
+  // Organizer withdraws a pending, unpaid Invitation. No edit path exists
+  // (ADR 0016) — cancel-and-resend is the only way to change an amount.
+  async cancelInvitation(organizerId: string, poolId: string, invitationId: string): Promise<Invitation> {
+    const pool = await this.poolRepository.findById(poolId);
+    if (!pool) {
+      throw new PoolNotFoundError();
+    }
+    if (pool.organizerId !== organizerId) {
+      throw new NotPoolOrganizerError();
+    }
+
+    const invitation = await this.invitationRepository.findById(invitationId);
+    if (!invitation || invitation.poolId !== poolId) {
+      throw new InvitationRecordNotFoundError();
+    }
+    if (invitation.state !== "PENDING") {
+      throw new InvitationNotCancellableError();
+    }
+
+    return this.invitationRepository.markCancelled(invitation.id);
   }
 }
 

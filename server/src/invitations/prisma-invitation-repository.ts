@@ -1,5 +1,11 @@
 import type { PrismaClient } from "@prisma/client";
-import type { CreateInvitationData, Invitation, InvitationRepository, InvitationState } from "./types.js";
+import {
+  InvitationNotCancellableError,
+  type CreateInvitationData,
+  type Invitation,
+  type InvitationRepository,
+  type InvitationState,
+} from "./types.js";
 
 export class PrismaInvitationRepository implements InvitationRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -38,6 +44,26 @@ export class PrismaInvitationRepository implements InvitationRepository {
       data: { state: "EXPIRED" },
     });
     return toInvitation(row);
+  }
+
+  async markCancelled(id: string): Promise<Invitation> {
+    // Conditional on state so a payment confirming concurrently (PENDING ->
+    // PAID) between the service's pre-check and this write can't have its
+    // result silently clobbered back to CANCELLED.
+    const result = await this.prisma.invitation.updateMany({
+      where: { id, state: "PENDING" },
+      data: { state: "CANCELLED" },
+    });
+    if (result.count === 0) {
+      throw new InvitationNotCancellableError();
+    }
+    const row = await this.prisma.invitation.findUniqueOrThrow({ where: { id } });
+    return toInvitation(row);
+  }
+
+  async findById(id: string): Promise<Invitation | null> {
+    const row = await this.prisma.invitation.findUnique({ where: { id } });
+    return row ? toInvitation(row) : null;
   }
 
   async listPendingByInvitee(userId: string): Promise<Invitation[]> {

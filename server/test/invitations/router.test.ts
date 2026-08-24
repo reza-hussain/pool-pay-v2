@@ -197,6 +197,118 @@ describe("GET /pools/:poolId/invitations", () => {
   });
 });
 
+describe("POST /pools/:poolId/invitations expiryPreset", () => {
+  it("sends an Invitation with the given expiry preset", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeCustomSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE, assignedAmountPaise: 250000, expiryPreset: "24h" });
+
+    expect(res.status).toBe(201);
+    const sentAt = Date.now();
+    const expiresAt = new Date(res.body.invitation.expiresAt).getTime();
+    expect(expiresAt).toBeGreaterThan(sentAt);
+    expect(expiresAt).toBeLessThan(sentAt + 25 * 60 * 60 * 1000);
+  });
+
+  it("400s an invalid expiry preset", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeCustomSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE, assignedAmountPaise: 250000, expiryPreset: "9d" });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("DELETE /pools/:poolId/invitations/:invitationId", () => {
+  it("cancels a pending Invitation", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeCustomSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+    const sendRes = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE, assignedAmountPaise: 250000 });
+
+    const res = await request(app)
+      .delete(`/pools/${pool.id}/invitations/${sendRes.body.invitation.id}`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(204);
+
+    const listRes = await request(app)
+      .get(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(listRes.body.invitations[0].invitation.state).toBe("CANCELLED");
+  });
+
+  it("403s a non-Organizer requester", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeCustomSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+    const sendRes = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE, assignedAmountPaise: 250000 });
+
+    const res = await request(app)
+      .delete(`/pools/${pool.id}/invitations/${sendRes.body.invitation.id}`)
+      .set("Authorization", bearerFor(INVITEE_ID));
+
+    expect(res.status).toBe(403);
+  });
+
+  it("404s an unknown invitation id", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeCustomSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+
+    const res = await request(app)
+      .delete(`/pools/${pool.id}/invitations/does-not-exist`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(404);
+  });
+
+  it("404s an unknown pool", async () => {
+    const { app } = makeApp();
+
+    const res = await request(app)
+      .delete("/pools/pool_missing/invitations/invitation_x")
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(404);
+  });
+
+  it("400s cancelling an already-paid Invitation", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeCustomSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+    const sendRes = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE, assignedAmountPaise: 250000 });
+    await request(app)
+      .delete(`/pools/${pool.id}/invitations/${sendRes.body.invitation.id}`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    const res = await request(app)
+      .delete(`/pools/${pool.id}/invitations/${sendRes.body.invitation.id}`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("GET /invitations/mine", () => {
   it("lists the invitee's pending Invitations across Pools", async () => {
     const { app, poolRepository, membershipRepository } = makeApp();

@@ -1,5 +1,15 @@
 export type InvitationState = "PENDING" | "PAID" | "CANCELLED" | "EXPIRED";
 
+// Small fixed set the Organizer picks from when sending an Invitation
+// (ticket #62) — exact values are implementation's choice per the issue.
+export type InvitationExpiryPreset = "24h" | "3d" | "7d";
+
+export const INVITATION_EXPIRY_PRESET_MS: Record<InvitationExpiryPreset, number> = {
+  "24h": 24 * 60 * 60 * 1000,
+  "3d": 3 * 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+};
+
 export interface Invitation {
   id: string;
   poolId: string;
@@ -35,10 +45,18 @@ export interface InvitationRepository {
   // Only ever matches a PENDING Invitation — a paid, cancelled, or expired
   // one is not a thing left to pay against.
   findPendingByPoolAndInvitee(poolId: string, inviteeUserId: string): Promise<Invitation | null>;
+  // Any Invitation regardless of state — backs cancellation, which needs to
+  // load the row first to check its current state (ticket #62).
+  findById(id: string): Promise<Invitation | null>;
   markPaid(id: string): Promise<Invitation>;
   // Lazy expiry only (ADR-0017) — called at the point something touches a
   // Pool whose Organizer self-Invitation has lapsed, never by a sweep.
   markExpired(id: string): Promise<Invitation>;
+  // Organizer withdraws a pending, unpaid Invitation (ticket #62). Guarded on
+  // state at the write itself (not just the caller's pre-check) so a payment
+  // confirming concurrently can't be clobbered back to CANCELLED — throws
+  // InvitationNotCancellableError if the state has already moved on.
+  markCancelled(id: string): Promise<Invitation>;
   // PENDING Invitations across every Pool for one invitee (ticket #60) — the
   // invitee's own list of Invitations still worth opening. Stays PENDING
   // even past expiresAt (lazy expiry, same as OtpRequest — no state
@@ -99,6 +117,13 @@ export class InvalidInvitationAmountError extends Error {
   }
 }
 
+export class InvalidInvitationExpiryPresetError extends Error {
+  constructor() {
+    super("expiryPreset must be one of 24h, 3d, 7d");
+    this.name = "InvalidInvitationExpiryPresetError";
+  }
+}
+
 // The invitee is already a Member of this Pool — nothing left to invite them
 // into.
 export class InviteeAlreadyMemberError extends Error {
@@ -115,6 +140,27 @@ export class InvitationAlreadyPendingError extends Error {
   constructor() {
     super("This person already has a pending Invitation to this Pool");
     this.name = "InvitationAlreadyPendingError";
+  }
+}
+
+// Cancelling an id that doesn't map to any Invitation on this Pool —
+// distinct from InvitationNotFoundError, which is about the deposit path
+// having no PENDING Invitation to pay against (ticket #62).
+export class InvitationRecordNotFoundError extends Error {
+  constructor() {
+    super("No Invitation found with that id for this Pool");
+    this.name = "InvitationRecordNotFoundError";
+  }
+}
+
+// Only a PENDING Invitation can be cancelled — a paid one is a done deal, a
+// cancelled or expired one is already resolved (ticket #62). Editing isn't
+// supported either (ADR 0016), so cancel-and-resend is the only path back
+// to a fresh Invitation.
+export class InvitationNotCancellableError extends Error {
+  constructor() {
+    super("Only a pending Invitation can be cancelled");
+    this.name = "InvitationNotCancellableError";
   }
 }
 

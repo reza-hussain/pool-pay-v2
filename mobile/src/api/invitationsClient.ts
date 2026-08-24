@@ -6,6 +6,8 @@ export class InvitationsApiError extends Error {}
 
 export type InvitationState = "PENDING" | "PAID" | "CANCELLED" | "EXPIRED";
 
+export type InvitationExpiryPreset = "24h" | "3d" | "7d";
+
 export interface Invitation {
   id: string;
   poolId: string;
@@ -51,12 +53,17 @@ export async function sendInvitation(
   poolId: string,
   phoneNumber: string,
   assignedAmountPaise: number,
+  expiryPreset: InvitationExpiryPreset,
 ): Promise<Invitation> {
   const data = await authedFetch(`/pools/${poolId}/invitations`, token, {
     method: "POST",
-    body: JSON.stringify({ phoneNumber, assignedAmountPaise }),
+    body: JSON.stringify({ phoneNumber, assignedAmountPaise, expiryPreset }),
   });
   return data.invitation as Invitation;
+}
+
+export async function cancelInvitation(token: string, poolId: string, invitationId: string): Promise<void> {
+  await authedFetch(`/pools/${poolId}/invitations/${invitationId}`, token, { method: "DELETE" });
 }
 
 export async function listSentInvitations(token: string, poolId: string): Promise<SentInvitation[]> {

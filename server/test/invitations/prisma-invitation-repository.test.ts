@@ -3,6 +3,7 @@ import { existsSync, rmSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PrismaInvitationRepository } from "../../src/invitations/prisma-invitation-repository.js";
+import { InvitationNotCancellableError } from "../../src/invitations/types.js";
 
 const TEST_DB_PATH = "prisma/invitations-test.db";
 const TEST_DB_URL = `file:./invitations-test.db`;
@@ -172,6 +173,53 @@ describe("PrismaInvitationRepository", () => {
     const all = await repo.listByPool(poolId);
 
     expect(all.map((i) => i.id).sort()).toEqual([pending.id, paidInvitation.id].sort());
+  });
+
+  it("finds an Invitation by id, or returns null", async () => {
+    const repo = new PrismaInvitationRepository(prisma);
+    const invitation = await repo.create({
+      poolId,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 30000,
+      token: "token_1",
+      expiresAt: futureDate(),
+    });
+
+    await expect(repo.findById(invitation.id)).resolves.toMatchObject({ assignedAmountPaise: 30000 });
+    await expect(repo.findById("does-not-exist")).resolves.toBeNull();
+  });
+
+  it("marks an Invitation cancelled", async () => {
+    const repo = new PrismaInvitationRepository(prisma);
+    const invitation = await repo.create({
+      poolId,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 30000,
+      token: "token_1",
+      expiresAt: futureDate(),
+    });
+
+    const cancelled = await repo.markCancelled(invitation.id);
+
+    expect(cancelled.state).toBe("CANCELLED");
+    await expect(repo.findPendingByPoolAndInvitee(poolId, organizerId)).resolves.toBeNull();
+  });
+
+  it("refuses to cancel an Invitation that has already moved off PENDING (race guard)", async () => {
+    const repo = new PrismaInvitationRepository(prisma);
+    const invitation = await repo.create({
+      poolId,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 30000,
+      token: "token_1",
+      expiresAt: futureDate(),
+    });
+    await repo.markPaid(invitation.id);
+
+    await expect(repo.markCancelled(invitation.id)).rejects.toThrow(InvitationNotCancellableError);
+
+    const stored = await repo.findById(invitation.id);
+    expect(stored?.state).toBe("PAID");
   });
 
   it("finds an Invitation by its token, or returns null", async () => {

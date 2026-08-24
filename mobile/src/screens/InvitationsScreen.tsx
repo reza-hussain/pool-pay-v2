@@ -1,9 +1,14 @@
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
-import { listSentInvitations, type SentInvitation } from "../api/invitationsClient";
+import {
+  cancelInvitation,
+  InvitationsApiError,
+  listSentInvitations,
+  type SentInvitation,
+} from "../api/invitationsClient";
 import { Screen } from "../components/Screen";
 import { buildInvitationLink } from "../lib/inviteLink";
 import { paiseToRupeeLabel } from "../lib/money";
@@ -32,7 +37,17 @@ function StatusPill({ state }: { state: SentInvitation["invitation"]["state"] })
   );
 }
 
-function InvitationRow({ sent, onShare }: { sent: SentInvitation; onShare?: (sent: SentInvitation) => void }) {
+function InvitationRow({
+  sent,
+  onCancel,
+  cancelling,
+  onShare,
+}: {
+  sent: SentInvitation;
+  onCancel?: () => void;
+  cancelling?: boolean;
+  onShare?: (sent: SentInvitation) => void;
+}) {
   return (
     <View style={styles.row}>
       <View style={styles.rowText}>
@@ -45,6 +60,15 @@ function InvitationRow({ sent, onShare }: { sent: SentInvitation; onShare?: (sen
         {onShare ? (
           <Pressable onPress={() => onShare(sent)} hitSlop={8}>
             <Text style={styles.rowShare}>Share</Text>
+          </Pressable>
+        ) : null}
+        {onCancel ? (
+          <Pressable style={styles.cancelButton} onPress={onCancel} disabled={cancelling}>
+            {cancelling ? (
+              <ActivityIndicator color={colors.danger600} />
+            ) : (
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            )}
           </Pressable>
         ) : null}
       </View>
@@ -65,6 +89,7 @@ export function InvitationsScreen({
 }) {
   const [invitations, setInvitations] = useState<SentInvitation[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -73,6 +98,38 @@ export function InvitationsScreen({
         .catch((err) => setError(err instanceof Error ? err.message : "Something went wrong"));
     }, [session.token, pool.id]),
   );
+
+  function confirmCancel(sent: SentInvitation) {
+    Alert.alert(
+      "Cancel this Invitation?",
+      `${sent.inviteeName ?? sent.inviteePhoneNumber} will no longer be able to pay their share.`,
+      [
+        { text: "Keep it", style: "cancel" },
+        {
+          text: "Cancel Invitation",
+          style: "destructive",
+          onPress: async () => {
+            setError(null);
+            setCancellingId(sent.invitation.id);
+            try {
+              await cancelInvitation(session.token, pool.id, sent.invitation.id);
+              setInvitations((prev) =>
+                prev.map((i) =>
+                  i.invitation.id === sent.invitation.id
+                    ? { ...i, invitation: { ...i.invitation, state: "CANCELLED" } }
+                    : i,
+                ),
+              );
+            } catch (err) {
+              setError(err instanceof InvitationsApiError ? err.message : "Something went wrong");
+            } finally {
+              setCancellingId(null);
+            }
+          },
+        },
+      ],
+    );
+  }
 
   const pending = invitations.filter((i) => i.invitation.state === "PENDING");
   const resolved = invitations.filter((i) => i.invitation.state !== "PENDING");
@@ -109,7 +166,12 @@ export function InvitationsScreen({
                 {pending.map((sent, i) => (
                   <View key={sent.invitation.id}>
                     {i > 0 ? <View style={styles.divider} /> : null}
-                    <InvitationRow sent={sent} onShare={shareInvitation} />
+                    <InvitationRow
+                      sent={sent}
+                      onCancel={() => confirmCancel(sent)}
+                      cancelling={cancellingId === sent.invitation.id}
+                      onShare={shareInvitation}
+                    />
                   </View>
                 ))}
               </View>
@@ -123,7 +185,7 @@ export function InvitationsScreen({
                 {resolved.map((sent, i) => (
                   <View key={sent.invitation.id}>
                     {i > 0 ? <View style={styles.divider} /> : null}
-                    <InvitationRow sent={sent} />
+                    <InvitationRow sent={sent} cancelling={false} />
                   </View>
                 ))}
               </View>
@@ -232,6 +294,20 @@ const styles = StyleSheet.create({
   statusPillText: {
     ...type.label,
     marginBottom: 0,
+  },
+  cancelButton: {
+    height: 30,
+    borderWidth: 1.5,
+    borderColor: colors.danger600,
+    borderRadius: radii.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.s3,
+    marginTop: spacing.s1,
+  },
+  cancelButtonText: {
+    ...type.label,
+    color: colors.danger600,
   },
   error: {
     ...type.body,
