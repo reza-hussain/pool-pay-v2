@@ -3,6 +3,7 @@ import { existsSync, rmSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PrismaInvitationRepository } from "../../src/invitations/prisma-invitation-repository.js";
+import { InvitationNotCancellableError } from "../../src/invitations/types.js";
 
 const TEST_DB_PATH = "prisma/invitations-test.db";
 const TEST_DB_URL = `file:./invitations-test.db`;
@@ -202,5 +203,22 @@ describe("PrismaInvitationRepository", () => {
 
     expect(cancelled.state).toBe("CANCELLED");
     await expect(repo.findPendingByPoolAndInvitee(poolId, organizerId)).resolves.toBeNull();
+  });
+
+  it("refuses to cancel an Invitation that has already moved off PENDING (race guard)", async () => {
+    const repo = new PrismaInvitationRepository(prisma);
+    const invitation = await repo.create({
+      poolId,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 30000,
+      token: "token_1",
+      expiresAt: futureDate(),
+    });
+    await repo.markPaid(invitation.id);
+
+    await expect(repo.markCancelled(invitation.id)).rejects.toThrow(InvitationNotCancellableError);
+
+    const stored = await repo.findById(invitation.id);
+    expect(stored?.state).toBe("PAID");
   });
 });

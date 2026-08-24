@@ -1,4 +1,9 @@
-import type { CreateInvitationData, Invitation, InvitationRepository } from "../types.js";
+import {
+  InvitationNotCancellableError,
+  type CreateInvitationData,
+  type Invitation,
+  type InvitationRepository,
+} from "../types.js";
 
 let nextId = 1;
 
@@ -52,6 +57,12 @@ export class InMemoryInvitationRepository implements InvitationRepository {
     const invitation = this.invitations.find((i) => i.id === id);
     if (!invitation) {
       throw new Error(`Invitation ${id} not found`);
+    }
+    // Conditional on state so a payment confirming concurrently (PENDING ->
+    // PAID) between the service's pre-check and this write can't have its
+    // result silently clobbered back to CANCELLED.
+    if (invitation.state !== "PENDING") {
+      throw new InvitationNotCancellableError();
     }
     invitation.state = "CANCELLED";
     return invitation;

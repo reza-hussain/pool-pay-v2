@@ -52,7 +52,10 @@ export interface InvitationRepository {
   // Lazy expiry only (ADR-0017) — called at the point something touches a
   // Pool whose Organizer self-Invitation has lapsed, never by a sweep.
   markExpired(id: string): Promise<Invitation>;
-  // Organizer withdraws a pending, unpaid Invitation (ticket #62).
+  // Organizer withdraws a pending, unpaid Invitation (ticket #62). Guarded on
+  // state at the write itself (not just the caller's pre-check) so a payment
+  // confirming concurrently can't be clobbered back to CANCELLED — throws
+  // InvitationNotCancellableError if the state has already moved on.
   markCancelled(id: string): Promise<Invitation>;
   // PENDING Invitations across every Pool for one invitee (ticket #60) — the
   // invitee's own list of Invitations still worth opening. Stays PENDING

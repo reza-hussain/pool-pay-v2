@@ -337,4 +337,26 @@ describe("InvitationService.cancelInvitation", () => {
       invitationService.cancelInvitation(ORGANIZER_ID, pool.id, invitation.id),
     ).rejects.toThrow(InvitationNotCancellableError);
   });
+
+  it("does not clobber a payment that confirms between the pre-check and the write (race guard)", async () => {
+    const { invitationService, pool, invitationRepository } = await makeService();
+    const invitation = await invitationService.sendInvitation(ORGANIZER_ID, pool.id, INVITEE_PHONE, 250000);
+
+    // Simulate the payment confirming in the window between cancelInvitation's
+    // findById pre-check and its markCancelled write: the pre-check still
+    // sees a stale PENDING snapshot while the stored row has already moved
+    // to PAID underneath it.
+    const staleSnapshot = { ...invitation };
+    const originalFindById = invitationRepository.findById.bind(invitationRepository);
+    invitationRepository.findById = async (id: string) =>
+      id === invitation.id ? staleSnapshot : originalFindById(id);
+    await invitationRepository.markPaid(invitation.id);
+
+    await expect(
+      invitationService.cancelInvitation(ORGANIZER_ID, pool.id, invitation.id),
+    ).rejects.toThrow(InvitationNotCancellableError);
+
+    const stored = await originalFindById(invitation.id);
+    expect(stored?.state).toBe("PAID");
+  });
 });
