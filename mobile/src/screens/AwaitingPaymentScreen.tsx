@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import type { Pool } from "../api/poolsClient";
+import { poolTypeLabel, type Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
-import { getDepositIntent } from "../api/depositsClient";
 import { Screen } from "../components/Screen";
 import { paiseToRupeeLabel } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
@@ -26,27 +24,13 @@ export function AwaitingPaymentScreen({
   onCancel: () => void;
 }) {
   // Custom Split's own share amount lives on the Organizer's self-Invitation,
-  // not on the Pool — fetched only for display here; Deposit screen looks it
-  // up again itself when the Member actually pays.
-  const [customShareAmountPaise, setCustomShareAmountPaise] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (pool.type !== "CUSTOM_SPLIT") return;
-    let cancelled = false;
-    getDepositIntent(session.token, pool.id)
-      .then((intent) => {
-        if (!cancelled) setCustomShareAmountPaise(intent.fixedAmountPaise);
-      })
-      .catch(() => {
-        // Non-critical — the button just shows without an amount; Deposit
-        // screen surfaces the real error if the Pool actually expired.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [pool.id, pool.type, session.token]);
-
-  const shareAmountPaise = pool.type === "EQUAL_SPLIT" ? pool.perPersonAmountPaise : customShareAmountPaise;
+  // not on the Pool — unknown here (getDepositIntent would show it, but that
+  // call is side-effecting server-side: it creates a real payment-provider
+  // order, so it must only fire once the Organizer actually taps to pay, on
+  // the Deposit screen, not just from viewing this Dashboard). The button
+  // shows a plain "Pay My Share" for Custom Split; the exact amount appears
+  // once Deposit's own intent fetch resolves.
+  const shareAmountPaise = pool.type === "EQUAL_SPLIT" ? pool.perPersonAmountPaise : null;
   const isExpired =
     pool.state === "EXPIRED" ||
     (pool.state === "ACTIVE" && Date.now() - new Date(pool.createdAt).getTime() >= ORGANIZER_INVITATION_EXPIRY_MS);
@@ -83,9 +67,7 @@ export function AwaitingPaymentScreen({
           <View style={{ width: 24 }} />
         </View>
         <Text style={styles.title}>{pool.name}</Text>
-        <Text style={styles.subtitle}>
-          {pool.type === "EQUAL_SPLIT" ? "Equal Split" : "Custom Split"} · Awaiting Payment
-        </Text>
+        <Text style={styles.subtitle}>{poolTypeLabel(pool.type)} · Awaiting Payment</Text>
 
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Pool Balance</Text>
@@ -109,11 +91,7 @@ export function AwaitingPaymentScreen({
         </View>
         <Text style={styles.lockedHint}>Pay your share to unlock inviting members.</Text>
 
-        <Pressable
-          style={styles.primaryButton}
-          onPress={onPayShare}
-          disabled={pool.type === "CUSTOM_SPLIT" && shareAmountPaise === null}
-        >
+        <Pressable style={styles.primaryButton} onPress={onPayShare}>
           <Text style={styles.primaryButtonText}>
             {shareAmountPaise !== null ? `Pay My Share (${paiseToRupeeLabel(shareAmountPaise)})` : "Pay My Share"}
           </Text>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import type { Pool } from "../api/poolsClient";
+import { poolTypeLabel, type Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
 import { listMembers } from "../api/membersClient";
 import { usePolledLedger } from "../api/ledgerClient";
@@ -10,10 +10,12 @@ import { Screen } from "../components/Screen";
 import { paiseToRupeeLabel } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
-// A Pool never returns to Awaiting Payment once unlocked (CONTEXT.md) — the
-// gate only ever applies to Equal Split/Custom Split, and only to the
-// Organizer, and only until they have a Membership (ADR-0016/0017).
-function organizerAwaitsOwnPayment(pool: Pool, sessionUserId: string): boolean {
+// Whether this viewer is the one the Organizer-payment gate applies to at
+// all — not whether they've actually paid yet (see the members check below).
+// A Pool never returns to Awaiting Payment once unlocked (CONTEXT.md), and
+// the gate only ever applies to Equal Split/Custom Split, and only to the
+// Organizer (ADR-0016/0017).
+function isOrganizerPaymentGated(pool: Pool, sessionUserId: string): boolean {
   return (
     pool.organizerId === sessionUserId &&
     (pool.type === "EQUAL_SPLIT" || pool.type === "CUSTOM_SPLIT")
@@ -46,7 +48,7 @@ export function PoolDetailScreen({
   onVoteToRefund: () => void;
 }) {
   const isOrganizer = pool.organizerId === session.user.id;
-  const gateable = organizerAwaitsOwnPayment(pool, session.user.id);
+  const isGated = isOrganizerPaymentGated(pool, session.user.id);
   // Membership presence is the single source of truth for whether the
   // Organizer has paid their own share (ADR-0016/0017) — null while the
   // first fetch is still in flight, so a gateable Pool never briefly flashes
@@ -69,25 +71,26 @@ export function PoolDetailScreen({
     };
   }, [pool.id, session.token]);
 
-  if (gateable && members === null) {
-    return (
-      <Screen backgroundColor={colors.cream}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator color={colors.ink600} />
-        </View>
-      </Screen>
-    );
-  }
-
-  if (gateable && !members!.some((m) => m.userId === pool.organizerId)) {
-    return (
-      <AwaitingPaymentScreen
-        session={session}
-        pool={pool}
-        onPayShare={onPayOrganizerShare}
-        onCancel={onCancel}
-      />
-    );
+  if (isGated) {
+    if (members === null) {
+      return (
+        <Screen backgroundColor={colors.cream}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator color={colors.ink600} />
+          </View>
+        </Screen>
+      );
+    }
+    if (!members.some((m) => m.userId === pool.organizerId)) {
+      return (
+        <AwaitingPaymentScreen
+          session={session}
+          pool={pool}
+          onPayShare={onPayOrganizerShare}
+          onCancel={onCancel}
+        />
+      );
+    }
   }
 
   const memberCount = members?.length ?? null;
@@ -111,7 +114,7 @@ export function PoolDetailScreen({
 
         <Text style={styles.title}>{pool.name}</Text>
         <Text style={styles.subtitle}>
-          {pool.type === "EQUAL_SPLIT" ? "Equal Split" : pool.type === "CUSTOM_SPLIT" ? "Custom Split" : "Open Pool"}
+          {poolTypeLabel(pool.type)}
           {" · "}
           {isOrganizer ? "You're the Organizer" : "Member"}
           {pool.state === "LOCKED" ? " · Locked" : ""}

@@ -1,5 +1,5 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import type { Pool } from "../api/poolsClient";
+import { poolTypeLabel, type Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
 import { Screen } from "../components/Screen";
 import { paiseToRupeeLabel } from "../lib/money";
@@ -105,14 +105,11 @@ function PoolCard({
       <View style={styles.cardTopRow}>
         <Text style={styles.cardTitle}>{pool.name}</Text>
         <View style={styles.cardTopRowRight}>
-          {pool.state === "LOCKED" ? (
+          {pool.state === "LOCKED" || pool.state === "EXPIRED" ? (
             <View style={styles.lockedPill}>
-              <Text style={styles.lockedPillText}>Locked</Text>
-            </View>
-          ) : null}
-          {pool.state === "EXPIRED" ? (
-            <View style={styles.lockedPill}>
-              <Text style={styles.lockedPillText}>Expired</Text>
+              <Text style={styles.lockedPillText}>
+                {pool.state === "LOCKED" ? "Locked" : "Expired"}
+              </Text>
             </View>
           ) : null}
           {isOrganizer ? (
@@ -131,10 +128,8 @@ function PoolCard({
       <View style={styles.cardBottomRow}>
         <Text style={styles.cardType}>
           {pool.type === "EQUAL_SPLIT"
-            ? `Equal Split · ${paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)} / person`
-            : pool.type === "CUSTOM_SPLIT"
-              ? "Custom Split"
-              : "Open Pool"}
+            ? `${poolTypeLabel(pool.type)} · ${paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)} / person`
+            : poolTypeLabel(pool.type)}
         </Text>
         <View style={styles.cardBottomRowRight}>
           {!isOrganizer && pool.state !== "CLOSED" ? (

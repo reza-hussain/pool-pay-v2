@@ -291,7 +291,6 @@ const styles = StyleSheet.create({
   },
   payLaterHint: {
     ...type.caption,
-    color: colors.danger600,
     textAlign: "center",
     marginTop: spacing.s3,
   },

@@ -25,6 +25,20 @@ export interface CreatePoolInput {
   organizerShareAmountPaise?: number;
 }
 
+// Shared across every screen that displays a Pool's type as a short label
+// (PoolDetailScreen, PoolsHomeScreen, AwaitingPaymentScreen) so the three
+// type names live in exactly one place.
+export function poolTypeLabel(type: Pool["type"]): string {
+  switch (type) {
+    case "EQUAL_SPLIT":
+      return "Equal Split";
+    case "CUSTOM_SPLIT":
+      return "Custom Split";
+    case "OPEN":
+      return "Open Pool";
+  }
+}
+
 export async function listPools(token: string): Promise<Pool[]> {
   const res = await fetch(`${API_URL}/pools`, {
     headers: { Authorization: `Bearer ${token}` },
