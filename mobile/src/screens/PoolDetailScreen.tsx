@@ -70,7 +70,7 @@ export function PoolDetailScreen({
 
         <Text style={styles.title}>{pool.name}</Text>
         <Text style={styles.subtitle}>
-          {pool.type === "EQUAL_SPLIT" ? "Equal Split" : "Open Pool"}
+          {pool.type === "EQUAL_SPLIT" ? "Equal Split" : pool.type === "CUSTOM_SPLIT" ? "Custom Split" : "Open Pool"}
           {" · "}
           {isOrganizer ? "You're the Organizer" : "Member"}
           {pool.state === "LOCKED" ? " · Locked" : ""}
@@ -83,17 +83,28 @@ export function PoolDetailScreen({
             <Text style={styles.statValue}>{memberCount ?? "···"}</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statLabel}>{pool.type === "EQUAL_SPLIT" ? "Per person" : "Share"}</Text>
+            <Text style={styles.statLabel}>
+              {pool.type === "EQUAL_SPLIT" ? "Per person" : pool.type === "CUSTOM_SPLIT" ? "Split" : "Share"}
+            </Text>
             <Text style={styles.statValue}>
-              {pool.type === "EQUAL_SPLIT" ? paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0) : "Open"}
+              {pool.type === "EQUAL_SPLIT"
+                ? paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)
+                : pool.type === "CUSTOM_SPLIT"
+                  ? "Custom"
+                  : "Open"}
             </Text>
           </View>
         </View>
 
         <View style={styles.actionsRow}>
-          <Pressable style={styles.depositButton} onPress={onDeposit}>
-            <Text style={styles.depositButtonText}>Deposit</Text>
-          </Pressable>
+          {/* A Custom Split Member's one Deposit is already spoken for by
+              their Invitation — there's never a further Deposit to make
+              (ADR 0016), so this button doesn't apply to that Pool type. */}
+          {pool.type !== "CUSTOM_SPLIT" ? (
+            <Pressable style={styles.depositButton} onPress={onDeposit}>
+              <Text style={styles.depositButtonText}>Deposit</Text>
+            </Pressable>
+          ) : null}
           <Pressable style={styles.ledgerButton} onPress={onViewLedger}>
             <Text style={styles.ledgerButtonText}>View Ledger</Text>
           </Pressable>

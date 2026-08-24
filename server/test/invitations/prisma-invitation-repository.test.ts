@@ -101,4 +101,60 @@ describe("PrismaInvitationRepository", () => {
     expect(paid.paidAt).toBeInstanceOf(Date);
     await expect(repo.findPendingByPoolAndInvitee(poolId, organizerId)).resolves.toBeNull();
   });
+
+  it("lists PENDING Invitations for an invitee across every Pool, newest first", async () => {
+    const repo = new PrismaInvitationRepository(prisma);
+    const otherPool = await prisma.pool.create({
+      data: {
+        name: "Second Pool",
+        type: "CUSTOM_SPLIT",
+        perPersonAmountPaise: null,
+        organizerId,
+        joinCode: "555555",
+      },
+    });
+    const first = await repo.create({
+      poolId,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 10000,
+      token: "token_first",
+      expiresAt: futureDate(),
+    });
+    const second = await repo.create({
+      poolId: otherPool.id,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 20000,
+      token: "token_second",
+      expiresAt: futureDate(),
+    });
+    await repo.markPaid(first.id);
+
+    const pending = await repo.listPendingByInvitee(organizerId);
+
+    expect(pending).toHaveLength(1);
+    expect(pending[0].id).toBe(second.id);
+  });
+
+  it("lists every Invitation ever sent for a Pool, regardless of state", async () => {
+    const repo = new PrismaInvitationRepository(prisma);
+    const pending = await repo.create({
+      poolId,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 10000,
+      token: "token_pending",
+      expiresAt: futureDate(),
+    });
+    const paidInvitation = await repo.create({
+      poolId,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 20000,
+      token: "token_paid",
+      expiresAt: futureDate(),
+    });
+    await repo.markPaid(paidInvitation.id);
+
+    const all = await repo.listByPool(poolId);
+
+    expect(all.map((i) => i.id).sort()).toEqual([pending.id, paidInvitation.id].sort());
+  });
 });

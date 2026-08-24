@@ -5,7 +5,7 @@ export class PoolsApiError extends Error {}
 export interface Pool {
   id: string;
   name: string;
-  type: "EQUAL_SPLIT" | "OPEN";
+  type: "EQUAL_SPLIT" | "OPEN" | "CUSTOM_SPLIT";
   perPersonAmountPaise: number | null;
   state: "ACTIVE" | "LOCKED" | "CLOSED";
   organizerId: string;

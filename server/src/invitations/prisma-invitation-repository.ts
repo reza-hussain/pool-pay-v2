@@ -31,6 +31,22 @@ export class PrismaInvitationRepository implements InvitationRepository {
     });
     return toInvitation(row);
   }
+
+  async listPendingByInvitee(userId: string): Promise<Invitation[]> {
+    const rows = await this.prisma.invitation.findMany({
+      where: { inviteeUserId: userId, state: "PENDING" },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(toInvitation);
+  }
+
+  async listByPool(poolId: string): Promise<Invitation[]> {
+    const rows = await this.prisma.invitation.findMany({
+      where: { poolId },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(toInvitation);
+  }
 }
 
 function toInvitation(row: {

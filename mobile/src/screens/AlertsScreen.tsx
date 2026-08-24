@@ -9,6 +9,7 @@ import {
   type Notification,
   type NotificationType,
 } from "../api/notificationsClient";
+import { listMyInvitations, type InvitationForInvitee } from "../api/invitationsClient";
 import { formatTimestamp } from "../lib/time";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
@@ -34,25 +35,30 @@ function TypeIcon({ type: notifType }: { type: NotificationType }) {
   );
 }
 
-function NotificationRow({ notification }: { notification: Notification }) {
+function NotificationRow({ notification, onPress }: { notification: Notification; onPress?: () => void }) {
   return (
-    <View style={styles.row}>
+    <Pressable style={styles.row} onPress={onPress} disabled={!onPress}>
       <TypeIcon type={notification.type} />
       <View style={styles.rowText}>
         <Text style={styles.rowTitle}>{notification.message}</Text>
         <Text style={styles.rowSubtitle}>{formatTimestamp(notification.createdAt)}</Text>
       </View>
       {notification.readAt === null ? <View style={styles.dot} /> : null}
-    </View>
+    </Pressable>
   );
 }
 
 export function AlertsScreen({
   session,
   onUnreadCountChange,
+  onOpenInvitation,
 }: {
   session: StoredSession;
   onUnreadCountChange: (count: number) => void;
+  // Called once the tapped INVITATION_RECEIVED notification is resolved to
+  // its live Invitation — resolution happens here (not in the caller) since
+  // the notification only carries a poolId, not an invitation id.
+  onOpenInvitation: (invitationForInvitee: InvitationForInvitee) => void;
 }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +89,22 @@ export function AlertsScreen({
     }
   }
 
+  async function handleNotificationPress(notification: Notification) {
+    if (notification.type !== "INVITATION_RECEIVED") return;
+    try {
+      const invitations = await listMyInvitations(session.token);
+      const match = invitations.find((i) => i.invitation.poolId === notification.poolId);
+      if (match) {
+        onOpenInvitation(match);
+      } else {
+        // Already paid/voided/expired since the notification fired.
+        setError("This invitation is no longer available.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    }
+  }
+
   return (
     <Screen backgroundColor={colors.cream} edges={["top"]}>
       <View style={styles.container}>
@@ -108,7 +130,15 @@ export function AlertsScreen({
                 <Text style={styles.groupLabel}>New</Text>
                 <View style={styles.list}>
                   {unread.map((notification) => (
-                    <NotificationRow key={notification.id} notification={notification} />
+                    <NotificationRow
+                      key={notification.id}
+                      notification={notification}
+                      onPress={
+                        notification.type === "INVITATION_RECEIVED"
+                          ? () => handleNotificationPress(notification)
+                          : undefined
+                      }
+                    />
                   ))}
                 </View>
               </View>
@@ -118,7 +148,15 @@ export function AlertsScreen({
                 <Text style={styles.groupLabel}>Earlier</Text>
                 <View style={styles.list}>
                   {read.map((notification) => (
-                    <NotificationRow key={notification.id} notification={notification} />
+                    <NotificationRow
+                      key={notification.id}
+                      notification={notification}
+                      onPress={
+                        notification.type === "INVITATION_RECEIVED"
+                          ? () => handleNotificationPress(notification)
+                          : undefined
+                      }
+                    />
                   ))}
                 </View>
               </View>

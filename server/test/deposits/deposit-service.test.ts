@@ -25,7 +25,7 @@ import { PoolNotFoundError } from "../../src/memberships/types.js";
 const ORGANIZER_ID = "user_organizer";
 const MEMBER_ID = "user_member";
 
-async function makeService() {
+async function makeService(now?: () => Date) {
   const poolRepository = new InMemoryPoolRepository();
   const membershipRepository = new InMemoryMembershipRepository();
   const invitationRepository = new InMemoryInvitationRepository();
@@ -58,6 +58,7 @@ async function makeService() {
     userRepository,
     notificationService,
     invitationRepository,
+    now,
   });
 
   const equalSplitPool = await poolRepository.create(ORGANIZER_ID, {
@@ -114,6 +115,10 @@ async function deposit(
 
 function futureDate(days = 7): Date {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+}
+
+function pastDate(days = 1): Date {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
 
 // Open Pool deposits are retired at createDepositIntent (ticket #59), so this
@@ -381,6 +386,39 @@ describe("DepositService.confirmDeposit — Custom Split Pool (ticket #58)", () 
     await expect(
       depositService.createDepositIntent(customSplitPool.id, ORGANIZER_ID),
     ).rejects.toThrow(InvitationNotFoundError);
+  });
+});
+
+describe("Custom Split Pool — lazily-expired Invitation (ticket #60)", () => {
+  it("createDepositIntent treats a past-expiresAt PENDING Invitation as not found", async () => {
+    const { depositService, invitationRepository, customSplitPool } = await makeService();
+    await invitationRepository.create({
+      poolId: customSplitPool.id,
+      inviteeUserId: ORGANIZER_ID,
+      assignedAmountPaise: 30000,
+      token: "token_expired",
+      expiresAt: pastDate(),
+    });
+
+    await expect(
+      depositService.createDepositIntent(customSplitPool.id, ORGANIZER_ID),
+    ).rejects.toThrow(InvitationNotFoundError);
+  });
+
+  it("confirmDeposit rejects a payment against an Invitation that expired between intent and confirmation", async () => {
+    let clock = new Date("2026-01-01T00:00:00Z");
+    const { depositService, invitationRepository, customSplitPool } = await makeService(() => clock);
+    await invitationRepository.create({
+      poolId: customSplitPool.id,
+      inviteeUserId: ORGANIZER_ID,
+      assignedAmountPaise: 30000,
+      token: "token_1",
+      expiresAt: new Date("2026-01-02T00:00:00Z"),
+    });
+    const intent = await depositService.createDepositIntent(customSplitPool.id, ORGANIZER_ID);
+
+    clock = new Date("2026-01-03T00:00:00Z"); // now past expiresAt
+    await expect(depositService.confirmDeposit(intent.id, 30000)).rejects.toThrow(InvitationNotFoundError);
   });
 });
 

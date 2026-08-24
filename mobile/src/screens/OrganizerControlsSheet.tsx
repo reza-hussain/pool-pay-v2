@@ -9,6 +9,7 @@ export function OrganizerControlsSheet({
   onTransferOut,
   onReimburse,
   onManageMembers,
+  onManageInvitations,
   onClosePool,
   onClose,
 }: {
@@ -17,6 +18,9 @@ export function OrganizerControlsSheet({
   onTransferOut: () => void;
   onReimburse: () => void;
   onManageMembers: () => void;
+  // Custom Split Pool only (ticket #60) — undefined for every other type,
+  // which hides the row rather than wiring it to a no-op.
+  onManageInvitations?: () => void;
   onClosePool: () => void;
   onClose: () => void;
 }) {
@@ -77,6 +81,15 @@ export function OrganizerControlsSheet({
                 <Text style={styles.rowDescription}>View or remove Members from this Pool</Text>
               </View>
             </Pressable>
+
+            {pool.type === "CUSTOM_SPLIT" && onManageInvitations ? (
+              <Pressable style={styles.row} onPress={onManageInvitations}>
+                <View style={styles.rowText}>
+                  <Text style={styles.rowTitle}>Invitations</Text>
+                  <Text style={styles.rowDescription}>Invite Members and see who's paid</Text>
+                </View>
+              </Pressable>
+            ) : null}
 
             <Pressable style={styles.row} onPress={onClosePool}>
               <View style={styles.rowText}>

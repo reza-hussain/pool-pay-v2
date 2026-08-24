@@ -75,7 +75,12 @@ export function DepositScreen({
     );
   }
 
-  if (pool.type === "EQUAL_SPLIT") {
+  if (pool.type === "EQUAL_SPLIT" || pool.type === "CUSTOM_SPLIT") {
+    // Equal Split's fixed amount lives on the Pool; Custom Split's lives on
+    // the caller's own Invitation instead (ADR 0016) — the intent already
+    // carries whichever one applies, so both branches read from it the same way.
+    const lockedAmountPaise =
+      pool.type === "EQUAL_SPLIT" ? pool.perPersonAmountPaise ?? 0 : intent?.fixedAmountPaise ?? 0;
     return (
       <Screen backgroundColor={colors.ink900}>
       <View style={styles.darkContainer}>
@@ -99,14 +104,14 @@ export function DepositScreen({
 
         <View style={styles.lockedBlock}>
           <Text style={styles.lockedCaption}>Amount locked for this Pool</Text>
-          <Text style={styles.lockedAmount}>{paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)}</Text>
+          <Text style={styles.lockedAmount}>{paiseToRupeeLabel(lockedAmountPaise)}</Text>
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Pressable
           style={styles.primaryButton}
-          onPress={() => confirmDeposit(pool.perPersonAmountPaise ?? 0)}
+          onPress={() => confirmDeposit(lockedAmountPaise)}
           disabled={loading || !intent}
         >
           {loading ? (

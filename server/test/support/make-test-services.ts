@@ -3,6 +3,7 @@ import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-rep
 import { MembershipService } from "../../src/memberships/membership-service.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { InMemoryInvitationRepository } from "../../src/invitations/fakes/in-memory-invitation-repository.js";
+import { InvitationService } from "../../src/invitations/invitation-service.js";
 import { DepositService } from "../../src/deposits/deposit-service.js";
 import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-deposit-repository.js";
 import { InMemoryPendingDepositRepository } from "../../src/deposits/fakes/in-memory-pending-deposit-repository.js";
@@ -56,6 +57,13 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     invitationRepository,
   });
   const membershipService = new MembershipService({ poolRepository, membershipRepository });
+  const invitationService = new InvitationService({
+    invitationRepository,
+    poolRepository,
+    membershipRepository,
+    userRepository,
+    notificationService,
+  });
   const depositService = new DepositService({
     poolRepository,
     membershipRepository,
@@ -124,6 +132,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
   return {
     poolService,
     membershipService,
+    invitationService,
     depositService,
     spendService,
     reimbursementService,

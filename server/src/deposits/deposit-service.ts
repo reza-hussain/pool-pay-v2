@@ -12,6 +12,7 @@ import type { NotificationService } from "../notifications/notification-service.
 import {
   InvitationAmountMismatchError,
   InvitationNotFoundError,
+  isInvitationExpired,
   type Invitation,
   type InvitationRepository,
 } from "../invitations/types.js";
@@ -48,6 +49,7 @@ export interface DepositServiceOptions {
   // caller's own pending Invitation rather than Pool.perPersonAmountPaise,
   // and confirming that deposit is what creates their Membership.
   invitationRepository: InvitationRepository;
+  now?: () => Date;
 }
 
 export class DepositService {
@@ -62,6 +64,7 @@ export class DepositService {
   private readonly userRepository: UserRepository;
   private readonly notificationService: NotificationService;
   private readonly invitationRepository: InvitationRepository;
+  private readonly now: () => Date;
 
   constructor(options: DepositServiceOptions) {
     this.poolRepository = options.poolRepository;
@@ -75,6 +78,7 @@ export class DepositService {
     this.userRepository = options.userRepository;
     this.notificationService = options.notificationService;
     this.invitationRepository = options.invitationRepository;
+    this.now = options.now ?? (() => new Date());
   }
 
   async createDepositIntent(poolId: string, userId: string): Promise<DepositIntent> {
@@ -94,7 +98,9 @@ export class DepositService {
       // Invitation, not the Pool — Pool.perPersonAmountPaise stays null for
       // CUSTOM_SPLIT (ADR 0016).
       const invitation = await this.invitationRepository.findPendingByPoolAndInvitee(poolId, userId);
-      if (!invitation) {
+      // A past-expiresAt Invitation lapses exactly as if cancelled (CONTEXT.md)
+      // — lazy check, same pattern as OtpRequest.expiresAt, no state mutation.
+      if (!invitation || isInvitationExpired(invitation, this.now())) {
         throw new InvitationNotFoundError();
       }
       fixedAmountPaise = invitation.assignedAmountPaise;
@@ -162,7 +168,7 @@ export class DepositService {
         pending.poolId,
         pending.userId,
       );
-      if (!invitation) {
+      if (!invitation || isInvitationExpired(invitation, this.now())) {
         throw new InvitationNotFoundError();
       }
       // Exact match only — a shortfall or overage is rejected outright, not

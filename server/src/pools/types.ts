@@ -98,6 +98,15 @@ export class NotPoolOrganizerError extends Error {
   }
 }
 
+// Sending an Invitation (ticket #60) only makes sense for a Custom Split
+// Pool — Equal Split joins via Invite Link/Pool Code instead.
+export class NotCustomSplitPoolError extends Error {
+  constructor() {
+    super("Only Custom Split Pools can send Invitations");
+    this.name = "NotCustomSplitPoolError";
+  }
+}
+
 export class OrganizerNotVerifiedError extends Error {
   constructor() {
     super("Verify your identity before creating a Pool");
