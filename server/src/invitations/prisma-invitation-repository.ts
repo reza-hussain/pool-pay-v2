@@ -61,6 +61,23 @@ export class PrismaInvitationRepository implements InvitationRepository {
     return toInvitation(row);
   }
 
+  async voidPendingByPool(poolId: string): Promise<Invitation[]> {
+    // Conditional on state, same as markCancelled — a payment confirming
+    // concurrently on one of these rows wins, so only rows still PENDING at
+    // write time flip, and only those are read back and returned.
+    const pending = await this.prisma.invitation.findMany({ where: { poolId, state: "PENDING" } });
+    if (pending.length === 0) {
+      return [];
+    }
+    const ids = pending.map((row) => row.id);
+    await this.prisma.invitation.updateMany({
+      where: { id: { in: ids }, state: "PENDING" },
+      data: { state: "VOIDED" },
+    });
+    const rows = await this.prisma.invitation.findMany({ where: { id: { in: ids }, state: "VOIDED" } });
+    return rows.map(toInvitation);
+  }
+
   async findById(id: string): Promise<Invitation | null> {
     const row = await this.prisma.invitation.findUnique({ where: { id } });
     return row ? toInvitation(row) : null;

@@ -3,7 +3,8 @@ export type NotificationType =
   | "POOL_FULLY_FUNDED"
   | "POOL_LOCKED"
   | "REFUND_PROCESSED"
-  | "INVITATION_RECEIVED";
+  | "INVITATION_RECEIVED"
+  | "INVITATION_VOIDED";
 
 export interface Notification {
   id: string;

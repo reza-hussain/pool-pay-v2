@@ -172,6 +172,25 @@ export class PoolService {
       });
     }
 
+    // An unpaid Invitation is a deferred Deposit (CONTEXT.md) — only Custom
+    // Split Pools send Invitations to invitees, so this is scoped there
+    // rather than also catching, e.g., an Equal Split Pool's still-pending
+    // Organizer self-Invitation (ticket #63).
+    if (pool.type === "CUSTOM_SPLIT") {
+      const voidedInvitations = await this.invitationRepository.voidPendingByPool(poolId);
+      const voidedInviteeIds = voidedInvitations
+        .map((invitation) => invitation.inviteeUserId)
+        .filter((id) => id !== userId);
+      if (voidedInviteeIds.length > 0) {
+        await this.notificationService.notify({
+          recipientUserIds: voidedInviteeIds,
+          poolId,
+          type: "INVITATION_VOIDED",
+          message: `Your Invitation to ${pool.name} was voided because the Pool was locked`,
+        });
+      }
+    }
+
     return locked;
   }
 

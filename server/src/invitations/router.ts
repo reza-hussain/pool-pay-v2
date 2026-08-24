@@ -14,6 +14,7 @@ import {
   InviteeAlreadyMemberError,
   InviteeNotRegisteredError,
   OrganizerNotAMemberError,
+  PoolNotAcceptingInvitationsError,
 } from "./types.js";
 
 const sendInvitationSchema = z.object({
@@ -55,7 +56,8 @@ export function createInvitationsRouter(invitationService: InvitationService, jw
           error instanceof InvalidInvitationExpiryPresetError ||
           error instanceof NotCustomSplitPoolError ||
           error instanceof InviteeAlreadyMemberError ||
-          error instanceof InvitationAlreadyPendingError
+          error instanceof InvitationAlreadyPendingError ||
+          error instanceof PoolNotAcceptingInvitationsError
         ) {
           res.status(400).json({ error: error.message });
           return;

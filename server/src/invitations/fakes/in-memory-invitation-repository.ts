@@ -68,6 +68,17 @@ export class InMemoryInvitationRepository implements InvitationRepository {
     return invitation;
   }
 
+  async voidPendingByPool(poolId: string): Promise<Invitation[]> {
+    const voided: Invitation[] = [];
+    for (const invitation of this.invitations) {
+      if (invitation.poolId === poolId && invitation.state === "PENDING") {
+        invitation.state = "VOIDED";
+        voided.push(invitation);
+      }
+    }
+    return voided;
+  }
+
   async findById(id: string): Promise<Invitation | null> {
     return this.invitations.find((i) => i.id === id) ?? null;
   }

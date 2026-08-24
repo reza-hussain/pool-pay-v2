@@ -87,7 +87,7 @@ model Invitation {
   // In paise. Individually assigned by the Organizer — not shared with any
   // other Invitation on the same Pool, unlike Pool.perPersonAmountPaise.
   assignedAmountPaise Int
-  // "PENDING" | "PAID" | "CANCELLED" | "EXPIRED"
+  // "PENDING" | "PAID" | "CANCELLED" | "EXPIRED" | "VOIDED"
   state         String    @default("PENDING")
   // Opaque token for the phone-bound Invitation link (ticket #61) — unused
   // by the self-addressed Invitation created at Pool creation (ticket #58).

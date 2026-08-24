@@ -160,6 +160,42 @@ describe("POST /pools/:poolId/invitations", () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("400s on a Locked Pool, and locking voided the pending Invitation and notified the invitee", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeCustomSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+
+    const sendRes = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE, assignedAmountPaise: 250000 });
+    expect(sendRes.status).toBe(201);
+
+    const lockRes = await request(app)
+      .post(`/pools/${pool.id}/lock`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(lockRes.status).toBe(200);
+
+    const listRes = await request(app)
+      .get(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(listRes.body.invitations).toHaveLength(1);
+    expect(listRes.body.invitations[0].invitation.state).toBe("VOIDED");
+
+    const notificationsRes = await request(app)
+      .get("/notifications")
+      .set("Authorization", bearerFor(INVITEE_ID));
+    expect(notificationsRes.body.notifications).toContainEqual(
+      expect.objectContaining({ poolId: pool.id, type: "INVITATION_VOIDED" }),
+    );
+
+    const secondSendRes = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE, assignedAmountPaise: 250000 });
+    expect(secondSendRes.status).toBe(400);
+  });
 });
 
 describe("GET /pools/:poolId/invitations", () => {

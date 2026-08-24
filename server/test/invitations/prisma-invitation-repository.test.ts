@@ -222,6 +222,46 @@ describe("PrismaInvitationRepository", () => {
     expect(stored?.state).toBe("PAID");
   });
 
+  it("voids every PENDING Invitation on a Pool and returns them, leaving other states untouched", async () => {
+    const repo = new PrismaInvitationRepository(prisma);
+    const pending1 = await repo.create({
+      poolId,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 10000,
+      token: "token_pending_1",
+      expiresAt: futureDate(),
+    });
+    const otherInvitee = await prisma.user.create({ data: { phoneNumber: "+919876543211" } });
+    const pending2 = await repo.create({
+      poolId,
+      inviteeUserId: otherInvitee.id,
+      assignedAmountPaise: 20000,
+      token: "token_pending_2",
+      expiresAt: futureDate(),
+    });
+    const paidInvitation = await repo.create({
+      poolId,
+      inviteeUserId: organizerId,
+      assignedAmountPaise: 30000,
+      token: "token_paid",
+      expiresAt: futureDate(),
+    });
+    await repo.markPaid(paidInvitation.id);
+
+    const voided = await repo.voidPendingByPool(poolId);
+
+    expect(voided.map((i) => i.id).sort()).toEqual([pending1.id, pending2.id].sort());
+    await expect(repo.findById(pending1.id)).resolves.toMatchObject({ state: "VOIDED" });
+    await expect(repo.findById(pending2.id)).resolves.toMatchObject({ state: "VOIDED" });
+    await expect(repo.findById(paidInvitation.id)).resolves.toMatchObject({ state: "PAID" });
+  });
+
+  it("returns an empty array when a Pool has no PENDING Invitations", async () => {
+    const repo = new PrismaInvitationRepository(prisma);
+
+    await expect(repo.voidPendingByPool(poolId)).resolves.toEqual([]);
+  });
+
   it("finds an Invitation by its token, or returns null", async () => {
     const repo = new PrismaInvitationRepository(prisma);
     const invitation = await repo.create({

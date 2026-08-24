@@ -18,6 +18,7 @@ import {
   InviteeAlreadyMemberError,
   InviteeNotRegisteredError,
   OrganizerNotAMemberError,
+  PoolNotAcceptingInvitationsError,
 } from "../../src/invitations/types.js";
 
 const ORGANIZER_ID = "user_organizer";
@@ -112,6 +113,15 @@ describe("InvitationService.sendInvitation", () => {
     await expect(
       invitationService.sendInvitation(ORGANIZER_ID, equalSplitPool.id, INVITEE_PHONE, 250000),
     ).rejects.toThrow(NotCustomSplitPoolError);
+  });
+
+  it("rejects sending on a Locked Pool", async () => {
+    const { invitationService, poolRepository, pool } = await makeService();
+    (await poolRepository.findById(pool.id))!.state = "LOCKED";
+
+    await expect(
+      invitationService.sendInvitation(ORGANIZER_ID, pool.id, INVITEE_PHONE, 250000),
+    ).rejects.toThrow(PoolNotAcceptingInvitationsError);
   });
 
   it("rejects a non-positive or non-integer amount", async () => {
