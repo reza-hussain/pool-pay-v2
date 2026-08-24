@@ -8,6 +8,7 @@ import {
   ReimbursementsApiError,
   type RecordReimbursementResult,
 } from "../api/reimbursementsClient";
+import { Screen } from "../components/Screen";
 import { paiseToRupeeLabel, rupeesToPaise } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
@@ -90,59 +91,61 @@ export function ReimburseScreen({
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.topRow}>
-        <Pressable onPress={onCancel}>
-          <Text style={styles.back}>{"‹"}</Text>
-        </Pressable>
-        <View style={{ width: 24 }} />
-      </View>
-      <Text style={styles.title}>Reimburse a Member</Text>
-      <Text style={styles.subtitle}>from {pool.name}</Text>
-
-      <Text style={styles.fieldLabelStandalone}>Member</Text>
-      <View style={styles.memberList}>
-        {members.map((membership) => (
-          <Pressable
-            key={membership.id}
-            style={[
-              styles.memberRow,
-              selectedMemberId === membership.userId && styles.memberRowSelected,
-            ]}
-            onPress={() => setSelectedMemberId(membership.userId)}
-          >
-            <Text style={styles.memberRowText}>{memberLabel(membership, session.user.id)}</Text>
-            {selectedMemberId === membership.userId ? <Text style={styles.checkGlyphSmall}>✓</Text> : null}
+    <Screen backgroundColor={colors.cream}>
+      <View style={styles.container}>
+        <View style={styles.topRow}>
+          <Pressable onPress={onCancel} hitSlop={8}>
+            <Text style={styles.back}>{"‹"}</Text>
           </Pressable>
-        ))}
+          <View style={{ width: 24 }} />
+        </View>
+        <Text style={styles.title}>Reimburse a Member</Text>
+        <Text style={styles.subtitle}>from {pool.name}</Text>
+
+        <Text style={styles.fieldLabelStandalone}>Member</Text>
+        <View style={styles.memberList}>
+          {members.map((membership) => (
+            <Pressable
+              key={membership.id}
+              style={[
+                styles.memberRow,
+                selectedMemberId === membership.userId && styles.memberRowSelected,
+              ]}
+              onPress={() => setSelectedMemberId(membership.userId)}
+            >
+              <Text style={styles.memberRowText}>{memberLabel(membership, session.user.id)}</Text>
+              {selectedMemberId === membership.userId ? <Text style={styles.checkGlyphSmall}>✓</Text> : null}
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Amount (₹)</Text>
+          <TextInput
+            style={styles.fieldValue}
+            placeholder="2500"
+            placeholderTextColor={colors.ink400}
+            keyboardType="decimal-pad"
+            value={amountRupees}
+            onChangeText={setAmountRupees}
+          />
+        </View>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        <Pressable
+          style={styles.primaryButton}
+          onPress={confirmReimbursement}
+          disabled={loading || !amountRupees || !selectedMemberId}
+        >
+          {loading ? (
+            <ActivityIndicator color={colors.paper} />
+          ) : (
+            <Text style={styles.primaryButtonText}>Reimburse ₹{amountRupees || "0"}</Text>
+          )}
+        </Pressable>
       </View>
-
-      <View style={styles.field}>
-        <Text style={styles.fieldLabel}>Amount (₹)</Text>
-        <TextInput
-          style={styles.fieldValue}
-          placeholder="2500"
-          placeholderTextColor={colors.ink400}
-          keyboardType="decimal-pad"
-          value={amountRupees}
-          onChangeText={setAmountRupees}
-        />
-      </View>
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <Pressable
-        style={styles.primaryButton}
-        onPress={confirmReimbursement}
-        disabled={loading || !amountRupees || !selectedMemberId}
-      >
-        {loading ? (
-          <ActivityIndicator color={colors.paper} />
-        ) : (
-          <Text style={styles.primaryButtonText}>Reimburse ₹{amountRupees || "0"}</Text>
-        )}
-      </Pressable>
-    </View>
+    </Screen>
   );
 }
 

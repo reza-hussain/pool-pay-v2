@@ -79,7 +79,7 @@ export function CreatePoolScreen({
       <Screen backgroundColor={colors.cream}>
       <View style={styles.container}>
         <View style={styles.topRow}>
-          <Pressable onPress={() => setStep("details")}>
+          <Pressable onPress={() => setStep("details")} hitSlop={8}>
             <Text style={styles.back}>{"‹"}</Text>
           </Pressable>
           <Text style={styles.eyebrow}>Step 2 of 2</Text>
@@ -140,7 +140,7 @@ export function CreatePoolScreen({
     <Screen backgroundColor={colors.cream}>
     <View style={styles.container}>
       <View style={styles.topRow}>
-        <Pressable onPress={onCancel}>
+        <Pressable onPress={onCancel} hitSlop={8}>
           <Text style={styles.back}>{"‹"}</Text>
         </Pressable>
         <Text style={styles.eyebrow}>Step 1 of 2</Text>

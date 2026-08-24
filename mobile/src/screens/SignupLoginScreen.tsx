@@ -214,7 +214,7 @@ function OtpStep({
     <Screen backgroundColor={colors.cream}>
       <KeyboardDismissingView>
         <View style={styles.container}>
-          <Pressable onPress={onBack} style={styles.backButton}>
+          <Pressable onPress={onBack} style={styles.backButton} hitSlop={8}>
             <Text style={styles.back}>{"‹"}</Text>
           </Pressable>
 

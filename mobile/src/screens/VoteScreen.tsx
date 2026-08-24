@@ -60,7 +60,7 @@ export function VoteScreen({
     <Screen backgroundColor={colors.cream}>
       <View style={styles.container}>
         <View style={styles.topRow}>
-          <Pressable onPress={onCancel}>
+          <Pressable onPress={onCancel} hitSlop={8}>
             <Text style={styles.back}>{"‹"}</Text>
           </Pressable>
           <View style={{ width: 24 }} />
