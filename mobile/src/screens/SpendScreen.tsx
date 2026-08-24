@@ -112,7 +112,7 @@ export function SpendScreen({
     return (
       <Screen backgroundColor={colors.ink900} edges={["top"]}>
         <View style={styles.scanContainer}>
-          <Pressable onPress={onCancel} style={styles.darkBack}>
+          <Pressable onPress={onCancel} style={styles.darkBack} hitSlop={8}>
             <Text style={styles.darkBackGlyph}>{"‹"}</Text>
           </Pressable>
 
@@ -151,7 +151,7 @@ export function SpendScreen({
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
-        <Pressable onPress={onCancel}>
+        <Pressable onPress={onCancel} hitSlop={8}>
           <Text style={styles.back}>{"‹"}</Text>
         </Pressable>
         <View style={{ width: 24 }} />

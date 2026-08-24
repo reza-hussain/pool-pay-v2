@@ -2,6 +2,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
 import { usePolledLedger, type LedgerEntry } from "../api/ledgerClient";
+import { Screen } from "../components/Screen";
 import { paiseToRupeeLabel } from "../lib/money";
 import { formatTimestamp } from "../lib/time";
 import { colors, radii, spacing, type } from "../theme/tokens";
@@ -61,29 +62,31 @@ export function LedgerScreen({
   const { entries, error } = usePolledLedger(session.token, pool.id);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.topRow}>
-        <Pressable onPress={onCancel}>
-          <Text style={styles.back}>{"‹"}</Text>
-        </Pressable>
-        <View style={{ width: 24 }} />
+    <Screen backgroundColor={colors.cream}>
+      <View style={styles.container}>
+        <View style={styles.topRow}>
+          <Pressable onPress={onCancel} hitSlop={8}>
+            <Text style={styles.back}>{"‹"}</Text>
+          </Pressable>
+          <View style={{ width: 24 }} />
+        </View>
+        <Text style={styles.title}>Activity</Text>
+        <Text style={styles.subtitle}>{pool.name}</Text>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        {entries.length === 0 ? (
+          <Text style={styles.empty}>No activity yet</Text>
+        ) : (
+          <FlatList
+            data={entries}
+            keyExtractor={(entry) => entry.id}
+            contentContainerStyle={styles.list}
+            renderItem={({ item }) => <EntryRow entry={item} sessionUserId={session.user.id} />}
+          />
+        )}
       </View>
-      <Text style={styles.title}>Activity</Text>
-      <Text style={styles.subtitle}>{pool.name}</Text>
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      {entries.length === 0 ? (
-        <Text style={styles.empty}>No activity yet</Text>
-      ) : (
-        <FlatList
-          data={entries}
-          keyExtractor={(entry) => entry.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => <EntryRow entry={item} sessionUserId={session.user.id} />}
-        />
-      )}
-    </View>
+    </Screen>
   );
 }
 

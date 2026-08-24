@@ -84,7 +84,7 @@ export function DepositScreen({
     return (
       <Screen backgroundColor={colors.ink900}>
       <View style={styles.darkContainer}>
-        <Pressable onPress={onCancel} style={styles.darkBack}>
+        <Pressable onPress={onCancel} style={styles.darkBack} hitSlop={8}>
           <Text style={styles.darkBackGlyph}>{"‹"}</Text>
         </Pressable>
         <Text style={styles.darkEyebrow}>Depositing into</Text>
@@ -129,7 +129,7 @@ export function DepositScreen({
     <Screen backgroundColor={colors.cream}>
     <View style={styles.container}>
       <View style={styles.topRow}>
-        <Pressable onPress={onCancel}>
+        <Pressable onPress={onCancel} hitSlop={8}>
           <Text style={styles.back}>{"‹"}</Text>
         </Pressable>
         <View style={{ width: 24 }} />
