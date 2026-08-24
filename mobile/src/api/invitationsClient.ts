@@ -13,6 +13,7 @@ export interface Invitation {
   poolId: string;
   inviteeUserId: string;
   assignedAmountPaise: number;
+  token: string;
   state: InvitationState;
   expiresAt: string;
   createdAt: string;
@@ -73,4 +74,12 @@ export async function listSentInvitations(token: string, poolId: string): Promis
 export async function listMyInvitations(token: string): Promise<InvitationForInvitee[]> {
   const data = await authedFetch(`/invitations/mine`, token);
   return data.invitations as InvitationForInvitee[];
+}
+
+export async function getInvitationByToken(
+  sessionToken: string,
+  invitationToken: string,
+): Promise<InvitationForInvitee> {
+  const data = await authedFetch(`/invitations/token/${invitationToken}`, sessionToken);
+  return data.invitationForInvitee as InvitationForInvitee;
 }

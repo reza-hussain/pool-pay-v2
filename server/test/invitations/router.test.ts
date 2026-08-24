@@ -341,3 +341,54 @@ describe("GET /invitations/mine", () => {
     expect(res.body.invitations).toEqual([]);
   });
 });
+
+describe("GET /invitations/token/:token", () => {
+  it("resolves the Invitation for its rightful invitee", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeCustomSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+    const sendRes = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE, assignedAmountPaise: 250000 });
+    const token = sendRes.body.invitation.token;
+
+    const res = await request(app)
+      .get(`/invitations/token/${token}`)
+      .set("Authorization", bearerFor(INVITEE_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.invitationForInvitee.invitation).toMatchObject({ assignedAmountPaise: 250000 });
+    expect(res.body.invitationForInvitee.pool).toMatchObject({ name: "Munnar Trip" });
+    expect(res.body.invitationForInvitee.organizerName).toBe("Rhea");
+  });
+
+  it("404s a signed-in user other than the named invitee, leaking no Pool or amount", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeCustomSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+    const sendRes = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE, assignedAmountPaise: 250000 });
+    const token = sendRes.body.invitation.token;
+
+    const res = await request(app)
+      .get(`/invitations/token/${token}`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(res.body)).not.toContain("250000");
+    expect(JSON.stringify(res.body)).not.toContain("Munnar Trip");
+  });
+
+  it("404s an unknown token", async () => {
+    const { app } = makeApp();
+
+    const res = await request(app)
+      .get("/invitations/token/not-a-real-token")
+      .set("Authorization", bearerFor(INVITEE_ID));
+
+    expect(res.status).toBe(404);
+  });
+});

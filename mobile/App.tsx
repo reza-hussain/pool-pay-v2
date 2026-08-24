@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { AppState } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
@@ -44,7 +44,7 @@ import { InvitationScreen } from './src/screens/InvitationScreen';
 import { HomeTabIcon, ActivityTabIcon, AlertsTabIcon, ProfileTabIcon } from './src/components/TabBarIcons';
 import { colors, fontFamily } from './src/theme/tokens';
 import type { ClosureRefund } from './src/api/closureClient';
-import type { InvitationForInvitee } from './src/api/invitationsClient';
+import { getInvitationByToken, InvitationsApiError, type InvitationForInvitee } from './src/api/invitationsClient';
 import {
   clearSession,
   clearStaleDataFromPriorInstall,
@@ -60,7 +60,7 @@ import { isBiometricAuthAvailable } from './src/lib/biometrics';
 import { listPools, lockPool, type Pool } from './src/api/poolsClient';
 import { joinByPoolId } from './src/api/membersClient';
 import { getNotifications } from './src/api/notificationsClient';
-import { parseJoinPoolId } from './src/lib/inviteLink';
+import { parseInvitationToken, parseJoinPoolId } from './src/lib/inviteLink';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -692,20 +692,43 @@ export default function App() {
     setLocked(false);
   }, []);
 
-  // Invite links (poolpay://join/<poolId>) auto-join while logged in. If the
-  // app is opened by a link before login, the link is dropped — completing a
-  // deferred join after signup is out of scope for this ticket.
+  // Invite links (poolpay://join/<poolId>) auto-join while logged in, and
+  // Invitation links (poolpay://invitation/<token>, ticket #61) open the pay
+  // screen for the invitee they name. If the app is opened by a link before
+  // login, the link is dropped — completing a deferred join/invitation after
+  // signup is out of scope for this ticket.
   useEffect(() => {
     if (!session) return;
 
     function handleUrl(url: string) {
+      if (!session) return;
+
       const poolId = parseJoinPoolId(url);
-      if (!poolId || !session) return;
-      joinByPoolId(session.token, poolId)
-        .then(() => navigationRef.current?.navigate('Home'))
-        .catch(() => {
-          // Swallow: an invalid/expired join link shouldn't crash the app.
-        });
+      if (poolId) {
+        joinByPoolId(session.token, poolId)
+          .then(() => navigationRef.current?.navigate('Home'))
+          .catch(() => {
+            // Swallow: an invalid/expired join link shouldn't crash the app.
+          });
+        return;
+      }
+
+      const invitationToken = parseInvitationToken(url);
+      if (invitationToken) {
+        getInvitationByToken(session.token, invitationToken)
+          .then((invitationForInvitee) => {
+            navigationRef.current?.navigate('InvitationDetail', { invitationForInvitee });
+          })
+          .catch((err) => {
+            // Unlike a join link, a phone-bound Invitation link must surface
+            // its failure (wrong account, unknown/cancelled token) rather
+            // than fail silently — see CONTEXT.md's Invitation entry.
+            Alert.alert(
+              "Can't open this Invitation",
+              err instanceof InvitationsApiError ? err.message : 'Something went wrong',
+            );
+          });
+      }
     }
 
     Linking.getInitialURL().then((url) => {

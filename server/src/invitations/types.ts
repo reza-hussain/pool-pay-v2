@@ -65,6 +65,10 @@ export interface InvitationRepository {
   // Every Invitation ever sent for one Pool, newest first — the Organizer's
   // management view (ticket #60), spanning every state.
   listByPool(poolId: string): Promise<Invitation[]>;
+  // Backs the phone-bound Invitation link (ticket #61) — token is unique, so
+  // this is a single lookup regardless of state; the caller enforces that
+  // only the invitee it names may see the result.
+  findByToken(token: string): Promise<Invitation | null>;
 }
 
 // Thrown when a Custom Split Pool deposit is attempted with no PENDING
@@ -157,5 +161,16 @@ export class InvitationNotCancellableError extends Error {
   constructor() {
     super("Only a pending Invitation can be cancelled");
     this.name = "InvitationNotCancellableError";
+  }
+}
+
+// Thrown for both an unknown token and a token that exists but names a
+// different invitee (ticket #61) — deliberately the same error either way,
+// so a mismatched-account attempt can't distinguish "no such Invitation"
+// from "not your Invitation," and the response carries no Pool/amount data.
+export class InvitationLinkNotFoundError extends Error {
+  constructor() {
+    super("This Invitation link isn't valid for your account");
+    this.name = "InvitationLinkNotFoundError";
   }
 }

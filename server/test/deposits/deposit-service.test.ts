@@ -421,9 +421,9 @@ describe("Custom Split Pool — lazily-expired Invitation (ticket #60)", () => {
     ).rejects.toThrow(InvitationNotFoundError);
   });
 
-  it("confirmDeposit rejects a payment against an Invitation that expired between intent and confirmation", async () => {
+  it("confirmDeposit rejects a payment once the Organizer's self-Invitation expired between intent and confirmation, expiring the Pool (ADR-0017)", async () => {
     let clock = new Date("2026-01-01T00:00:00Z");
-    const { depositService, invitationRepository, customSplitPool } = await makeService(() => clock);
+    const { depositService, poolRepository, invitationRepository, customSplitPool } = await makeService(() => clock);
     await invitationRepository.create({
       poolId: customSplitPool.id,
       inviteeUserId: ORGANIZER_ID,
@@ -434,7 +434,10 @@ describe("Custom Split Pool — lazily-expired Invitation (ticket #60)", () => {
     const intent = await depositService.createDepositIntent(customSplitPool.id, ORGANIZER_ID);
 
     clock = new Date("2026-01-03T00:00:00Z"); // now past expiresAt
-    await expect(depositService.confirmDeposit(intent.id, 30000)).rejects.toThrow(InvitationNotFoundError);
+    await expect(depositService.confirmDeposit(intent.id, 30000)).rejects.toThrow(
+      PoolNotAcceptingDepositsError,
+    );
+    expect((await poolRepository.findById(customSplitPool.id))!.state).toBe("EXPIRED");
   });
 });
 

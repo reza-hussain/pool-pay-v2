@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
@@ -10,6 +10,7 @@ import {
   type SentInvitation,
 } from "../api/invitationsClient";
 import { Screen } from "../components/Screen";
+import { buildInvitationLink } from "../lib/inviteLink";
 import { paiseToRupeeLabel } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
@@ -40,10 +41,12 @@ function InvitationRow({
   sent,
   onCancel,
   cancelling,
+  onShare,
 }: {
   sent: SentInvitation;
   onCancel?: () => void;
-  cancelling: boolean;
+  cancelling?: boolean;
+  onShare?: (sent: SentInvitation) => void;
 }) {
   return (
     <View style={styles.row}>
@@ -54,6 +57,11 @@ function InvitationRow({
       <View style={styles.rowEnd}>
         <Text style={styles.rowAmount}>{paiseToRupeeLabel(sent.invitation.assignedAmountPaise)}</Text>
         <StatusPill state={sent.invitation.state} />
+        {onShare ? (
+          <Pressable onPress={() => onShare(sent)} hitSlop={8}>
+            <Text style={styles.rowShare}>Share</Text>
+          </Pressable>
+        ) : null}
         {onCancel ? (
           <Pressable style={styles.cancelButton} onPress={onCancel} disabled={cancelling}>
             {cancelling ? (
@@ -126,6 +134,12 @@ export function InvitationsScreen({
   const pending = invitations.filter((i) => i.invitation.state === "PENDING");
   const resolved = invitations.filter((i) => i.invitation.state !== "PENDING");
 
+  async function shareInvitation(sent: SentInvitation) {
+    await Share.share({
+      message: `Pay your share for ${pool.name} on Pool Pay: ${buildInvitationLink(sent.invitation.token)}`,
+    });
+  }
+
   return (
     <Screen backgroundColor={colors.cream}>
       <View style={styles.container}>
@@ -156,6 +170,7 @@ export function InvitationsScreen({
                       sent={sent}
                       onCancel={() => confirmCancel(sent)}
                       cancelling={cancellingId === sent.invitation.id}
+                      onShare={shareInvitation}
                     />
                   </View>
                 ))}
@@ -265,6 +280,11 @@ const styles = StyleSheet.create({
   rowAmount: {
     ...type.bodyBold,
     color: colors.ink900,
+  },
+  rowShare: {
+    ...type.caption,
+    color: colors.ink600,
+    marginTop: 2,
   },
   statusPill: {
     borderRadius: 999,
