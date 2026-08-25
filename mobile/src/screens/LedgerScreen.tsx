@@ -1,23 +1,30 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
-import { usePolledLedger, type LedgerEntry } from "../api/ledgerClient";
+import { isMoneyIn, usePolledLedger, type LedgerEntry } from "../api/ledgerClient";
 import { Screen } from "../components/Screen";
+import { phoneSuffix } from "../lib/identity";
 import { paiseToRupeeLabel } from "../lib/money";
 import { formatTimestamp } from "../lib/time";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
-function entryLabel(entry: LedgerEntry, sessionUserId: string): string {
+// Exported so UserDetailScreen (ADR-0018) reuses the same wording for its
+// Deposit/Reimbursement/Refund history rows.
+export function entryLabel(entry: LedgerEntry, sessionUserId: string): string {
   switch (entry.type) {
     case "DEPOSIT": {
-      const who = entry.counterparty === sessionUserId ? "You" : `Member ···${entry.counterparty.slice(-4)}`;
+      const who = entry.counterparty === sessionUserId ? "You" : `Member ···${phoneSuffix(entry.counterparty)}`;
       return `${who} deposited`;
     }
     case "SPEND":
       return `Paid ${entry.counterparty}`;
     case "REIMBURSEMENT": {
-      const who = entry.counterparty === sessionUserId ? "you" : `Member ···${entry.counterparty.slice(-4)}`;
+      const who = entry.counterparty === sessionUserId ? "you" : `Member ···${phoneSuffix(entry.counterparty)}`;
       return `Reimbursed ${who}`;
+    }
+    case "REFUND": {
+      const who = entry.counterparty === sessionUserId ? "you" : `Member ···${phoneSuffix(entry.counterparty)}`;
+      return `Refunded ${who}`;
     }
   }
 }
@@ -27,7 +34,7 @@ function entryLabel(entry: LedgerEntry, sessionUserId: string): string {
 // added it explicitly reuses this screen's data-fetching, and reusing the
 // row markup too keeps the two surfaces visually identical.
 export function EntryRow({ entry, sessionUserId }: { entry: LedgerEntry; sessionUserId: string }) {
-  const isInflow = entry.type === "DEPOSIT";
+  const isInflow = isMoneyIn(entry.type);
   return (
     <View style={styles.row}>
       <View style={[styles.iconCircle, isInflow ? styles.iconCircleGreen : styles.iconCircleInk]}>

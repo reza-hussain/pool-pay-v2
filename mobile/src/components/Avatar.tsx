@@ -1,15 +1,36 @@
 import { StyleSheet, Text, View } from "react-native";
+import Svg, { Circle, Path } from "react-native-svg";
 import { colors, fontFamily } from "../theme/tokens";
 
 // Design kit section 01 (.avatar / .avatar.lg / .avatar-stack .a) — docs/design/poolpay-ui-kit.html.
 
 export type AvatarSize = "default" | "lg";
 
-export function Avatar({ label, size = "default" }: { label: string; size?: AvatarSize }) {
+// Omitting `label` renders a generic placeholder glyph instead of an initial —
+// User Detail's header uses this (ADR-0018: "placeholder avatar, no initials",
+// since there's no real name to take an initial from).
+export function Avatar({ label, size = "default" }: { label?: string; size?: AvatarSize }) {
   const isLg = size === "lg";
+  const glyphSize = isLg ? 32 : 18;
   return (
     <View style={[styles.circle, styles.base, isLg ? styles.lg : styles.default]}>
-      <Text style={isLg ? styles.letterLg : styles.letterDefault}>{label}</Text>
+      {label ? (
+        <Text style={isLg ? styles.letterLg : styles.letterDefault}>{label}</Text>
+      ) : (
+        <Svg
+          width={glyphSize}
+          height={glyphSize}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={colors.ink900}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <Circle cx={12} cy={8} r={4} />
+          <Path d="M4 21c1.6-4 5-5 8-5s6.4 1 8 5" />
+        </Svg>
+      )}
     </View>
   );
 }

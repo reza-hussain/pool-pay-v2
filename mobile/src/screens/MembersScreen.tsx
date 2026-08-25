@@ -12,17 +12,12 @@ import { Avatar } from "../components/Avatar";
 import { ListRow } from "../components/ListRow";
 import { Pill } from "../components/Pill";
 import { Screen } from "../components/Screen";
+import { phoneSuffix } from "../lib/identity";
 import { colors, radii, spacing, type } from "../theme/tokens";
-
-// No Member profile (name/phone) exists yet — same shortened-userId suffix
-// used on the Reimburse/Closed screens, for both the row label and the avatar letter.
-function memberSuffix(userId: string): string {
-  return userId.slice(-4);
-}
 
 function memberLabel(membership: Membership, sessionUserId: string): string {
   const you = membership.userId === sessionUserId ? " (you)" : "";
-  return `Member ···${memberSuffix(membership.userId)}${you}`;
+  return `Member ···${phoneSuffix(membership.userId)}${you}`;
 }
 
 export function MembersScreen({
@@ -99,7 +94,7 @@ export function MembersScreen({
             contentContainerStyle={styles.listContent}
             renderItem={({ item, index }) => (
               <ListRow
-                leading={<Avatar label={memberSuffix(item.userId).charAt(0).toUpperCase()} />}
+                leading={<Avatar label={phoneSuffix(item.userId).charAt(0).toUpperCase()} />}
                 title={memberLabel(item, session.user.id)}
                 subtitle={item.role === "ORGANIZER" ? undefined : "Member"}
                 divider={index < members.length - 1}
