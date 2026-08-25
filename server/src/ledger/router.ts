@@ -84,5 +84,22 @@ export function createLedgerRouter(ledgerService: LedgerService, jwtSecret: stri
     }
   });
 
+  router.get("/:poolId/balance", requireAuth(jwtSecret), async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const balancePaise = await ledgerService.getPoolBalance(req.params.poolId, req.userId as string);
+      res.status(200).json({ balancePaise });
+    } catch (error) {
+      if (error instanceof PoolNotFoundError) {
+        res.status(404).json({ error: error.message });
+        return;
+      }
+      if (error instanceof NotAPoolMemberError) {
+        res.status(403).json({ error: error.message });
+        return;
+      }
+      next(error);
+    }
+  });
+
   return router;
 }

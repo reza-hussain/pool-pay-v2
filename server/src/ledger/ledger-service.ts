@@ -2,6 +2,7 @@ import type { DepositRepository } from "../deposits/types.js";
 import type { MembershipRepository } from "../memberships/types.js";
 import { PoolNotFoundError } from "../memberships/types.js";
 import type { PoolRepository } from "../pools/types.js";
+import { getPoolBalance } from "../pools/pool-balance.js";
 import type { SpendRepository } from "../spends/types.js";
 import type { ReimbursementRepository } from "../reimbursements/types.js";
 import type { RefundRepository } from "../closure/types.js";
@@ -125,6 +126,31 @@ export class LedgerService {
     const nextCursor = hasMore ? encodeLedgerCursor(page[page.length - 1]) : null;
 
     return { entries: page, nextCursor };
+  }
+
+  // Backs Pool Detail's Total Balance card (ADR-0018) — same membership check
+  // as getLedger above, since balance visibility follows the same full-ledger
+  // transparency rule (ADR-0008).
+  async getPoolBalance(poolId: string, userId: string): Promise<number> {
+    const pool = await this.poolRepository.findById(poolId);
+    if (!pool) {
+      throw new PoolNotFoundError();
+    }
+
+    const membership = await this.membershipRepository.find(poolId, userId);
+    if (!membership) {
+      throw new NotAPoolMemberError();
+    }
+
+    return getPoolBalance(
+      {
+        depositRepository: this.depositRepository,
+        spendRepository: this.spendRepository,
+        reimbursementRepository: this.reimbursementRepository,
+        refundRepository: this.refundRepository,
+      },
+      poolId,
+    );
   }
 }
 

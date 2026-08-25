@@ -343,3 +343,46 @@ describe("LedgerService.getLedger", () => {
     });
   });
 });
+
+describe("LedgerService.getPoolBalance", () => {
+  it("nets Deposits, Spends, Reimbursements, and Refunds", async () => {
+    const {
+      ledgerService,
+      depositRepository,
+      spendRepository,
+      reimbursementRepository,
+      refundRepository,
+      pool,
+    } = await makeService();
+
+    await depositRepository.create(pool.id, MEMBER_ID, 100000);
+    await spendRepository.create(pool.id, ORGANIZER_ID, "merchant@upi", 30000, 300);
+    await reimbursementRepository.create(pool.id, MEMBER_ID, "member@upi", 20000);
+    await refundRepository.create(pool.id, MEMBER_ID, "member@fakebank", 10000);
+
+    const balancePaise = await ledgerService.getPoolBalance(pool.id, MEMBER_ID);
+    // Spend's sumByPool includes its feePaise, on top of the 30000 principal.
+    expect(balancePaise).toBe(100000 - 30000 - 300 - 20000 - 10000);
+  });
+
+  it("is visible to the Organizer too", async () => {
+    const { ledgerService, depositRepository, pool } = await makeService();
+    await depositRepository.create(pool.id, MEMBER_ID, 10000);
+
+    await expect(ledgerService.getPoolBalance(pool.id, ORGANIZER_ID)).resolves.toBe(10000);
+  });
+
+  it("rejects a non-Member", async () => {
+    const { ledgerService, pool } = await makeService();
+    await expect(ledgerService.getPoolBalance(pool.id, STRANGER_ID)).rejects.toThrow(
+      NotAPoolMemberError,
+    );
+  });
+
+  it("rejects an unknown Pool", async () => {
+    const { ledgerService } = await makeService();
+    await expect(ledgerService.getPoolBalance("does-not-exist", MEMBER_ID)).rejects.toThrow(
+      PoolNotFoundError,
+    );
+  });
+});

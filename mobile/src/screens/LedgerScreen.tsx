@@ -8,8 +8,8 @@ import { paiseToRupeeLabel } from "../lib/money";
 import { formatTimestamp } from "../lib/time";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
-// Exported so UserDetailScreen (ADR-0018) reuses the same wording for its
-// Deposit/Reimbursement/Refund history rows.
+// Exported so UserDetailScreen and PoolDetailScreen (ADR-0018) reuse the
+// same row wording instead of each re-deriving it.
 export function entryLabel(entry: LedgerEntry, sessionUserId: string): string {
   switch (entry.type) {
     case "DEPOSIT": {
@@ -29,11 +29,7 @@ export function entryLabel(entry: LedgerEntry, sessionUserId: string): string {
   }
 }
 
-// Exported so PoolDetailScreen can render the same row for its "Recent
-// activity" preview instead of rebuilding this rendering — the ticket that
-// added it explicitly reuses this screen's data-fetching, and reusing the
-// row markup too keeps the two surfaces visually identical.
-export function EntryRow({ entry, sessionUserId }: { entry: LedgerEntry; sessionUserId: string }) {
+function EntryRow({ entry, sessionUserId }: { entry: LedgerEntry; sessionUserId: string }) {
   const isInflow = isMoneyIn(entry.type);
   return (
     <View style={styles.row}>

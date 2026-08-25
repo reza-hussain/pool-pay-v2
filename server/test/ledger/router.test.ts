@@ -260,3 +260,56 @@ describe("GET /pools/:poolId/ledger", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("GET /pools/:poolId/balance", () => {
+  it("returns the Pool's current balance for a Member", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/balance`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(200);
+    // Organizer's own share (ADR-0017) + this Member's Deposit, no Spends yet.
+    expect(res.body).toEqual({ balancePaise: 200000 });
+  });
+
+  it("returns the balance for the Organizer too", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/balance`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ balancePaise: 200000 });
+  });
+
+  it("returns 403 for a non-Member", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/balance`)
+      .set("Authorization", bearerFor("user_stranger"));
+
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 404 for an unknown pool", async () => {
+    const { app } = await makeApp();
+
+    const res = await request(app)
+      .get("/pools/pool_missing/balance")
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 401 without a bearer token", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app).get(`/pools/${pool.id}/balance`);
+
+    expect(res.status).toBe(401);
+  });
+});

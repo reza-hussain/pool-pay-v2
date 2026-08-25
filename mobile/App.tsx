@@ -164,7 +164,7 @@ function SignupLoginRoute() {
 }
 
 function HomeRoute({ navigation }: HomeRouteProps) {
-  const { session, isNewUser, pools, setPools } = useSessionContext();
+  const { session, isNewUser, pools } = useSessionContext();
   const [organizerControlsPool, setOrganizerControlsPool] = useState<Pool | null>(null);
 
   return (
@@ -186,11 +186,6 @@ function HomeRoute({ navigation }: HomeRouteProps) {
       {organizerControlsPool ? (
         <OrganizerControlsSheet
           pool={organizerControlsPool}
-          onLock={async () => {
-            const locked = await lockPool(session.token, organizerControlsPool.id);
-            setPools((prev) => prev.map((p) => (p.id === locked.id ? locked : p)));
-            setOrganizerControlsPool(null);
-          }}
           onTransferOut={() => {
             navigation.navigate('Spend', { pool: organizerControlsPool });
             setOrganizerControlsPool(null);
@@ -215,10 +210,6 @@ function HomeRoute({ navigation }: HomeRouteProps) {
                 }
               : undefined
           }
-          onClosePool={() => {
-            navigation.navigate('CloseConfirm', { pool: organizerControlsPool });
-            setOrganizerControlsPool(null);
-          }}
           onClose={() => setOrganizerControlsPool(null)}
         />
       ) : null}
@@ -394,18 +385,20 @@ function PoolDetailRoute({
         onCancel={() => navigation.goBack()}
         onDeposit={() => navigation.navigate('Deposit', { pool })}
         onPayOrganizerShare={() => navigation.replace('Deposit', { pool, isOrganizerShare: true })}
-        onViewLedger={() => navigation.navigate('Ledger', { pool })}
         onOpenOrganizerControls={() => setOrganizerControlsOpen(true)}
         onVoteToRefund={() => navigation.navigate('Vote', { pool })}
+        onViewAllMembers={() => navigation.navigate('Members', { pool })}
+        onAddMembers={() => navigation.navigate('Invite', { pool })}
+        onSelectTransaction={(entry) => navigation.navigate('TransactionDetail', { pool, entry })}
+        onLock={async () => {
+          const locked = await lockPool(session.token, pool.id);
+          setPools((prev) => prev.map((p) => (p.id === locked.id ? locked : p)));
+        }}
+        onClosePool={() => navigation.navigate('CloseConfirm', { pool })}
       />
       {organizerControlsOpen ? (
         <OrganizerControlsSheet
           pool={pool}
-          onLock={async () => {
-            const locked = await lockPool(session.token, pool.id);
-            setPools((prev) => prev.map((p) => (p.id === locked.id ? locked : p)));
-            setOrganizerControlsOpen(false);
-          }}
           onTransferOut={() => {
             navigation.navigate('Spend', { pool });
             setOrganizerControlsOpen(false);
@@ -430,10 +423,6 @@ function PoolDetailRoute({
                 }
               : undefined
           }
-          onClosePool={() => {
-            navigation.navigate('CloseConfirm', { pool });
-            setOrganizerControlsOpen(false);
-          }}
           onClose={() => setOrganizerControlsOpen(false)}
         />
       ) : null}

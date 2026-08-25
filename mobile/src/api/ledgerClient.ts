@@ -66,6 +66,18 @@ export async function getLedger(
   return { entries: data.entries as LedgerEntry[], nextCursor: (data.nextCursor as string | null) ?? null };
 }
 
+// Backs Pool Detail's Total Balance card (ADR-0018).
+export async function getPoolBalance(token: string, poolId: string): Promise<number> {
+  const res = await fetch(`${API_URL}/pools/${poolId}/balance`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new LedgerApiError(data.error ?? `Request failed with status ${res.status}`);
+  }
+  return data.balancePaise as number;
+}
+
 // No websocket/SSE infra exists in this codebase — polling while a screen is
 // open is the established way to keep the ledger fresh without a manual
 // refresh, matching the REST pattern used everywhere else here. Shared by

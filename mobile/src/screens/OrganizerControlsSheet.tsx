@@ -1,21 +1,19 @@
-import { useState } from "react";
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
+// Lock Pool and Close Pool & Refund moved to direct, organizer-only buttons
+// on PoolDetailScreen (ADR-0018) — this sheet keeps its other five actions.
 export function OrganizerControlsSheet({
   pool,
-  onLock,
   onTransferOut,
   onReimburse,
   onAddMembers,
   onManageMembers,
   onManageInvitations,
-  onClosePool,
   onClose,
 }: {
   pool: Pool;
-  onLock: () => Promise<void>;
   onTransferOut: () => void;
   onReimburse: () => void;
   // Invite Link/Pool Code only exists for Equal Split (CONTEXT.md — Custom
@@ -25,24 +23,8 @@ export function OrganizerControlsSheet({
   // Custom Split Pool only (ticket #60) — undefined for every other type,
   // which hides the row rather than wiring it to a no-op.
   onManageInvitations?: () => void;
-  onClosePool: () => void;
   onClose: () => void;
 }) {
-  const [locking, setLocking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleLock() {
-    setError(null);
-    setLocking(true);
-    try {
-      await onLock();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setLocking(false);
-    }
-  }
-
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} />
@@ -55,16 +37,6 @@ export function OrganizerControlsSheet({
           <Text style={styles.closedNotice}>This Pool is closed — nothing left to do.</Text>
         ) : (
           <>
-            {pool.state !== "LOCKED" ? (
-              <Pressable style={styles.row} onPress={handleLock} disabled={locking}>
-                <View style={styles.rowText}>
-                  <Text style={styles.rowTitle}>Lock Pool</Text>
-                  <Text style={styles.rowDescription}>Stop new deposits — balance stays as is</Text>
-                </View>
-                {locking ? <ActivityIndicator color={colors.ink600} /> : null}
-              </Pressable>
-            ) : null}
-
             <Pressable style={styles.row} onPress={onTransferOut}>
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>Transfer out</Text>
@@ -103,17 +75,8 @@ export function OrganizerControlsSheet({
                 </View>
               </Pressable>
             ) : null}
-
-            <Pressable style={styles.row} onPress={onClosePool}>
-              <View style={styles.rowText}>
-                <Text style={[styles.rowTitle, styles.dangerText]}>Close Pool & refund</Text>
-                <Text style={styles.rowDescription}>Ends the Pool, refunds leftover pro-rata</Text>
-              </View>
-            </Pressable>
           </>
         )}
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Pressable style={styles.cancelButton} onPress={onClose}>
           <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -171,20 +134,12 @@ const styles = StyleSheet.create({
     ...type.caption,
     marginTop: 2,
   },
-  dangerText: {
-    color: colors.danger600,
-  },
   closedNotice: {
     ...type.body,
     color: colors.ink400,
     paddingVertical: spacing.s4,
     borderTopWidth: 1,
     borderTopColor: colors.line,
-  },
-  error: {
-    ...type.body,
-    color: colors.danger600,
-    marginTop: spacing.s2,
   },
   cancelButton: {
     height: 48,
