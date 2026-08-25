@@ -25,7 +25,7 @@ The two ways a person joins an Equal Split Pool as a Member: an open shareable l
 _Avoid_: Invite code (ambiguous between the two mechanisms — use the full term)
 
 **Equal Split Pool**:
-A Pool where the Organizer sets a fixed per-person contribution amount, and every Member is expected to contribute exactly that share. Unlike Custom Split, a Member isn't limited to one Deposit — repeat Deposits over time are how an Equal Split Pool now covers ongoing/recurring use cases (e.g. apartment/roommate expenses), the role the retired Open Pool used to serve.
+A Pool where the Organizer sets a fixed per-person contribution amount, and every Member is expected to contribute exactly that share. Unlike Custom Split, a Member isn't limited to one Deposit — repeat Deposits over time are how an Equal Split Pool now covers ongoing use cases (e.g. apartment/roommate expenses), the role the retired Open Pool used to serve. For a use case with an actual period (e.g. rent due monthly), see **Recurring Pool** and **Cycle** — plain repeat Deposits without a period remain valid too.
 _Avoid_: Fixed pool
 
 **Custom Split Pool**:
@@ -47,12 +47,24 @@ A Pool with no fixed contribution amount — Members contribute whatever they wa
 _Avoid_: Flexible pool, ongoing pool
 
 **Locked** (Pool state):
-A Pool state, set only by the Organizer, in which no Member (including the Organizer) can make further deposits. Applies to both Equal Split and Custom Split Pools. Lets an Organizer fully fund a Pool alone and shut out further contributions, or simply stop collection once a Pool has enough. For a Custom Split Pool, Locking also blocks sending any new invites and voids any Invitation still pending — an invite is a promise of a future Deposit, so it doesn't make sense to leave that open, or let one still resolve, while blocking the Deposit itself.
+A Pool state, set only by the Organizer, in which no Member (including the Organizer) can make further deposits. Applies to both Equal Split and Custom Split Pools. Lets an Organizer fully fund a Pool alone and shut out further contributions, or simply stop collection once a Pool has enough. For a Custom Split Pool, Locking also blocks sending any new invites and voids any Invitation still pending — an invite is a promise of a future Deposit, so it doesn't make sense to leave that open, or let one still resolve, while blocking the Deposit itself. The only way to unlock a Locked Pool again is by requesting a **Top-up Request** — there is no standalone Unlock action (ADR-0018). Re-Locking is blocked while any Top-up Request is still unpaid.
 _Avoid_: Closed (reserved for the Pool's end-of-life state, a separate concept)
 
 **Deposit**:
-Money a Member pays into a Pool via UPI. For an Equal Split Pool, the amount is fixed and locked, equal to the Member's required share, carried by the Pool's QR code. For a Custom Split Pool, the amount is likewise fixed and locked, but equal to that specific Member's individually assigned share rather than a pool-wide amount.
+Money a Member pays into a Pool via UPI. For an Equal Split Pool, the amount is fixed, equal to the Member's required share, carried by the Pool's QR code. For a Custom Split Pool, the amount is likewise fixed, but equal to that specific Member's individually assigned share rather than a pool-wide amount. That required share isn't permanently fixed for the Pool's whole life, though — see **Top-up Request** for how the Organizer can raise it mid-life, and **Cycle** for how a Recurring Pool re-sets it each period.
 _Avoid_: Contribution (used loosely elsewhere in this doc before this term was sharpened — treat as synonym, but prefer "Deposit" going forward), payment-in
+
+**Top-up Request**:
+The Organizer's request for an already-contributing Member to deposit an additional amount, on top of what they've already paid — how the Organizer raises a Pool's required share mid-life (e.g. deciding ₹2000 a head wasn't enough, after everyone's already paid). One Top-up Request per Member, tracked `PENDING → PAID | CANCELLED`; paying one is just an ordinary Deposit. For an Equal Split Pool, the Organizer sets one delta requested from every Member at once. For a Custom Split Pool, the Organizer sets a different delta per Member. While any Top-up Request in a Pool is `PENDING`, no Spend or Reimbursement can happen anywhere in that Pool. Cancelling one is called *waiving* it: for Custom Split, the Organizer waives one Member's Top-up Request individually, excusing them permanently at their old amount; for Equal Split, waiving reverts every outstanding Top-up Request in the Pool at once, since Equal Split requires every Member to owe the same amount at all times (ADR-0018).
+_Avoid_: Top-up (ambiguous between the request and the resulting Deposit — use "Top-up Request" for the ask, "Deposit" for the money that settles it)
+
+**Recurring Pool**:
+An Equal Split or Custom Split Pool that resets itself into a new **Cycle** on a fixed period (Weekly, Monthly, or Custom) instead of running as one open-ended fund. Chosen once, at creation — a Pool can't become Recurring later, or stop being Recurring without being Closed for good. The Pool itself never re-creates: it keeps the same id, join code, and Membership list across every Cycle (ADR-0019).
+_Avoid_: Subscription pool, ongoing pool (see **Equal Split Pool** — an ongoing Pool doesn't have to be Recurring)
+
+**Cycle**:
+One period's round of collection within a Recurring Pool — e.g. one month's rent. The Organizer sets each Cycle's per-person amount when it starts (any value, up or down, defaulting to the last Cycle's amount); rollover to the next Cycle happens lazily, the next time anyone opens the Pool after the period has elapsed, and starting a new Cycle auto-waives any Top-up Request still pending from the one before. A Cycle's leftover balance rolls forward into the next Cycle rather than being refunded, and a Member's shortfall in one Cycle doesn't carry into the next Cycle's target — both stand alone, visible only in that Cycle's history (ADR-0019).
+_Avoid_: Period, round, billing cycle (use "Cycle" — it's this Pool's own term, not a generic billing concept)
 
 **Registered UPI ID**:
 The UPI ID a person provides once, during Onboarding, stored on their account as the default destination for money leaving a Pool to them — refunds and reimbursements. Distinct from whatever UPI ID or app a Member happens to pay *from* when making a Deposit, which Pool Pay never captures or stores.
