@@ -24,10 +24,12 @@ export function MembersScreen({
   session,
   pool,
   onCancel,
+  onSelectUser,
 }: {
   session: StoredSession;
   pool: Pool;
   onCancel: () => void;
+  onSelectUser: (userId: string) => void;
 }) {
   const [members, setMembers] = useState<Membership[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,6 +100,7 @@ export function MembersScreen({
                 title={memberLabel(item, session.user.id)}
                 subtitle={item.role === "ORGANIZER" ? undefined : "Member"}
                 divider={index < members.length - 1}
+                onPress={() => onSelectUser(item.userId)}
                 right={
                   item.role === "ORGANIZER" ? (
                     <Pill label="Organizer" variant="dark" />

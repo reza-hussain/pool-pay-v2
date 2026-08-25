@@ -534,8 +534,14 @@ function VoteRoute({ route, navigation }: NativeStackScreenProps<AppStackParamLi
 
 function MembersRoute({ route, navigation }: NativeStackScreenProps<AppStackParamList, 'Members'>) {
   const { session } = useSessionContext();
+  const pool = route.params.pool;
   return (
-    <MembersScreen session={session} pool={route.params.pool} onCancel={() => navigation.goBack()} />
+    <MembersScreen
+      session={session}
+      pool={pool}
+      onCancel={() => navigation.goBack()}
+      onSelectUser={(userId) => navigation.navigate('UserDetail', { pool, userId })}
+    />
   );
 }
 
