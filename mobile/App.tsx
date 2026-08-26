@@ -41,6 +41,7 @@ import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
 import { InvitationsScreen } from './src/screens/InvitationsScreen';
 import { InviteByPhoneScreen } from './src/screens/InviteByPhoneScreen';
 import { InvitationScreen } from './src/screens/InvitationScreen';
+import { AddMemberScreen } from './src/screens/AddMemberScreen';
 import { HomeTabIcon, ActivityTabIcon, AlertsTabIcon, ProfileTabIcon } from './src/components/TabBarIcons';
 import { colors, fontFamily } from './src/theme/tokens';
 import type { ClosureRefund } from './src/api/closureClient';
@@ -96,6 +97,10 @@ type AppStackParamList = {
   Invitations: { pool: Pool };
   InviteByPhone: { pool: Pool };
   InvitationDetail: { invitationForInvitee: InvitationForInvitee };
+  // Equal Split direct add by phone/contact (ticket #87, part of #83) —
+  // scaffolded for manual verification; not yet linked from any button
+  // (that wiring is ticket #4).
+  AddMember: { pool: Pool };
 };
 
 type AppTabParamList = {
@@ -565,6 +570,21 @@ function InviteByPhoneRoute({
   );
 }
 
+function AddMemberRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'AddMember'>) {
+  const { session } = useSessionContext();
+  return (
+    <AddMemberScreen
+      session={session}
+      pool={route.params.pool}
+      onSent={() => navigation.goBack()}
+      onCancel={() => navigation.goBack()}
+    />
+  );
+}
+
 function InvitationDetailRoute({
   route,
   navigation,
@@ -576,6 +596,7 @@ function InvitationDetailRoute({
       session={session}
       invitationForInvitee={invitationForInvitee}
       onPay={() => navigation.navigate('Deposit', { pool: invitationForInvitee.pool })}
+      onAccepted={() => navigation.replace('PoolDetail', { pool: invitationForInvitee.pool })}
       onCancel={() => navigation.goBack()}
     />
   );
@@ -817,6 +838,7 @@ export default function App() {
               <AppStack.Screen name="Invitations" component={InvitationsRoute} />
               <AppStack.Screen name="InviteByPhone" component={InviteByPhoneRoute} />
               <AppStack.Screen name="InvitationDetail" component={InvitationDetailRoute} />
+              <AppStack.Screen name="AddMember" component={AddMemberRoute} />
             </AppStack.Navigator>
           </SessionContext.Provider>
         )}

@@ -39,6 +39,12 @@
           "faceIDPermission": "Pool Pay uses Face ID to lock your Pools when app lock is turned on."
         }
       ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Pool Pay needs access to your contacts so you can add a Member directly."
+        }
+      ],
       "expo-status-bar"
     ]
   }

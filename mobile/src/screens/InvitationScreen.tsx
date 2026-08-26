@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import type { InvitationForInvitee } from "../api/invitationsClient";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { acceptInvitation, InvitationsApiError, type InvitationForInvitee } from "../api/invitationsClient";
 import type { StoredSession } from "../api/session";
 import { listMembers } from "../api/membersClient";
 import { Screen } from "../components/Screen";
@@ -20,15 +20,26 @@ export function InvitationScreen({
   session,
   invitationForInvitee,
   onPay,
+  onAccepted,
   onCancel,
 }: {
   session: StoredSession;
   invitationForInvitee: InvitationForInvitee;
+  // Custom Split — navigates to the Deposit screen to pay the assigned amount.
   onPay: () => void;
+  // Equal Split phone/contact variant (ticket #87) — called once this screen's
+  // own zero-cost accept call succeeds.
+  onAccepted: () => void;
   onCancel: () => void;
 }) {
   const { invitation, pool, organizerName } = invitationForInvitee;
+  const isEqualSplit = invitation.assignedAmountPaise === null;
+  // Only read in the branches below that already guard on !isEqualSplit —
+  // the fallback is never actually reached, just satisfies the type.
+  const assignedAmountPaise = invitation.assignedAmountPaise ?? 0;
   const [memberCount, setMemberCount] = useState<number | null>(null);
+  const [accepting, setAccepting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +55,19 @@ export function InvitationScreen({
     };
   }, [pool.id, session.token]);
 
+  async function handleAccept() {
+    setError(null);
+    setAccepting(true);
+    try {
+      await acceptInvitation(session.token, invitation.id);
+      onAccepted();
+    } catch (err) {
+      setError(err instanceof InvitationsApiError ? err.message : "Something went wrong");
+    } finally {
+      setAccepting(false);
+    }
+  }
+
   return (
     <Screen backgroundColor={colors.cream}>
       <View style={styles.container}>
@@ -57,7 +81,7 @@ export function InvitationScreen({
 
         <View style={styles.context}>
           <View style={styles.eyebrowPill}>
-            <Text style={styles.eyebrowText}>Custom Split Pool</Text>
+            <Text style={styles.eyebrowText}>{isEqualSplit ? "Equal Split Pool" : "Custom Split Pool"}</Text>
           </View>
           <Text style={styles.poolName}>{pool.name}</Text>
           <View style={styles.invitedByChip}>
@@ -66,8 +90,17 @@ export function InvitationScreen({
         </View>
 
         <View style={styles.amountCard}>
-          <Text style={styles.amountLabel}>Your assigned share</Text>
-          <Text style={styles.amountValue}>{paiseToRupeeLabel(invitation.assignedAmountPaise)}</Text>
+          {isEqualSplit ? (
+            <>
+              <Text style={styles.amountLabel}>No payment required</Text>
+              <Text style={styles.amountValue}>Join for free</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.amountLabel}>Your assigned share</Text>
+              <Text style={styles.amountValue}>{paiseToRupeeLabel(assignedAmountPaise)}</Text>
+            </>
+          )}
           <View style={styles.expiryPill}>
             <Text style={styles.expiryText}>{expiryLabel(invitation.expiresAt)}</Text>
           </View>
@@ -78,19 +111,35 @@ export function InvitationScreen({
             <Text style={styles.infoTitle}>
               Join {memberCount} other member{memberCount === 1 ? "" : "s"}
             </Text>
-            <Text style={styles.infoSubtitle}>They have already paid their share.</Text>
+            <Text style={styles.infoSubtitle}>
+              {isEqualSplit ? "They're already Members." : "They have already paid their share."}
+            </Text>
           </View>
         ) : null}
 
         <View style={styles.spacer} />
 
-        <Pressable style={styles.payButton} onPress={onPay}>
-          <Text style={styles.payButtonText}>
-            Pay {paiseToRupeeLabel(invitation.assignedAmountPaise)} to Join
-          </Text>
-        </Pressable>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        {isEqualSplit ? (
+          <Pressable style={styles.payButton} onPress={handleAccept} disabled={accepting}>
+            {accepting ? (
+              <ActivityIndicator color={colors.paper} />
+            ) : (
+              <Text style={styles.payButtonText}>Accept & Join</Text>
+            )}
+          </Pressable>
+        ) : (
+          <Pressable style={styles.payButton} onPress={onPay}>
+            <Text style={styles.payButtonText}>
+              Pay {paiseToRupeeLabel(assignedAmountPaise)} to Join
+            </Text>
+          </Pressable>
+        )}
         <Text style={styles.payCaption}>
-          Paying this exact amount makes you a Member automatically — no separate join step.
+          {isEqualSplit
+            ? "Accepting makes you a Member immediately — no payment needed."
+            : "Paying this exact amount makes you a Member automatically — no separate join step."}
         </Text>
       </View>
     </Screen>
@@ -192,6 +241,12 @@ const styles = StyleSheet.create({
   },
   spacer: {
     flex: 1,
+  },
+  error: {
+    ...type.body,
+    color: colors.danger600,
+    marginBottom: spacing.s3,
+    textAlign: "center",
   },
   payButton: {
     height: 52,

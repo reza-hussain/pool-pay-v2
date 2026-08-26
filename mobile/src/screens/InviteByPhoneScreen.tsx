@@ -7,12 +7,10 @@ import {
   sendInvitation,
   type InvitationExpiryPreset,
 } from "../api/invitationsClient";
+import { NATIONAL_NUMBER_PATTERN, PhoneNumberField } from "../components/PhoneNumberField";
 import { Screen } from "../components/Screen";
 import { rupeesToPaise } from "../lib/money";
 import { colors, radii, spacing, type } from "../theme/tokens";
-
-// India-only v1 (ADR 0003) — Indian mobile numbers are 10 digits starting with 6-9.
-const NATIONAL_NUMBER_PATTERN = /^[6-9]\d{9}$/;
 
 const EXPIRY_PRESETS: { value: InvitationExpiryPreset; label: string }[] = [
   { value: "24h", label: "24 hours" },
@@ -70,23 +68,7 @@ export function InviteByPhoneScreen({
         </View>
         <Text style={styles.title}>Invite to {pool.name}</Text>
 
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Phone number</Text>
-          <View style={styles.phoneRow}>
-            <Text style={styles.phonePrefix}>+91</Text>
-            <View style={styles.phoneDivider} />
-            <TextInput
-              style={styles.phoneInput}
-              placeholder="98765 43210"
-              placeholderTextColor={colors.ink400}
-              keyboardType="number-pad"
-              maxLength={10}
-              value={nationalNumber}
-              onChangeText={(value) => setNationalNumber(value.replace(/\D/g, ""))}
-            />
-          </View>
-          <Text style={styles.hint}>They must already have a Pool Pay account.</Text>
-        </View>
+        <PhoneNumberField value={nationalNumber} onChangeValue={setNationalNumber} />
 
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>Assigned share (₹)</Text>
@@ -167,33 +149,6 @@ const styles = StyleSheet.create({
     color: colors.ink900,
     marginTop: 5,
     padding: 0,
-  },
-  phoneRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 5,
-  },
-  phonePrefix: {
-    fontSize: 15,
-    fontFamily: type.bodyBold.fontFamily,
-    color: colors.ink400,
-  },
-  phoneDivider: {
-    width: 1,
-    height: 18,
-    backgroundColor: colors.lineStrong,
-    marginHorizontal: spacing.s2,
-  },
-  phoneInput: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: type.bodyBold.fontFamily,
-    color: colors.ink900,
-    padding: 0,
-  },
-  hint: {
-    ...type.caption,
-    marginTop: spacing.s2,
   },
   chipRow: {
     flexDirection: "row",

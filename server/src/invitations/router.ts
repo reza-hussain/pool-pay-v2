@@ -8,17 +8,24 @@ import {
   InvalidInvitationAmountError,
   InvalidInvitationExpiryPresetError,
   InvitationAlreadyPendingError,
+  InvitationNotAcceptableError,
   InvitationNotCancellableError,
+  InvitationNotFoundForAccepterError,
   InvitationRecordNotFoundError,
+  InvitationRequiresPaymentError,
   InvitationLinkNotFoundError,
   InviteeAlreadyMemberError,
   InviteeNotRegisteredError,
+  NotEqualSplitPoolError,
   OrganizerNotAMemberError,
 } from "./types.js";
 
+// assignedAmountPaise omitted (rather than sent as 0/null) selects the
+// Equal Split phone/contact variant (ticket #87) — Custom Split's targeted
+// Invitation still requires it.
 const sendInvitationSchema = z.object({
   phoneNumber: z.string(),
-  assignedAmountPaise: z.number(),
+  assignedAmountPaise: z.number().optional(),
   expiryPreset: z.enum(["24h", "3d", "7d"]).optional(),
 });
 
@@ -32,18 +39,26 @@ export function createInvitationsRouter(invitationService: InvitationService, jw
     async (req: AuthenticatedRequest, res, next) => {
       const parsed = sendInvitationSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: "phoneNumber and assignedAmountPaise are required" });
+        res.status(400).json({ error: "phoneNumber is required" });
         return;
       }
 
       try {
-        const invitation = await invitationService.sendInvitation(
-          req.userId as string,
-          req.params.poolId,
-          parsed.data.phoneNumber,
-          parsed.data.assignedAmountPaise,
-          parsed.data.expiryPreset,
-        );
+        const invitation =
+          parsed.data.assignedAmountPaise !== undefined
+            ? await invitationService.sendInvitation(
+                req.userId as string,
+                req.params.poolId,
+                parsed.data.phoneNumber,
+                parsed.data.assignedAmountPaise,
+                parsed.data.expiryPreset,
+              )
+            : await invitationService.sendEqualSplitInvitation(
+                req.userId as string,
+                req.params.poolId,
+                parsed.data.phoneNumber,
+                parsed.data.expiryPreset,
+              );
         res.status(201).json({ invitation });
       } catch (error) {
         if (error instanceof PoolNotFoundError || error instanceof InviteeNotRegisteredError) {
@@ -54,6 +69,7 @@ export function createInvitationsRouter(invitationService: InvitationService, jw
           error instanceof InvalidInvitationAmountError ||
           error instanceof InvalidInvitationExpiryPresetError ||
           error instanceof NotCustomSplitPoolError ||
+          error instanceof NotEqualSplitPoolError ||
           error instanceof InviteeAlreadyMemberError ||
           error instanceof InvitationAlreadyPendingError
         ) {
@@ -157,6 +173,37 @@ export function createMyInvitationsRouter(invitationService: InvitationService, 
       next(error);
     }
   });
+
+  // Invitee accepts the Equal Split phone/contact Invitation variant (ticket
+  // #87) — creates a Membership immediately, at zero cost, no Deposit. A
+  // Custom Split (assigned-amount) Invitation is rejected here; that one is
+  // only resolved by paying (see the Deposit endpoints).
+  router.post(
+    "/:invitationId/accept",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      try {
+        const membership = await invitationService.acceptInvitation(
+          req.params.invitationId,
+          req.userId as string,
+        );
+        res.status(200).json({ membership });
+      } catch (error) {
+        if (error instanceof InvitationNotFoundForAccepterError) {
+          res.status(404).json({ error: error.message });
+          return;
+        }
+        if (
+          error instanceof InvitationNotAcceptableError ||
+          error instanceof InvitationRequiresPaymentError
+        ) {
+          res.status(400).json({ error: error.message });
+          return;
+        }
+        next(error);
+      }
+    },
+  );
 
   return router;
 }
