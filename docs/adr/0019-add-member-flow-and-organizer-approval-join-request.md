@@ -58,11 +58,13 @@ entity, mirroring how `Invitation` already models a different pre-`Membership` s
   `pool.joinCode` — there's no way to distinguish them server-side, and no reason to trust one
   transport more than another. `MembershipService.join()` (`membership-service.ts:75-105`) now
   always creates a `JoinRequest` for Equal Split instead of an immediate `Membership`.
-- **Expires 24 hours after creation if the Organizer doesn't act** — lazy, no cron, same
-  no-sweep pattern as `OtpRequest.expiresAt` and the self-`Invitation` expiry (ADR-0017).
-- An **expired** `JoinRequest` allows a fresh retry (re-scanning/re-entering the code creates a
-  new `PENDING` request) — no real rejection happened, the Organizer was just slow, same spirit
-  as `Membership.create()` already reactivating a removed row rather than erroring.
+- **Never expires on its own.** A `PENDING` `JoinRequest` has no `expiresAt` — it sits until the
+  Organizer approves or declines it, however long that takes; a slow Organizer is not a reason to
+  cut the requester loose. The only time-bound check in this flow is §5's join-code/link
+  `expiresAt`, applied once, at the moment a join attempt is made: if the code/link the requester
+  used has already expired, no `JoinRequest` is created at all (the attempt is rejected outright,
+  same "checked lazily, no cron" pattern as everything else here). Once a `JoinRequest` exists,
+  it's immune to the link expiring later or being re-shared with a new expiry.
 - A **declined** `JoinRequest` does not allow silent re-request via the same code/link — decline
   is an explicit Organizer signal. The Organizer can still override it via the explicit
   phone/contact-add path (§2), which bypasses this gate entirely.
@@ -95,7 +97,10 @@ editable from the share screen (a preset picklist, matching the existing
 Invitations). Defaults to `null` (no expiry) at Pool creation, so nothing changes for existing
 Pools or Organizers who never touch the new share screen. One code, one expiry — governs typed
 entry, QR, and link uniformly, consistent with §3's "one mechanism, three transports" model.
-Checked lazily at join time, same no-cron pattern as everything else here.
+Checked lazily at join time, same no-cron pattern as everything else here. This is the only
+expiry in the whole join flow: it gates whether a join attempt is allowed to create a
+`JoinRequest` at all; it says nothing about how long that `JoinRequest` then waits for the
+Organizer (§3 — that has no expiry of its own).
 
 Considered and rejected: minting a distinct, separately-expiring token per share event (closer
 to some apps' multi-link invite systems). Rejected as a materially bigger build — a new table,
@@ -141,9 +146,11 @@ per screen" rule better than several competing buttons.
 ## Consequences
 
 - **New `JoinRequest` model**: `id`, `poolId`, `requesterUserId`, `state`
-  (`PENDING`/`APPROVED`/`REJECTED`), `createdAt`, `expiresAt` (created-at + 24h). Approving
+  (`PENDING`/`APPROVED`/`REJECTED`), `createdAt`. No `expiresAt` of its own — see §3. Approving
   atomically creates a `Membership`, same transaction shape as paying an `Invitation`.
 - **`Pool` gains a nullable `expiresAt`** governing its existing `joinCode`, defaulting to `null`.
+  This is the sole expiry in the join flow — it governs whether a join attempt is accepted at all,
+  not how long a resulting `JoinRequest` waits for the Organizer.
 - **`Invitation.assignedAmountPaise`** (`schema.prisma:89`) becomes nullable, or gains an
   Equal-Split-shaped sibling path — needs a concrete schema decision during implementation, since
   it's currently a required field written only by Custom Split's phone-invite flow
