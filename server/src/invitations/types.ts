@@ -15,8 +15,10 @@ export interface Invitation {
   poolId: string;
   inviteeUserId: string;
   // In paise. Individually assigned by the Organizer — not shared with any
-  // other Invitation on the same Pool.
-  assignedAmountPaise: number;
+  // other Invitation on the same Pool. Null for the Equal Split phone/contact
+  // variant (ticket #87), which has no per-invitee assigned share — the
+  // invitee accepts at zero cost instead of paying this amount.
+  assignedAmountPaise: number | null;
   state: InvitationState;
   // Opaque token for the phone-bound Invitation link (ticket #61) — unused
   // by the self-addressed Invitation created at Pool creation (ticket #58).
@@ -35,7 +37,7 @@ export function isInvitationExpired(invitation: Invitation, now: Date): boolean 
 export interface CreateInvitationData {
   poolId: string;
   inviteeUserId: string;
-  assignedAmountPaise: number;
+  assignedAmountPaise: number | null;
   token: string;
   expiresAt: Date;
 }
@@ -172,5 +174,46 @@ export class InvitationLinkNotFoundError extends Error {
   constructor() {
     super("This Invitation link isn't valid for your account");
     this.name = "InvitationLinkNotFoundError";
+  }
+}
+
+// The Organizer's direct phone/contact add (ticket #87) only makes sense for
+// an Equal Split Pool — Custom Split already has its own targeted,
+// assigned-amount Invitation, and Open Pools don't take Invitations at all.
+export class NotEqualSplitPoolError extends Error {
+  constructor() {
+    super("Only Equal Split Pools support adding a Member directly by phone or contact");
+    this.name = "NotEqualSplitPoolError";
+  }
+}
+
+// Thrown for both an unknown Invitation id and one that exists but names a
+// different invitee (ticket #87) — same non-leaking pattern as
+// InvitationLinkNotFoundError, so a mismatched-account attempt can't tell
+// "no such Invitation" from "not yours."
+export class InvitationNotFoundForAccepterError extends Error {
+  constructor() {
+    super("No Invitation found for your account with that id");
+    this.name = "InvitationNotFoundForAccepterError";
+  }
+}
+
+// Only a PENDING, unexpired Invitation can be accepted (ticket #87) — an
+// already-resolved (paid/cancelled) or lazily-expired one has nothing left
+// to accept.
+export class InvitationNotAcceptableError extends Error {
+  constructor() {
+    super("This Invitation can no longer be accepted");
+    this.name = "InvitationNotAcceptableError";
+  }
+}
+
+// A Custom Split Invitation carries an assigned amount that must be paid in
+// full (ADR 0016) — it can't be resolved by the zero-cost accept path built
+// for the Equal Split phone/contact variant (ticket #87).
+export class InvitationRequiresPaymentError extends Error {
+  constructor() {
+    super("This Invitation has an assigned amount and must be paid, not just accepted");
+    this.name = "InvitationRequiresPaymentError";
   }
 }

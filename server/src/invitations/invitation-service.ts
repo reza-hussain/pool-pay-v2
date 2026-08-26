@@ -1,22 +1,26 @@
 import { randomBytes } from "node:crypto";
-import type { MembershipRepository } from "../memberships/types.js";
+import type { Membership, MembershipRepository } from "../memberships/types.js";
 import { PoolNotFoundError } from "../memberships/types.js";
 import type { Pool, PoolRepository } from "../pools/types.js";
 import { NotCustomSplitPoolError, NotPoolOrganizerError } from "../pools/types.js";
-import type { UserRepository } from "../auth/types.js";
+import type { User, UserRepository } from "../auth/types.js";
 import type { NotificationService } from "../notifications/notification-service.js";
 import { formatRupees } from "../lib/format-money.js";
 import {
   InvalidInvitationAmountError,
   InvalidInvitationExpiryPresetError,
   InvitationAlreadyPendingError,
+  InvitationNotAcceptableError,
   InvitationNotCancellableError,
+  InvitationNotFoundForAccepterError,
   InvitationRecordNotFoundError,
+  InvitationRequiresPaymentError,
   INVITATION_EXPIRY_PRESET_MS,
   InvitationLinkNotFoundError,
   InviteeAlreadyMemberError,
   InviteeNotRegisteredError,
   isInvitationExpired,
+  NotEqualSplitPoolError,
   OrganizerNotAMemberError,
   type Invitation,
   type InvitationExpiryPreset,
@@ -78,13 +82,7 @@ export class InvitationService {
     assignedAmountPaise: number,
     expiryPreset: InvitationExpiryPreset = DEFAULT_INVITATION_EXPIRY_PRESET,
   ): Promise<Invitation> {
-    const pool = await this.poolRepository.findById(poolId);
-    if (!pool) {
-      throw new PoolNotFoundError();
-    }
-    if (pool.organizerId !== organizerId) {
-      throw new NotPoolOrganizerError();
-    }
+    const pool = await this.findOrganizerPool(organizerId, poolId);
     if (pool.type !== "CUSTOM_SPLIT") {
       throw new NotCustomSplitPoolError();
     }
@@ -96,28 +94,7 @@ export class InvitationService {
       throw new InvalidInvitationExpiryPresetError();
     }
 
-    // The Organizer isn't a Member (hasn't paid their own share) until their
-    // own self-addressed Invitation from Pool creation is paid — see
-    // PoolService.createPool / DepositService.confirmDeposit (ADR 0016).
-    const organizerMembership = await this.membershipRepository.find(poolId, organizerId);
-    if (!organizerMembership) {
-      throw new OrganizerNotAMemberError();
-    }
-
-    const invitee = await this.userRepository.findByPhoneNumber(phoneNumber);
-    if (!invitee) {
-      throw new InviteeNotRegisteredError();
-    }
-
-    const existingMembership = await this.membershipRepository.find(poolId, invitee.id);
-    if (existingMembership) {
-      throw new InviteeAlreadyMemberError();
-    }
-
-    const existingPending = await this.invitationRepository.findPendingByPoolAndInvitee(poolId, invitee.id);
-    if (existingPending && !isInvitationExpired(existingPending, this.now())) {
-      throw new InvitationAlreadyPendingError();
-    }
+    const invitee = await this.resolveInvitee(pool, organizerId, phoneNumber);
 
     const invitation = await this.invitationRepository.create({
       poolId,
@@ -137,6 +114,112 @@ export class InvitationService {
     });
 
     return invitation;
+  }
+
+  // The Organizer directly picking a phone number/contact on an Equal Split
+  // Pool (ticket #87) — reuses the Invitation entity/mechanism, but with no
+  // assigned amount (Equal Split has no per-invitee share) and no
+  // Organizer-approval step: choosing this specific person *is* the
+  // approval. The invitee still must explicitly accept (acceptInvitation) —
+  // this never creates a Membership by itself.
+  async sendEqualSplitInvitation(
+    organizerId: string,
+    poolId: string,
+    phoneNumber: string,
+    expiryPreset: InvitationExpiryPreset = DEFAULT_INVITATION_EXPIRY_PRESET,
+  ): Promise<Invitation> {
+    const pool = await this.findOrganizerPool(organizerId, poolId);
+    if (pool.type !== "EQUAL_SPLIT") {
+      throw new NotEqualSplitPoolError();
+    }
+    const expiryMs = INVITATION_EXPIRY_PRESET_MS[expiryPreset];
+    if (!expiryMs) {
+      throw new InvalidInvitationExpiryPresetError();
+    }
+
+    const invitee = await this.resolveInvitee(pool, organizerId, phoneNumber);
+
+    const invitation = await this.invitationRepository.create({
+      poolId,
+      inviteeUserId: invitee.id,
+      assignedAmountPaise: null,
+      token: this.generateInvitationToken(),
+      expiresAt: new Date(this.now().getTime() + expiryMs),
+    });
+
+    const organizer = await this.userRepository.findById(organizerId);
+    const organizerName = organizer?.name ?? "The Organizer";
+    await this.notificationService.notify({
+      recipientUserIds: [invitee.id],
+      poolId,
+      type: "INVITATION_RECEIVED",
+      message: `${organizerName} added you to ${pool.name} — accept to join`,
+    });
+
+    return invitation;
+  }
+
+  // Shared by sendInvitation and sendEqualSplitInvitation: loads the Pool
+  // and confirms the caller is its Organizer, before either method applies
+  // its own pool-type/amount rules.
+  private async findOrganizerPool(organizerId: string, poolId: string): Promise<Pool> {
+    const pool = await this.poolRepository.findById(poolId);
+    if (!pool) {
+      throw new PoolNotFoundError();
+    }
+    if (pool.organizerId !== organizerId) {
+      throw new NotPoolOrganizerError();
+    }
+    return pool;
+  }
+
+  // Shared by sendInvitation and sendEqualSplitInvitation, once each has
+  // validated its own pool-type/amount rules: the Organizer-paid-their-own-
+  // share gate (ADR 0016/0017), invitee lookup, and the existing-Membership/
+  // still-pending checks are identical either way.
+  private async resolveInvitee(pool: Pool, organizerId: string, phoneNumber: string): Promise<User> {
+    const organizerMembership = await this.membershipRepository.find(pool.id, organizerId);
+    if (!organizerMembership) {
+      throw new OrganizerNotAMemberError();
+    }
+
+    const invitee = await this.userRepository.findByPhoneNumber(phoneNumber);
+    if (!invitee) {
+      throw new InviteeNotRegisteredError();
+    }
+
+    const existingMembership = await this.membershipRepository.find(pool.id, invitee.id);
+    if (existingMembership) {
+      throw new InviteeAlreadyMemberError();
+    }
+
+    const existingPending = await this.invitationRepository.findPendingByPoolAndInvitee(pool.id, invitee.id);
+    if (existingPending && !isInvitationExpired(existingPending, this.now())) {
+      throw new InvitationAlreadyPendingError();
+    }
+
+    return invitee;
+  }
+
+  // The invitee explicitly accepting an Equal Split phone/contact Invitation
+  // (ticket #87) — the only way that entity ever becomes a Membership, since
+  // this path never runs through DepositService (no payment, no Deposit).
+  // Custom Split's assigned-amount Invitation is deliberately rejected here;
+  // it can only be resolved by paying (see DepositService.confirmDeposit).
+  async acceptInvitation(invitationId: string, requesterId: string): Promise<Membership> {
+    const invitation = await this.invitationRepository.findById(invitationId);
+    if (!invitation || invitation.inviteeUserId !== requesterId) {
+      throw new InvitationNotFoundForAccepterError();
+    }
+    if (invitation.assignedAmountPaise !== null) {
+      throw new InvitationRequiresPaymentError();
+    }
+    if (invitation.state !== "PENDING" || isInvitationExpired(invitation, this.now())) {
+      throw new InvitationNotAcceptableError();
+    }
+
+    await this.invitationRepository.markPaid(invitation.id);
+    return this.membershipRepository.create(invitation.poolId, requesterId, "MEMBER");
   }
 
   // Every Invitation still worth opening for this invitee, across every

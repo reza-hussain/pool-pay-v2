@@ -78,6 +78,10 @@ model Pool {
 // must pay in full before a Membership is created for them. The Organizer's
 // own share (ticket #58) is a self-addressed Invitation created alongside
 // the Pool, gating Pool creation until they pay it just like anyone else.
+// Also backs the Equal Split Organizer's direct phone/contact add (ticket
+// #87): the same entity, minted with assignedAmountPaise null since Equal
+// Split has no per-invitee assigned share, and resolved by the invitee
+// accepting at zero cost rather than paying.
 model Invitation {
   id            String @id @default(cuid())
   poolId        String
@@ -85,8 +89,10 @@ model Invitation {
   inviteeUserId String
   invitee       User   @relation(fields: [inviteeUserId], references: [id])
   // In paise. Individually assigned by the Organizer — not shared with any
-  // other Invitation on the same Pool, unlike Pool.perPersonAmountPaise.
-  assignedAmountPaise Int
+  // other Invitation on the same Pool, unlike Pool.perPersonAmountPaise. Null
+  // for the Equal Split phone/contact variant (ticket #87), which has no
+  // per-invitee assigned share.
+  assignedAmountPaise Int?
   // "PENDING" | "PAID" | "CANCELLED" | "EXPIRED"
   state         String    @default("PENDING")
   // Opaque token for the phone-bound Invitation link (ticket #61) — unused
