@@ -13,6 +13,8 @@ import { PoolNotFoundError } from "../../src/memberships/types.js";
 import { MembershipService } from "../../src/memberships/membership-service.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { InMemoryInvitationRepository } from "../../src/invitations/fakes/in-memory-invitation-repository.js";
+import { JoinRequestService } from "../../src/join-requests/join-request-service.js";
+import { InMemoryJoinRequestRepository } from "../../src/join-requests/fakes/in-memory-join-request-repository.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
 import { NotificationService } from "../../src/notifications/notification-service.js";
 import { InMemoryNotificationRepository } from "../../src/notifications/fakes/in-memory-notification-repository.js";
@@ -329,7 +331,21 @@ describe("ClosureService + a removed Member (ticket #11)", () => {
       await makeService();
     const membershipRepository = new InMemoryMembershipRepository();
     const invitationRepository = new InMemoryInvitationRepository();
-    const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
+    // Pool is OPEN (see makeService above) — joining never reaches the
+    // JoinRequest branch, so this can stay a throwaway instance.
+    const joinRequestService = new JoinRequestService({
+      joinRequestRepository: new InMemoryJoinRequestRepository(),
+      membershipRepository,
+      poolRepository,
+      userRepository,
+      notificationService: new NotificationService({ notificationRepository: new InMemoryNotificationRepository() }),
+    });
+    const membershipService = new MembershipService({
+      poolRepository,
+      membershipRepository,
+      invitationRepository,
+      joinRequestService,
+    });
     // OPEN Pool here is created directly via poolRepository, bypassing
     // PoolService.createPool — seed the Organizer's Membership to match what
     // that would have done, since joining now requires it (ADR-0017).

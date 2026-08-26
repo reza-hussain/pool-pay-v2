@@ -12,6 +12,8 @@ import { MembershipService } from "./memberships/membership-service.js";
 import { PrismaMembershipRepository } from "./memberships/prisma-membership-repository.js";
 import { PrismaInvitationRepository } from "./invitations/prisma-invitation-repository.js";
 import { InvitationService } from "./invitations/invitation-service.js";
+import { PrismaJoinRequestRepository } from "./join-requests/prisma-join-request-repository.js";
+import { JoinRequestService } from "./join-requests/join-request-service.js";
 import { DepositService } from "./deposits/deposit-service.js";
 import { PrismaDepositRepository } from "./deposits/prisma-deposit-repository.js";
 import { PrismaPendingDepositRepository } from "./deposits/prisma-pending-deposit-repository.js";
@@ -73,6 +75,7 @@ const authService = new AuthService({
 const poolRepository = new PrismaPoolRepository(prisma);
 const membershipRepository = new PrismaMembershipRepository(prisma);
 const invitationRepository = new PrismaInvitationRepository(prisma);
+const joinRequestRepository = new PrismaJoinRequestRepository(prisma);
 const depositRepository = new PrismaDepositRepository(prisma);
 const pendingDepositRepository = new PrismaPendingDepositRepository(prisma);
 const spendRepository = new PrismaSpendRepository(prisma);
@@ -89,7 +92,19 @@ const poolService = new PoolService({
   notificationService,
   invitationRepository,
 });
-const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
+const joinRequestService = new JoinRequestService({
+  joinRequestRepository,
+  membershipRepository,
+  poolRepository,
+  userRepository,
+  notificationService,
+});
+const membershipService = new MembershipService({
+  poolRepository,
+  membershipRepository,
+  invitationRepository,
+  joinRequestService,
+});
 const invitationService = new InvitationService({
   invitationRepository,
   poolRepository,
@@ -176,6 +191,7 @@ const app = createApp({
   notificationService,
   activityService,
   invitationService,
+  joinRequestService,
   jwtSecret: env.JWT_SECRET,
   paymentProvider,
 });

@@ -23,6 +23,7 @@ import {
   PoolClosedError,
   PoolNotFoundError,
 } from "../memberships/types.js";
+import { JoinRequestAlreadyDeclinedError } from "../join-requests/types.js";
 
 const createPoolSchema = z.object({
   name: z.string(),
@@ -97,16 +98,17 @@ export function createPoolsRouter(
       }
 
       try {
-        const membership = await membershipService.joinByCode(
+        const result = await membershipService.joinByCode(
           req.userId as string,
           parsed.data.code,
         );
-        res.status(200).json({ membership });
+        res.status(200).json(result);
       } catch (error) {
         if (
           error instanceof InvalidJoinCodeError ||
           error instanceof PoolClosedError ||
-          error instanceof PoolAwaitingPaymentError
+          error instanceof PoolAwaitingPaymentError ||
+          error instanceof JoinRequestAlreadyDeclinedError
         ) {
           res.status(400).json({ error: error.message });
           return;
@@ -121,17 +123,21 @@ export function createPoolsRouter(
     requireAuth(jwtSecret),
     async (req: AuthenticatedRequest, res, next) => {
       try {
-        const membership = await membershipService.joinByPoolId(
+        const result = await membershipService.joinByPoolId(
           req.userId as string,
           req.params.poolId,
         );
-        res.status(200).json({ membership });
+        res.status(200).json(result);
       } catch (error) {
         if (error instanceof PoolNotFoundError) {
           res.status(404).json({ error: error.message });
           return;
         }
-        if (error instanceof PoolClosedError || error instanceof PoolAwaitingPaymentError) {
+        if (
+          error instanceof PoolClosedError ||
+          error instanceof PoolAwaitingPaymentError ||
+          error instanceof JoinRequestAlreadyDeclinedError
+        ) {
           res.status(400).json({ error: error.message });
           return;
         }

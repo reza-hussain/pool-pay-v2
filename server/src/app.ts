@@ -26,6 +26,8 @@ import type { ActivityService } from "./activity/activity-service.js";
 import { createActivityRouter } from "./activity/router.js";
 import type { InvitationService } from "./invitations/invitation-service.js";
 import { createInvitationsRouter, createMyInvitationsRouter } from "./invitations/router.js";
+import type { JoinRequestService } from "./join-requests/join-request-service.js";
+import { createJoinRequestsRouter } from "./join-requests/router.js";
 
 export interface AppDependencies {
   authService: AuthService;
@@ -43,6 +45,11 @@ export interface AppDependencies {
   // Optional so every other test file's createApp call is unaffected (same
   // pattern as paymentProvider below) — only mounted when provided.
   invitationService?: InvitationService;
+  // Same optional-router pattern as invitationService above — MembershipService
+  // itself always needs a real JoinRequestService (Equal Split joining
+  // depends on it unconditionally), but the Organizer-facing
+  // list/approve/decline router is only mounted when this is provided.
+  joinRequestService?: JoinRequestService;
   jwtSecret: string;
   // Deposit-confirmation webhook (ticket #15) — optional so every other
   // test file's createApp call is unaffected; only mounted when provided.
@@ -63,6 +70,7 @@ export function createApp({
   notificationService,
   activityService,
   invitationService,
+  joinRequestService,
   jwtSecret,
   paymentProvider,
 }: AppDependencies): Express {
@@ -92,6 +100,9 @@ export function createApp({
   if (invitationService) {
     app.use("/pools", createInvitationsRouter(invitationService, jwtSecret));
     app.use("/invitations", createMyInvitationsRouter(invitationService, jwtSecret));
+  }
+  if (joinRequestService) {
+    app.use("/pools", createJoinRequestsRouter(joinRequestService, jwtSecret));
   }
   if (paymentProvider) {
     app.use("/webhooks", createDepositWebhookRouter(depositService, paymentProvider));

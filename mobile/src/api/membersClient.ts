@@ -1,3 +1,5 @@
+import type { JoinRequest } from "./joinRequestsClient";
+
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
 
 export class MembersApiError extends Error {}
@@ -9,6 +11,13 @@ export interface Membership {
   role: "ORGANIZER" | "MEMBER";
   joinedAt: string;
 }
+
+// What joining via Pool Code/Invite Link resolves to (ticket #86): an
+// immediate Membership for every Pool type except Equal Split, which now
+// creates a JoinRequest awaiting the Organizer's approval instead.
+export type JoinResult =
+  | { kind: "MEMBERSHIP"; membership: Membership }
+  | { kind: "JOIN_REQUEST"; joinRequest: JoinRequest };
 
 async function postJson<T>(path: string, token: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
@@ -24,21 +33,12 @@ async function postJson<T>(path: string, token: string, body?: unknown): Promise
   return data as T;
 }
 
-export async function joinByPoolId(token: string, poolId: string): Promise<Membership> {
-  const { membership } = await postJson<{ membership: Membership }>(
-    `/pools/${poolId}/join`,
-    token,
-  );
-  return membership;
+export async function joinByPoolId(token: string, poolId: string): Promise<JoinResult> {
+  return postJson<JoinResult>(`/pools/${poolId}/join`, token);
 }
 
-export async function joinByCode(token: string, code: string): Promise<Membership> {
-  const { membership } = await postJson<{ membership: Membership }>(
-    "/pools/join-by-code",
-    token,
-    { code },
-  );
-  return membership;
+export async function joinByCode(token: string, code: string): Promise<JoinResult> {
+  return postJson<JoinResult>("/pools/join-by-code", token, { code });
 }
 
 export async function listMembers(token: string, poolId: string): Promise<Membership[]> {
