@@ -40,6 +40,7 @@ model User {
   refundVotes    RefundVote[]
   notifications  Notification[]
   invitations    Invitation[]
+  joinRequests   JoinRequest[]
 }
 
 model Pool {
@@ -69,6 +70,7 @@ model Pool {
   refundVotes    RefundVote[]
   notifications  Notification[]
   invitations    Invitation[]
+  joinRequests   JoinRequest[]
 
   @@index([organizerId])
 }
@@ -101,6 +103,31 @@ model Invitation {
   // Backs listPendingByInvitee (ticket #60) — an invitee's own list of
   // Invitations still worth opening, across every Pool.
   @@index([inviteeUserId, state])
+}
+
+// An Equal Split Pool's approval-gated joining (ticket #86): joining via
+// Pool Code or Invite Link no longer creates a Membership directly — it
+// creates one of these, which the Organizer must Approve (creating the
+// Membership) or Decline. Modeled as its own entity rather than a status on
+// Membership since a rejected/pending request never becomes one. Never
+// expires on its own — stays PENDING until the Organizer decides, no matter
+// how long that takes (only the Pool's join code/link itself expires, #88).
+// Unused by Custom Split Pools, which join exclusively via Invitation.
+model JoinRequest {
+  id              String    @id @default(cuid())
+  poolId          String
+  pool            Pool      @relation(fields: [poolId], references: [id])
+  requesterUserId String
+  requester       User      @relation(fields: [requesterUserId], references: [id])
+  // "PENDING" | "APPROVED" | "REJECTED"
+  state           String    @default("PENDING")
+  createdAt       DateTime  @default(now())
+  decidedAt       DateTime?
+
+  @@index([poolId])
+  // Backs the most-recent-request-per-requester lookup that blocks an
+  // immediate re-request right after a decline.
+  @@index([poolId, requesterUserId])
 }
 
 model Deposit {

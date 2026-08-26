@@ -8,6 +8,7 @@ import { InMemoryOtpStore } from "../../src/auth/fakes/in-memory-otp-store.js";
 import { FakeOtpSender } from "../../src/auth/fakes/fake-otp-sender.js";
 import { FakeIdentityProvider } from "../../src/auth/fakes/fake-identity-provider.js";
 import { makeTestServices } from "../support/make-test-services.js";
+import { joinAndApprove } from "../support/join-and-approve.js";
 
 const JWT_SECRET = "test-secret";
 const ORGANIZER_ID = "user_organizer";
@@ -40,6 +41,7 @@ async function makeApp() {
     analyticsService,
     notificationService,
     activityService,
+    joinRequestService,
   } = makeTestServices({ userRepository });
   const app = createApp({
     authService,
@@ -54,6 +56,7 @@ async function makeApp() {
     analyticsService,
     notificationService,
     activityService,
+    joinRequestService,
     jwtSecret: JWT_SECRET,
   });
 
@@ -73,8 +76,8 @@ async function makeApp() {
     .set("Authorization", bearerFor(ORGANIZER_ID))
     .send({ depositIntentId: organizerIntentRes.body.intent.id, amountPaise: 100000 });
 
-  await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_A));
-  await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_B));
+  await joinAndApprove(app, pool.id, ORGANIZER_ID, MEMBER_A, bearerFor);
+  await joinAndApprove(app, pool.id, ORGANIZER_ID, MEMBER_B, bearerFor);
   const intentRes = await request(app)
     .get(`/pools/${pool.id}/deposit-intent`)
     .set("Authorization", bearerFor(MEMBER_A));
