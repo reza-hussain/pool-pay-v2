@@ -1,3 +1,5 @@
+import type { JoinRequest } from "../join-requests/types.js";
+
 export type MembershipRole = "ORGANIZER" | "MEMBER";
 
 export interface Membership {
@@ -8,6 +10,13 @@ export interface Membership {
   joinedAt: Date;
   removedAt: Date | null;
 }
+
+// What joining via Pool Code/Invite Link resolves to (ticket #86): an
+// immediate Membership for every Pool type except Equal Split, which now
+// creates a JoinRequest awaiting the Organizer's approval instead.
+export type JoinResult =
+  | { kind: "MEMBERSHIP"; membership: Membership }
+  | { kind: "JOIN_REQUEST"; joinRequest: JoinRequest };
 
 export interface MembershipRepository {
   // Reactivates (clears removedAt on) an existing row for this poolId+userId
@@ -31,6 +40,17 @@ export class InvalidJoinCodeError extends Error {
   constructor() {
     super("Invalid Pool code");
     this.name = "InvalidJoinCodeError";
+  }
+}
+
+// The Organizer set an expiry on the Pool's join code/link (ticket #88) and
+// it has since passed — applies uniformly whether the code was typed,
+// scanned, or clicked, since there's one join code and one expiry. Distinct
+// from a JoinRequest's own lifetime, which has no expiry of its own.
+export class JoinCodeExpiredError extends Error {
+  constructor() {
+    super("This Pool's join code/link has expired");
+    this.name = "JoinCodeExpiredError";
   }
 }
 

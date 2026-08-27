@@ -248,3 +248,148 @@ describe("POST /pools/:poolId/lock", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("PATCH /pools/:poolId/join-code-expiry", () => {
+  async function createPool(app: import("express").Express) {
+    const res = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ name: "Goa Trip", type: "OPEN" });
+    return res.body.pool;
+  }
+
+  it("sets an expiry on the Pool's join code, measured from now", async () => {
+    const { app } = makeApp();
+    const pool = await createPool(app);
+    const before = Date.now();
+
+    const res = await request(app)
+      .patch(`/pools/${pool.id}/join-code-expiry`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ expiryPreset: "24h" });
+
+    expect(res.status).toBe(200);
+    const expiresAtMs = new Date(res.body.pool.joinCodeExpiresAt).getTime();
+    expect(expiresAtMs).toBeGreaterThan(before + 23 * 60 * 60 * 1000);
+    expect(expiresAtMs).toBeLessThan(before + 25 * 60 * 60 * 1000);
+  });
+
+  it("updates an already-set expiry to a new preset", async () => {
+    const { app } = makeApp();
+    const pool = await createPool(app);
+    await request(app)
+      .patch(`/pools/${pool.id}/join-code-expiry`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ expiryPreset: "24h" });
+
+    const res = await request(app)
+      .patch(`/pools/${pool.id}/join-code-expiry`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ expiryPreset: "7d" });
+
+    expect(res.status).toBe(200);
+    const expiresAtMs = new Date(res.body.pool.joinCodeExpiresAt).getTime();
+    expect(expiresAtMs).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+  });
+
+  it("returns 400 for an invalid preset", async () => {
+    const { app } = makeApp();
+    const pool = await createPool(app);
+
+    const res = await request(app)
+      .patch(`/pools/${pool.id}/join-code-expiry`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ expiryPreset: "9d" });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 403 for a non-Organizer", async () => {
+    const { app } = makeApp();
+    const pool = await createPool(app);
+
+    const res = await request(app)
+      .patch(`/pools/${pool.id}/join-code-expiry`)
+      .set("Authorization", bearerFor("user_someone_else"))
+      .send({ expiryPreset: "24h" });
+
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 404 for an unknown Pool", async () => {
+    const { app } = makeApp();
+
+    const res = await request(app)
+      .patch("/pools/pool_missing/join-code-expiry")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ expiryPreset: "24h" });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 401 without a bearer token", async () => {
+    const { app } = makeApp();
+    const pool = await createPool(app);
+
+    const res = await request(app)
+      .patch(`/pools/${pool.id}/join-code-expiry`)
+      .send({ expiryPreset: "24h" });
+
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("Joining rejects an expired join code (ticket #88)", () => {
+  const MEMBER_ID = "user_member";
+
+  async function createPoolPastExpiry(app: import("express").Express) {
+    const createRes = await request(app)
+      .post("/pools")
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ name: "Goa Trip", type: "OPEN" });
+    const pool = createRes.body.pool;
+    await request(app)
+      .patch(`/pools/${pool.id}/join-code-expiry`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ expiryPreset: "24h" });
+    return pool;
+  }
+
+  it("returns 400 from join-by-code once the code has expired", async () => {
+    const { app, poolRepository } = makeApp();
+    const pool = await createPoolPastExpiry(app);
+    // Fast-forward past the 24h preset directly via the repository, since
+    // there's no server-side clock injection to fast-forward instead.
+    await poolRepository.updateJoinCodeExpiry(pool.id, new Date(Date.now() - 1000));
+
+    const res = await request(app)
+      .post("/pools/join-by-code")
+      .set("Authorization", bearerFor(MEMBER_ID))
+      .send({ code: pool.joinCode });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 from :poolId/join once the code has expired", async () => {
+    const { app, poolRepository } = makeApp();
+    const pool = await createPoolPastExpiry(app);
+    await poolRepository.updateJoinCodeExpiry(pool.id, new Date(Date.now() - 1000));
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/join`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(400);
+  });
+
+  it("succeeds before the expiry passes", async () => {
+    const { app } = makeApp();
+    const pool = await createPoolPastExpiry(app);
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/join`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(200);
+  });
+});

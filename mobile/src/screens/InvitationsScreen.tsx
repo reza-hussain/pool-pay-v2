@@ -55,7 +55,9 @@ function InvitationRow({
         {sent.inviteeName ? <Text style={styles.rowPhone}>{sent.inviteePhoneNumber}</Text> : null}
       </View>
       <View style={styles.rowEnd}>
-        <Text style={styles.rowAmount}>{paiseToRupeeLabel(sent.invitation.assignedAmountPaise)}</Text>
+        {sent.invitation.assignedAmountPaise !== null ? (
+          <Text style={styles.rowAmount}>{paiseToRupeeLabel(sent.invitation.assignedAmountPaise)}</Text>
+        ) : null}
         <StatusPill state={sent.invitation.state} />
         {onShare ? (
           <Pressable onPress={() => onShare(sent)} hitSlop={8}>

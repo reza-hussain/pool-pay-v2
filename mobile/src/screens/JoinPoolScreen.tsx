@@ -17,18 +17,47 @@ export function JoinPoolScreen({
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Equal Split joining is approval-gated (ticket #86): a successful join
+  // call may resolve to a pending JoinRequest rather than a Membership —
+  // this shows a "request sent" confirmation in place of onJoined's usual
+  // navigate-into-the-Pool behavior.
+  const [requestSent, setRequestSent] = useState(false);
 
   async function handleJoin() {
     setError(null);
     setLoading(true);
     try {
-      const membership = await joinByCode(session.token, code);
-      onJoined(membership);
+      const result = await joinByCode(session.token, code);
+      if (result.kind === "MEMBERSHIP") {
+        onJoined(result.membership);
+      } else {
+        setRequestSent(true);
+      }
     } catch (err) {
       setError(err instanceof MembersApiError ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (requestSent) {
+    return (
+      <Screen backgroundColor={colors.cream}>
+        <View style={styles.confirmContainer}>
+          <View style={styles.waitRing}>
+            <Text style={styles.waitGlyph}>⏳</Text>
+          </View>
+          <Text style={styles.confirmTitle}>Request sent</Text>
+          <Text style={styles.confirmSubtitle}>
+            Waiting for the Organizer to approve your request to join. You'll be notified once
+            they do.
+          </Text>
+          <Pressable style={styles.doneButton} onPress={onCancel}>
+            <Text style={styles.doneButtonText}>Done</Text>
+          </Pressable>
+        </View>
+      </Screen>
+    );
   }
 
   return (
@@ -130,5 +159,47 @@ const styles = StyleSheet.create({
     ...type.body,
     color: colors.danger600,
     marginTop: spacing.s2,
+  },
+  confirmContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.s6,
+  },
+  waitRing: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: colors.ink100,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.s6,
+  },
+  waitGlyph: {
+    fontSize: 34,
+  },
+  confirmTitle: {
+    ...type.hero,
+    color: colors.ink900,
+    textAlign: "center",
+  },
+  confirmSubtitle: {
+    ...type.body,
+    color: colors.ink600,
+    marginTop: spacing.s2,
+    textAlign: "center",
+  },
+  doneButton: {
+    height: 48,
+    backgroundColor: colors.ink900,
+    borderRadius: radii.md,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.s6,
+    marginTop: spacing.s6,
+  },
+  doneButtonText: {
+    ...type.bodyBold,
+    color: colors.cream,
   },
 });

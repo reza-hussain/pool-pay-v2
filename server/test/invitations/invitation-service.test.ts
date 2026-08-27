@@ -12,11 +12,15 @@ import {
   InvalidInvitationAmountError,
   InvalidInvitationExpiryPresetError,
   InvitationAlreadyPendingError,
+  InvitationNotAcceptableError,
   InvitationNotCancellableError,
+  InvitationNotFoundForAccepterError,
   InvitationRecordNotFoundError,
+  InvitationRequiresPaymentError,
   InvitationLinkNotFoundError,
   InviteeAlreadyMemberError,
   InviteeNotRegisteredError,
+  NotEqualSplitPoolError,
   OrganizerNotAMemberError,
 } from "../../src/invitations/types.js";
 
@@ -63,6 +67,20 @@ async function makeService(now?: () => Date) {
     notificationRepository,
     pool,
   };
+}
+
+async function makeEqualSplitPool(
+  poolRepository: Awaited<ReturnType<typeof makeService>>["poolRepository"],
+  membershipRepository: Awaited<ReturnType<typeof makeService>>["membershipRepository"],
+) {
+  const pool = await poolRepository.create(ORGANIZER_ID, {
+    name: "Goa Trip",
+    type: "EQUAL_SPLIT",
+    perPersonAmountPaise: 100000,
+    joinCode: "666666",
+  });
+  await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+  return pool;
 }
 
 describe("InvitationService.sendInvitation", () => {
@@ -404,5 +422,148 @@ describe("InvitationService.getInvitationByToken", () => {
     clock = new Date("2026-01-09T00:00:00Z"); // past the 7-day default expiry
     const resolved = await invitationService.getInvitationByToken(sent.token, INVITEE_ID);
     expect(resolved.invitation.id).toBe(sent.id);
+  });
+});
+
+describe("InvitationService.sendEqualSplitInvitation", () => {
+  it("sends an Invitation with no assigned amount and notifies the invitee", async () => {
+    const { invitationService, poolRepository, membershipRepository, notificationRepository } =
+      await makeService();
+    const equalSplitPool = await makeEqualSplitPool(poolRepository, membershipRepository);
+
+    const invitation = await invitationService.sendEqualSplitInvitation(
+      ORGANIZER_ID,
+      equalSplitPool.id,
+      INVITEE_PHONE,
+    );
+
+    expect(invitation).toMatchObject({
+      poolId: equalSplitPool.id,
+      inviteeUserId: INVITEE_ID,
+      assignedAmountPaise: null,
+      state: "PENDING",
+    });
+
+    const notifications = await notificationRepository.listByUser(INVITEE_ID);
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toMatchObject({ poolId: equalSplitPool.id, type: "INVITATION_RECEIVED" });
+  });
+
+  it("rejects sending on a Custom Split Pool", async () => {
+    const { invitationService, pool } = await makeService();
+    await expect(
+      invitationService.sendEqualSplitInvitation(ORGANIZER_ID, pool.id, INVITEE_PHONE),
+    ).rejects.toThrow(NotEqualSplitPoolError);
+  });
+
+  it("rejects a non-Organizer sender", async () => {
+    const { invitationService, poolRepository, membershipRepository } = await makeService();
+    const equalSplitPool = await makeEqualSplitPool(poolRepository, membershipRepository);
+
+    await expect(
+      invitationService.sendEqualSplitInvitation("user_stranger", equalSplitPool.id, INVITEE_PHONE),
+    ).rejects.toThrow(NotPoolOrganizerError);
+  });
+
+  it("rejects an Organizer who hasn't paid their own share yet", async () => {
+    const { invitationService, poolRepository } = await makeService();
+    const unpaidPool = await poolRepository.create(ORGANIZER_ID, {
+      name: "Unpaid Equal Split Pool",
+      type: "EQUAL_SPLIT",
+      perPersonAmountPaise: 100000,
+      joinCode: "777778",
+    });
+
+    await expect(
+      invitationService.sendEqualSplitInvitation(ORGANIZER_ID, unpaidPool.id, INVITEE_PHONE),
+    ).rejects.toThrow(OrganizerNotAMemberError);
+  });
+
+  it("rejects a phone number with no registered User", async () => {
+    const { invitationService, poolRepository, membershipRepository } = await makeService();
+    const equalSplitPool = await makeEqualSplitPool(poolRepository, membershipRepository);
+
+    await expect(
+      invitationService.sendEqualSplitInvitation(ORGANIZER_ID, equalSplitPool.id, "+919999999999"),
+    ).rejects.toThrow(InviteeNotRegisteredError);
+  });
+
+  it("rejects inviting someone who is already a Member of this Pool", async () => {
+    const { invitationService, poolRepository, membershipRepository } = await makeService();
+    const equalSplitPool = await makeEqualSplitPool(poolRepository, membershipRepository);
+    await membershipRepository.create(equalSplitPool.id, INVITEE_ID, "MEMBER");
+
+    await expect(
+      invitationService.sendEqualSplitInvitation(ORGANIZER_ID, equalSplitPool.id, INVITEE_PHONE),
+    ).rejects.toThrow(InviteeAlreadyMemberError);
+  });
+
+  it("rejects a second Invitation while one is still pending", async () => {
+    const { invitationService, poolRepository, membershipRepository } = await makeService();
+    const equalSplitPool = await makeEqualSplitPool(poolRepository, membershipRepository);
+    await invitationService.sendEqualSplitInvitation(ORGANIZER_ID, equalSplitPool.id, INVITEE_PHONE);
+
+    await expect(
+      invitationService.sendEqualSplitInvitation(ORGANIZER_ID, equalSplitPool.id, INVITEE_PHONE),
+    ).rejects.toThrow(InvitationAlreadyPendingError);
+  });
+});
+
+describe("InvitationService.acceptInvitation", () => {
+  it("creates a Membership immediately at zero cost, no Deposit involved", async () => {
+    const { invitationService, poolRepository, membershipRepository } = await makeService();
+    const equalSplitPool = await makeEqualSplitPool(poolRepository, membershipRepository);
+    const sent = await invitationService.sendEqualSplitInvitation(ORGANIZER_ID, equalSplitPool.id, INVITEE_PHONE);
+
+    const membership = await invitationService.acceptInvitation(sent.id, INVITEE_ID);
+
+    expect(membership).toMatchObject({
+      poolId: equalSplitPool.id,
+      userId: INVITEE_ID,
+      role: "MEMBER",
+    });
+    const stored = await membershipRepository.find(equalSplitPool.id, INVITEE_ID);
+    expect(stored).not.toBeNull();
+  });
+
+  it("marks the Invitation resolved so it can't be accepted twice", async () => {
+    const { invitationService, poolRepository, membershipRepository, invitationRepository } =
+      await makeService();
+    const equalSplitPool = await makeEqualSplitPool(poolRepository, membershipRepository);
+    const sent = await invitationService.sendEqualSplitInvitation(ORGANIZER_ID, equalSplitPool.id, INVITEE_PHONE);
+    await invitationService.acceptInvitation(sent.id, INVITEE_ID);
+
+    const stored = await invitationRepository.findById(sent.id);
+    expect(stored?.state).toBe("PAID");
+
+    await expect(invitationService.acceptInvitation(sent.id, INVITEE_ID)).rejects.toThrow(
+      InvitationNotAcceptableError,
+    );
+  });
+
+  it("rejects an unknown Invitation id", async () => {
+    const { invitationService } = await makeService();
+    await expect(invitationService.acceptInvitation("does-not-exist", INVITEE_ID)).rejects.toThrow(
+      InvitationNotFoundForAccepterError,
+    );
+  });
+
+  it("throws the same error for someone else's Invitation, without leaking its existence", async () => {
+    const { invitationService, poolRepository, membershipRepository } = await makeService();
+    const equalSplitPool = await makeEqualSplitPool(poolRepository, membershipRepository);
+    const sent = await invitationService.sendEqualSplitInvitation(ORGANIZER_ID, equalSplitPool.id, INVITEE_PHONE);
+
+    await expect(invitationService.acceptInvitation(sent.id, "user_stranger")).rejects.toThrow(
+      InvitationNotFoundForAccepterError,
+    );
+  });
+
+  it("rejects accepting a Custom Split Invitation — it must be paid, not just accepted", async () => {
+    const { invitationService, pool } = await makeService();
+    const sent = await invitationService.sendInvitation(ORGANIZER_ID, pool.id, INVITEE_PHONE, 250000);
+
+    await expect(invitationService.acceptInvitation(sent.id, INVITEE_ID)).rejects.toThrow(
+      InvitationRequiresPaymentError,
+    );
   });
 });

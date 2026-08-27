@@ -92,7 +92,7 @@ function toInvitation(row: {
   id: string;
   poolId: string;
   inviteeUserId: string;
-  assignedAmountPaise: number;
+  assignedAmountPaise: number | null;
   state: string;
   token: string;
   expiresAt: Date;

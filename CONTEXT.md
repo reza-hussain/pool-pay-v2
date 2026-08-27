@@ -21,8 +21,12 @@ The one-time, mandatory flow a person completes before reaching Home: phone/OTP 
 _Avoid_: Signup (too narrow — Signup is only the phone/OTP step within Onboarding)
 
 **Invite Link / Pool Code**:
-The two ways a person joins an Equal Split Pool as a Member: an open shareable link, or a six-digit code entered manually. Anyone holding either can join — no Organizer approval step — since every Member owes the same known amount, so there's nothing to assign per-person. Custom Split Pools do not use this mechanism; see **Invitation**.
+The two ways a person requests to join an Equal Split Pool: an open shareable link, or a six-digit code entered manually. Holding either lets someone submit a **Join Request** — it no longer creates a Membership directly (ticket #86); the Organizer must Approve it first. Custom Split Pools do not use this mechanism; see **Invitation**. The Organizer can optionally set an expiry on the code/link itself from the Share screen (ticket #88), from the same preset durations used elsewhere — null by default (no expiry). This governs only whether a join *attempt* is accepted at all; it's unrelated to a Join Request's own lifetime, which still has no expiry of its own once submitted.
 _Avoid_: Invite code (ambiguous between the two mechanisms — use the full term)
+
+**Join Request**:
+An Equal Split Pool join attempt via Invite Link or Pool Code, awaiting the Organizer's decision. States: `PENDING` (the only actionable one — never expires on its own, however long it sits), `APPROVED` (created a Membership), `REJECTED` (no Membership; re-requesting via the same Invite Link/Pool Code is blocked). Modeled as its own entity, not a status on Membership, since a pending or rejected request never becomes one. Distinct from **Invitation**, which is Custom Split's per-person, per-amount mechanism sent by the Organizer rather than self-served by the joiner.
+_Avoid_: Invite request (collides with Invite Link/Pool Code, the mechanism this is requesting through)
 
 **Equal Split Pool**:
 A Pool where the Organizer sets a fixed per-person contribution amount, and every Member is expected to contribute exactly that share. Unlike Custom Split, a Member isn't limited to one Deposit — repeat Deposits over time are how an Equal Split Pool now covers ongoing/recurring use cases (e.g. apartment/roommate expenses), the role the retired Open Pool used to serve.
@@ -36,6 +40,8 @@ _Avoid_: Open pool (a separate, now-retired Pool type — see below), Flexible p
 The Organizer's request for one specific, already-registered person (looked up by phone number) to join a Custom Split Pool, carrying the fixed amount the Organizer has assigned them. Delivered as an in-app notification and/or a shareable link — but unlike Invite Link/Pool Code, this link is bound to that one phone number: opening it while signed in as anyone else fails with an invalid-invite error. Becomes a Membership only once the invitee pays the assigned amount in full. The Organizer can cancel a pending Invitation any time before payment (no in-place editing — cancel and send a new one instead); the Organizer also picks an expiry duration from presets, after which an unpaid Invitation lapses exactly as if cancelled. Sending new Invitations is blocked while the Pool is Locked, and Locking the Pool also voids any Invitation still pending at that moment, the same as a cancel — an unpaid Invitation is a deferred Deposit, and letting one complete after Locking would inject money the Pool's Locked-state totals never accounted for.
 
 The same entity also backs the Organizer's own first share, self-addressed at Pool creation, for every Pool type (not just Custom Split — see ADR-0017). That self-Invitation isn't sent anywhere and can't be cancelled by choice, but it expires the same way: 24 hours after creation, unpaid, it lapses and the Pool moves to Expired (see **Awaiting Payment**).
+
+The same entity also backs the Organizer directly picking a phone number or device contact to add to an Equal Split Pool (ticket #87, part of #83): that Invitation carries no assigned amount (Equal Split has no per-invitee share), and choosing that specific person is itself the approval — it never creates a JoinRequest. The invitee still must explicitly accept before becoming a Member, but accepting is free: it creates the Membership immediately, with no Deposit, unlike Custom Split's pay-to-accept Invitation.
 _Avoid_: Invite (too generic — collides with Invite Link/Pool Code, a different mechanism)
 
 **Awaiting Payment** (Pool state):

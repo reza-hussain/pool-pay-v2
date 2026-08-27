@@ -16,7 +16,22 @@ export interface Pool {
   // Six-digit code for manual Pool joining. An Invite Link is just this Pool's
   // id embedded in a deep link — no separate field needed for that.
   joinCode: string;
+  // Null by default (no expiry). Governs whether a join attempt via the
+  // code/link is accepted at all (ticket #88) — distinct from a JoinRequest's
+  // own lifetime, which has no expiry of its own (ticket #86).
+  joinCodeExpiresAt: Date | null;
 }
+
+// Same three-preset shape as Custom Split's Invitation expiry
+// (InvitationExpiryPreset) — kept as its own type since a join code's
+// expiry is a different concept, even though the durations happen to match.
+export type PoolJoinCodeExpiryPreset = "24h" | "3d" | "7d";
+
+export const POOL_JOIN_CODE_EXPIRY_PRESET_MS: Record<PoolJoinCodeExpiryPreset, number> = {
+  "24h": 24 * 60 * 60 * 1000,
+  "3d": 3 * 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+};
 
 export interface CreatePoolInput {
   name: string;
@@ -42,6 +57,7 @@ export interface PoolRepository {
   findById(id: string): Promise<Pool | null>;
   findByJoinCode(joinCode: string): Promise<Pool | null>;
   updateState(id: string, state: PoolState): Promise<Pool>;
+  updateJoinCodeExpiry(id: string, expiresAt: Date): Promise<Pool>;
   listByOrganizer(organizerId: string): Promise<Pool[]>;
 }
 
@@ -121,5 +137,12 @@ export class MaxActivePoolsExceededError extends Error {
   constructor() {
     super("Free accounts are limited to 3 concurrently Active Pools — subscribe for unlimited Pools");
     this.name = "MaxActivePoolsExceededError";
+  }
+}
+
+export class InvalidJoinCodeExpiryPresetError extends Error {
+  constructor() {
+    super("expiryPreset must be one of 24h, 3d, 7d");
+    this.name = "InvalidJoinCodeExpiryPresetError";
   }
 }

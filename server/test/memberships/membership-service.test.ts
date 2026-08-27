@@ -3,9 +3,15 @@ import { MembershipService } from "../../src/memberships/membership-service.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-repository.js";
 import { InMemoryInvitationRepository } from "../../src/invitations/fakes/in-memory-invitation-repository.js";
+import { InMemoryJoinRequestRepository } from "../../src/join-requests/fakes/in-memory-join-request-repository.js";
+import { JoinRequestService } from "../../src/join-requests/join-request-service.js";
+import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
+import { NotificationService } from "../../src/notifications/notification-service.js";
+import { InMemoryNotificationRepository } from "../../src/notifications/fakes/in-memory-notification-repository.js";
 import {
   CannotRemoveOrganizerError,
   InvalidJoinCodeError,
+  JoinCodeExpiredError,
   MemberNotFoundError,
   PoolAwaitingPaymentError,
   PoolClosedError,
@@ -20,7 +26,23 @@ async function makeService() {
   const poolRepository = new InMemoryPoolRepository();
   const membershipRepository = new InMemoryMembershipRepository();
   const invitationRepository = new InMemoryInvitationRepository();
-  const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
+  const joinRequestRepository = new InMemoryJoinRequestRepository();
+  const userRepository = new InMemoryUserRepository();
+  const notificationRepository = new InMemoryNotificationRepository();
+  const notificationService = new NotificationService({ notificationRepository });
+  const joinRequestService = new JoinRequestService({
+    joinRequestRepository,
+    membershipRepository,
+    poolRepository,
+    userRepository,
+    notificationService,
+  });
+  const membershipService = new MembershipService({
+    poolRepository,
+    membershipRepository,
+    invitationRepository,
+    joinRequestService,
+  });
 
   const pool = await poolRepository.create(ORGANIZER_ID, {
     name: "Goa Trip",
@@ -33,16 +55,28 @@ async function makeService() {
   // that would have done, since joining now requires it (ADR-0017).
   await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
 
-  return { membershipService, poolRepository, membershipRepository, invitationRepository, pool };
+  return {
+    membershipService,
+    poolRepository,
+    membershipRepository,
+    invitationRepository,
+    joinRequestRepository,
+    userRepository,
+    notificationRepository,
+    pool,
+  };
 }
 
 describe("MembershipService.joinByPoolId", () => {
   it("creates a MEMBER membership for the joining user", async () => {
     const { membershipService, pool } = await makeService();
 
-    const membership = await membershipService.joinByPoolId(MEMBER_ID, pool.id);
+    const result = await membershipService.joinByPoolId(MEMBER_ID, pool.id);
 
-    expect(membership).toMatchObject({ poolId: pool.id, userId: MEMBER_ID, role: "MEMBER" });
+    expect(result).toMatchObject({
+      kind: "MEMBERSHIP",
+      membership: { poolId: pool.id, userId: MEMBER_ID, role: "MEMBER" },
+    });
   });
 
   it("throws PoolNotFoundError for an unknown pool id", async () => {
@@ -58,7 +92,11 @@ describe("MembershipService.joinByPoolId", () => {
     const first = await membershipService.joinByPoolId(MEMBER_ID, pool.id);
     const second = await membershipService.joinByPoolId(MEMBER_ID, pool.id);
 
-    expect(second.id).toBe(first.id);
+    expect(first.kind).toBe("MEMBERSHIP");
+    expect(second.kind).toBe("MEMBERSHIP");
+    if (first.kind === "MEMBERSHIP" && second.kind === "MEMBERSHIP") {
+      expect(second.membership.id).toBe(first.membership.id);
+    }
     const all = await membershipRepository.listByPool(pool.id);
     expect(all.filter((m) => m.userId === MEMBER_ID)).toHaveLength(1);
   });
@@ -77,9 +115,12 @@ describe("MembershipService.joinByCode", () => {
   it("resolves the Pool by its join code and creates a membership", async () => {
     const { membershipService, pool } = await makeService();
 
-    const membership = await membershipService.joinByCode(MEMBER_ID, "123456");
+    const result = await membershipService.joinByCode(MEMBER_ID, "123456");
 
-    expect(membership).toMatchObject({ poolId: pool.id, userId: MEMBER_ID, role: "MEMBER" });
+    expect(result).toMatchObject({
+      kind: "MEMBERSHIP",
+      membership: { poolId: pool.id, userId: MEMBER_ID, role: "MEMBER" },
+    });
   });
 
   it("throws InvalidJoinCodeError for an unknown code", async () => {
@@ -90,6 +131,173 @@ describe("MembershipService.joinByCode", () => {
   });
 });
 
+// ticket #88 — the join code/link's own expiry, distinct from a
+// JoinRequest's lifetime (ticket #86), checked lazily and uniformly for
+// both joinByCode and joinByPoolId since they funnel through one join path.
+describe("MembershipService — join code expiry (ticket #88)", () => {
+  it("has no effect when unset — joining succeeds as normal", async () => {
+    const { membershipService, pool } = await makeService();
+
+    const result = await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+
+    expect(result.kind).toBe("MEMBERSHIP");
+  });
+
+  it("allows a join attempt made before the expiry passes", async () => {
+    const { membershipService, poolRepository, pool } = await makeService();
+    await poolRepository.updateJoinCodeExpiry(pool.id, new Date(Date.now() + 60 * 60 * 1000));
+
+    const result = await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+
+    expect(result.kind).toBe("MEMBERSHIP");
+  });
+
+  it("rejects joinByCode once the expiry has passed", async () => {
+    const { membershipService, poolRepository, pool } = await makeService();
+    await poolRepository.updateJoinCodeExpiry(pool.id, new Date(Date.now() - 60 * 60 * 1000));
+
+    await expect(membershipService.joinByCode(MEMBER_ID, pool.joinCode)).rejects.toThrow(
+      JoinCodeExpiredError,
+    );
+  });
+
+  it("rejects joinByPoolId the same way — one code, one expiry, regardless of entry path", async () => {
+    const { membershipService, poolRepository, pool } = await makeService();
+    await poolRepository.updateJoinCodeExpiry(pool.id, new Date(Date.now() - 60 * 60 * 1000));
+
+    await expect(membershipService.joinByPoolId(MEMBER_ID, pool.id)).rejects.toThrow(
+      JoinCodeExpiredError,
+    );
+  });
+
+  it("leaves an existing Member unaffected by the code expiring afterward", async () => {
+    const { membershipService, poolRepository, pool } = await makeService();
+    await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+
+    await poolRepository.updateJoinCodeExpiry(pool.id, new Date(Date.now() - 1000));
+
+    const result = await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+    expect(result.kind).toBe("MEMBERSHIP");
+  });
+});
+
+// Equal Split joining is approval-gated (ticket #86): MembershipService
+// routes to JoinRequestService instead of creating a Membership directly.
+// JoinRequestService's own rules (idempotent re-request, blocked after
+// decline, notifications) are covered in join-requests/join-request-service.test.ts —
+// these tests only cover MembershipService's dispatch on Pool type.
+describe("MembershipService — Equal Split joins create a JoinRequest, not a Membership", () => {
+  async function makeEqualSplitService() {
+    const poolRepository = new InMemoryPoolRepository();
+    const membershipRepository = new InMemoryMembershipRepository();
+    const invitationRepository = new InMemoryInvitationRepository();
+    const joinRequestRepository = new InMemoryJoinRequestRepository();
+    const userRepository = new InMemoryUserRepository();
+    const notificationRepository = new InMemoryNotificationRepository();
+    const notificationService = new NotificationService({ notificationRepository });
+    const joinRequestService = new JoinRequestService({
+      joinRequestRepository,
+      membershipRepository,
+      poolRepository,
+      userRepository,
+      notificationService,
+    });
+    const membershipService = new MembershipService({
+      poolRepository,
+      membershipRepository,
+      invitationRepository,
+      joinRequestService,
+    });
+
+    const pool = await poolRepository.create(ORGANIZER_ID, {
+      name: "Goa Trip",
+      type: "EQUAL_SPLIT",
+      perPersonAmountPaise: 100000,
+      joinCode: "222222",
+    });
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+
+    return {
+      membershipService,
+      poolRepository,
+      membershipRepository,
+      joinRequestRepository,
+      notificationRepository,
+      pool,
+    };
+  }
+
+  it("joinByCode creates a PENDING JoinRequest instead of a Membership", async () => {
+    const { membershipService, membershipRepository, pool } = await makeEqualSplitService();
+
+    const result = await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+
+    expect(result).toMatchObject({
+      kind: "JOIN_REQUEST",
+      joinRequest: { poolId: pool.id, requesterUserId: MEMBER_ID, state: "PENDING" },
+    });
+    expect(await membershipRepository.find(pool.id, MEMBER_ID)).toBeNull();
+  });
+
+  it("joinByPoolId creates a PENDING JoinRequest instead of a Membership", async () => {
+    const { membershipService, membershipRepository, pool } = await makeEqualSplitService();
+
+    const result = await membershipService.joinByPoolId(MEMBER_ID, pool.id);
+
+    expect(result).toMatchObject({
+      kind: "JOIN_REQUEST",
+      joinRequest: { poolId: pool.id, requesterUserId: MEMBER_ID, state: "PENDING" },
+    });
+    expect(await membershipRepository.find(pool.id, MEMBER_ID)).toBeNull();
+  });
+
+  it("notifies the Organizer when a Join Request comes in", async () => {
+    const { membershipService, notificationRepository, pool } = await makeEqualSplitService();
+
+    await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+
+    const notifications = await notificationRepository.listByUser(ORGANIZER_ID);
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toMatchObject({ poolId: pool.id, type: "JOIN_REQUEST_RECEIVED" });
+  });
+
+  it("is idempotent while a Join Request is still pending — no duplicate rows", async () => {
+    const { membershipService, joinRequestRepository, pool } = await makeEqualSplitService();
+
+    await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+    await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+
+    const requests = joinRequestRepository.joinRequests.filter((r) => r.requesterUserId === MEMBER_ID);
+    expect(requests).toHaveLength(1);
+  });
+
+  it("is idempotent once the requester already has a Membership — returns it directly", async () => {
+    const { membershipService, membershipRepository, pool } = await makeEqualSplitService();
+    await membershipRepository.create(pool.id, MEMBER_ID, "MEMBER");
+
+    const result = await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+
+    expect(result.kind).toBe("MEMBERSHIP");
+  });
+
+  // ticket #88 — a JoinRequest, once created, has no expiry of its own and
+  // is unaffected by the join code/link expiring afterward.
+  it("leaves an already-created JoinRequest pending after its Pool's join code later expires", async () => {
+    const { membershipService, poolRepository, joinRequestRepository, pool } =
+      await makeEqualSplitService();
+
+    const result = await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+    expect(result.kind).toBe("JOIN_REQUEST");
+
+    await poolRepository.updateJoinCodeExpiry(pool.id, new Date(Date.now() - 1000));
+
+    if (result.kind === "JOIN_REQUEST") {
+      const stillPending = await joinRequestRepository.findById(result.joinRequest.id);
+      expect(stillPending?.state).toBe("PENDING");
+    }
+  });
+});
+
 describe("MembershipService — Awaiting Payment gate (ADR-0017)", () => {
   const OTHER_ORGANIZER_ID = "user_awaiting_organizer";
 
@@ -97,7 +305,24 @@ describe("MembershipService — Awaiting Payment gate (ADR-0017)", () => {
     const poolRepository = new InMemoryPoolRepository();
     const membershipRepository = new InMemoryMembershipRepository();
     const invitationRepository = new InMemoryInvitationRepository();
-    const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
+    const joinRequestRepository = new InMemoryJoinRequestRepository();
+    const userRepository = new InMemoryUserRepository();
+    const notificationService = new NotificationService({
+      notificationRepository: new InMemoryNotificationRepository(),
+    });
+    const joinRequestService = new JoinRequestService({
+      joinRequestRepository,
+      membershipRepository,
+      poolRepository,
+      userRepository,
+      notificationService,
+    });
+    const membershipService = new MembershipService({
+      poolRepository,
+      membershipRepository,
+      invitationRepository,
+      joinRequestService,
+    });
 
     const pool = await poolRepository.create(OTHER_ORGANIZER_ID, {
       name: "Goa Trip",
@@ -134,20 +359,40 @@ describe("MembershipService — Awaiting Payment gate (ADR-0017)", () => {
     );
   });
 
-  it("allows joining once the Organizer has a Membership", async () => {
+  it("allows joining once the Organizer has a Membership — as a Join Request (Equal Split)", async () => {
     const { membershipService, membershipRepository, pool } = await makePoolAwaitingPayment();
     await membershipRepository.create(pool.id, OTHER_ORGANIZER_ID, "ORGANIZER");
 
-    const membership = await membershipService.joinByPoolId(MEMBER_ID, pool.id);
+    const result = await membershipService.joinByPoolId(MEMBER_ID, pool.id);
 
-    expect(membership).toMatchObject({ poolId: pool.id, userId: MEMBER_ID, role: "MEMBER" });
+    expect(result).toMatchObject({
+      kind: "JOIN_REQUEST",
+      joinRequest: { poolId: pool.id, requesterUserId: MEMBER_ID, state: "PENDING" },
+    });
   });
 
   it("rejects joining once the self-Invitation has lapsed, lazily marking the Pool EXPIRED", async () => {
     const poolRepository = new InMemoryPoolRepository();
     const membershipRepository = new InMemoryMembershipRepository();
     const invitationRepository = new InMemoryInvitationRepository();
-    const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
+    const joinRequestRepository = new InMemoryJoinRequestRepository();
+    const userRepository = new InMemoryUserRepository();
+    const notificationService = new NotificationService({
+      notificationRepository: new InMemoryNotificationRepository(),
+    });
+    const joinRequestService = new JoinRequestService({
+      joinRequestRepository,
+      membershipRepository,
+      poolRepository,
+      userRepository,
+      notificationService,
+    });
+    const membershipService = new MembershipService({
+      poolRepository,
+      membershipRepository,
+      invitationRepository,
+      joinRequestService,
+    });
     const pool = await poolRepository.create(OTHER_ORGANIZER_ID, {
       name: "Abandoned Trip",
       type: "EQUAL_SPLIT",
@@ -201,7 +446,7 @@ describe("MembershipService.removeMember", () => {
 
     const rejoined = await membershipService.joinByPoolId(MEMBER_ID, pool.id);
 
-    expect(rejoined).toMatchObject({ poolId: pool.id, userId: MEMBER_ID });
+    expect(rejoined).toMatchObject({ kind: "MEMBERSHIP", membership: { poolId: pool.id, userId: MEMBER_ID } });
     // 2: the Organizer (seeded in makeService, mirroring PoolService.createPool
     // for an OPEN Pool) plus the rejoined Member.
     expect(await membershipService.listMembers(pool.id)).toHaveLength(2);

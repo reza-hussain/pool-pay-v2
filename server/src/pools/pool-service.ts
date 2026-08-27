@@ -5,6 +5,7 @@ import type { UserRepository } from "../auth/types.js";
 import type { NotificationService } from "../notifications/notification-service.js";
 import type { InvitationRepository } from "../invitations/types.js";
 import {
+  InvalidJoinCodeExpiryPresetError,
   InvalidOrganizerShareAmountError,
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
@@ -13,10 +14,12 @@ import {
   MissingPerPersonAmountError,
   NotPoolOrganizerError,
   OrganizerNotVerifiedError,
+  POOL_JOIN_CODE_EXPIRY_PRESET_MS,
   UnexpectedOrganizerShareAmountError,
   UnexpectedPerPersonAmountError,
   type CreatePoolInput,
   type Pool,
+  type PoolJoinCodeExpiryPreset,
   type PoolRepository,
   type PoolType,
 } from "./types.js";
@@ -173,6 +176,27 @@ export class PoolService {
     }
 
     return locked;
+  }
+
+  async updateJoinCodeExpiry(
+    poolId: string,
+    organizerUserId: string,
+    preset: PoolJoinCodeExpiryPreset,
+  ): Promise<Pool> {
+    const pool = await this.poolRepository.findById(poolId);
+    if (!pool) {
+      throw new PoolNotFoundError();
+    }
+    if (pool.organizerId !== organizerUserId) {
+      throw new NotPoolOrganizerError();
+    }
+
+    const ms = POOL_JOIN_CODE_EXPIRY_PRESET_MS[preset];
+    if (ms === undefined) {
+      throw new InvalidJoinCodeExpiryPresetError();
+    }
+
+    return this.poolRepository.updateJoinCodeExpiry(poolId, new Date(Date.now() + ms));
   }
 
   async listPoolsForUser(userId: string): Promise<Pool[]> {

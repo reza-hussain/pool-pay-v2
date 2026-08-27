@@ -40,6 +40,7 @@ model User {
   refundVotes    RefundVote[]
   notifications  Notification[]
   invitations    Invitation[]
+  joinRequests   JoinRequest[]
 }
 
 model Pool {
@@ -60,6 +61,12 @@ model Pool {
   // id embedded in a deep link — no separate stored field needed for that.
   // Unused by Custom Split Pools, which join exclusively via Invitation.
   joinCode    String       @unique
+  // Null by default (no expiry) — existing Pools and Organizers who never
+  // open the Share screen (ticket #88) see no behavior change. Governs
+  // whether a join attempt via the code/link is accepted at all, checked
+  // lazily at the point of use; unrelated to a JoinRequest's own lifetime,
+  // which has no expiry (ticket #86).
+  joinCodeExpiresAt DateTime?
   memberships    Membership[]
   deposits       Deposit[]
   pendingDeposits PendingDeposit[]
@@ -69,6 +76,7 @@ model Pool {
   refundVotes    RefundVote[]
   notifications  Notification[]
   invitations    Invitation[]
+  joinRequests   JoinRequest[]
 
   @@index([organizerId])
 }
@@ -78,6 +86,10 @@ model Pool {
 // must pay in full before a Membership is created for them. The Organizer's
 // own share (ticket #58) is a self-addressed Invitation created alongside
 // the Pool, gating Pool creation until they pay it just like anyone else.
+// Also backs the Equal Split Organizer's direct phone/contact add (ticket
+// #87): the same entity, minted with assignedAmountPaise null since Equal
+// Split has no per-invitee assigned share, and resolved by the invitee
+// accepting at zero cost rather than paying.
 model Invitation {
   id            String @id @default(cuid())
   poolId        String
@@ -85,8 +97,10 @@ model Invitation {
   inviteeUserId String
   invitee       User   @relation(fields: [inviteeUserId], references: [id])
   // In paise. Individually assigned by the Organizer — not shared with any
-  // other Invitation on the same Pool, unlike Pool.perPersonAmountPaise.
-  assignedAmountPaise Int
+  // other Invitation on the same Pool, unlike Pool.perPersonAmountPaise. Null
+  // for the Equal Split phone/contact variant (ticket #87), which has no
+  // per-invitee assigned share.
+  assignedAmountPaise Int?
   // "PENDING" | "PAID" | "CANCELLED" | "EXPIRED"
   state         String    @default("PENDING")
   // Opaque token for the phone-bound Invitation link (ticket #61) — unused
@@ -101,6 +115,31 @@ model Invitation {
   // Backs listPendingByInvitee (ticket #60) — an invitee's own list of
   // Invitations still worth opening, across every Pool.
   @@index([inviteeUserId, state])
+}
+
+// An Equal Split Pool's approval-gated joining (ticket #86): joining via
+// Pool Code or Invite Link no longer creates a Membership directly — it
+// creates one of these, which the Organizer must Approve (creating the
+// Membership) or Decline. Modeled as its own entity rather than a status on
+// Membership since a rejected/pending request never becomes one. Never
+// expires on its own — stays PENDING until the Organizer decides, no matter
+// how long that takes (only the Pool's join code/link itself expires, #88).
+// Unused by Custom Split Pools, which join exclusively via Invitation.
+model JoinRequest {
+  id              String    @id @default(cuid())
+  poolId          String
+  pool            Pool      @relation(fields: [poolId], references: [id])
+  requesterUserId String
+  requester       User      @relation(fields: [requesterUserId], references: [id])
+  // "PENDING" | "APPROVED" | "REJECTED"
+  state           String    @default("PENDING")
+  createdAt       DateTime  @default(now())
+  decidedAt       DateTime?
+
+  @@index([poolId])
+  // Backs the most-recent-request-per-requester lookup that blocks an
+  // immediate re-request right after a decline.
+  @@index([poolId, requesterUserId])
 }
 
 model Deposit {

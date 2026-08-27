@@ -1,4 +1,5 @@
 import type { Pool } from "./poolsClient";
+import type { Membership } from "./membersClient";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -12,7 +13,9 @@ export interface Invitation {
   id: string;
   poolId: string;
   inviteeUserId: string;
-  assignedAmountPaise: number;
+  // Null for the Equal Split phone/contact variant (ticket #87) — no
+  // per-invitee assigned share, accepted at zero cost instead of paid.
+  assignedAmountPaise: number | null;
   token: string;
   state: InvitationState;
   expiresAt: string;
@@ -60,6 +63,30 @@ export async function sendInvitation(
     body: JSON.stringify({ phoneNumber, assignedAmountPaise, expiryPreset }),
   });
   return data.invitation as Invitation;
+}
+
+// The Organizer's direct phone/contact add on an Equal Split Pool (ticket
+// #87) — same entity/endpoint as sendInvitation, but with no assigned
+// amount: the Organizer choosing this person is the approval, though the
+// invitee still must explicitly accept (see acceptInvitation).
+export async function sendEqualSplitInvitation(
+  token: string,
+  poolId: string,
+  phoneNumber: string,
+  expiryPreset?: InvitationExpiryPreset,
+): Promise<Invitation> {
+  const data = await authedFetch(`/pools/${poolId}/invitations`, token, {
+    method: "POST",
+    body: JSON.stringify({ phoneNumber, expiryPreset }),
+  });
+  return data.invitation as Invitation;
+}
+
+// Accepts the Equal Split phone/contact Invitation variant — creates a
+// Membership immediately, at zero cost, no Deposit involved.
+export async function acceptInvitation(token: string, invitationId: string): Promise<Membership> {
+  const data = await authedFetch(`/invitations/${invitationId}/accept`, token, { method: "POST" });
+  return data.membership as Membership;
 }
 
 export async function cancelInvitation(token: string, poolId: string, invitationId: string): Promise<void> {

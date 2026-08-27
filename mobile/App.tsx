@@ -41,6 +41,8 @@ import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
 import { InvitationsScreen } from './src/screens/InvitationsScreen';
 import { InviteByPhoneScreen } from './src/screens/InviteByPhoneScreen';
 import { InvitationScreen } from './src/screens/InvitationScreen';
+import { AddMemberScreen } from './src/screens/AddMemberScreen';
+import { ShareCodeScreen } from './src/screens/ShareCodeScreen';
 import { HomeTabIcon, ActivityTabIcon, AlertsTabIcon, ProfileTabIcon } from './src/components/TabBarIcons';
 import { colors, fontFamily } from './src/theme/tokens';
 import type { ClosureRefund } from './src/api/closureClient';
@@ -96,6 +98,13 @@ type AppStackParamList = {
   Invitations: { pool: Pool };
   InviteByPhone: { pool: Pool };
   InvitationDetail: { invitationForInvitee: InvitationForInvitee };
+  // Equal Split direct add by phone/contact (ticket #87, part of #83) —
+  // scaffolded for manual verification; not yet linked from any button
+  // (that wiring is ticket #4).
+  AddMember: { pool: Pool };
+  // Share QR/link + join-code expiry (ticket #88) — reached from AddMember's
+  // third row; same not-yet-linked-elsewhere scaffolding as AddMember itself.
+  ShareCode: { pool: Pool };
 };
 
 type AppTabParamList = {
@@ -233,8 +242,8 @@ function ProfileRoute() {
   );
 }
 
-// AlertsRoute lives inside AppTab but navigates to an AppStack sibling
-// (InvitationDetail) when an INVITATION_RECEIVED notification is tapped —
+// AlertsRoute lives inside AppTab but navigates to AppStack siblings
+// (InvitationDetail, Members, PoolDetail) when a notification is tapped —
 // same composite-props reasoning as HomeRouteProps above.
 type AlertsRouteProps = CompositeScreenProps<
   BottomTabScreenProps<AppTabParamList, 'Alerts'>,
@@ -250,6 +259,8 @@ function AlertsRoute({ navigation }: AlertsRouteProps) {
       onOpenInvitation={(invitationForInvitee) =>
         navigation.navigate('InvitationDetail', { invitationForInvitee })
       }
+      onOpenJoinRequests={(pool) => navigation.navigate('Members', { pool })}
+      onOpenApprovedPool={(pool) => navigation.navigate('PoolDetail', { pool })}
     />
   );
 }
@@ -565,6 +576,36 @@ function InviteByPhoneRoute({
   );
 }
 
+function AddMemberRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'AddMember'>) {
+  const { session } = useSessionContext();
+  return (
+    <AddMemberScreen
+      session={session}
+      pool={route.params.pool}
+      onSent={() => navigation.goBack()}
+      onShare={() => navigation.navigate('ShareCode', { pool: route.params.pool })}
+      onCancel={() => navigation.goBack()}
+    />
+  );
+}
+
+function ShareCodeRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'ShareCode'>) {
+  const { session } = useSessionContext();
+  return (
+    <ShareCodeScreen
+      session={session}
+      pool={route.params.pool}
+      onDone={() => navigation.goBack()}
+    />
+  );
+}
+
 function InvitationDetailRoute({
   route,
   navigation,
@@ -576,6 +617,7 @@ function InvitationDetailRoute({
       session={session}
       invitationForInvitee={invitationForInvitee}
       onPay={() => navigation.navigate('Deposit', { pool: invitationForInvitee.pool })}
+      onAccepted={() => navigation.replace('PoolDetail', { pool: invitationForInvitee.pool })}
       onCancel={() => navigation.goBack()}
     />
   );
@@ -706,7 +748,19 @@ export default function App() {
       const poolId = parseJoinPoolId(url);
       if (poolId) {
         joinByPoolId(session.token, poolId)
-          .then(() => navigationRef.current?.navigate('Home'))
+          .then((result) => {
+            navigationRef.current?.navigate('Home');
+            // Equal Split joining is approval-gated (ticket #86) — a Join
+            // Request needs its own confirmation here since, unlike
+            // JoinPoolScreen's Pool Code flow, this link auto-joins with no
+            // screen of its own to show a "request sent" state on.
+            if (result.kind === 'JOIN_REQUEST') {
+              Alert.alert(
+                'Request sent',
+                "Waiting for the Organizer to approve your request to join. You'll be notified once they do.",
+              );
+            }
+          })
           .catch(() => {
             // Swallow: an invalid/expired join link shouldn't crash the app.
           });
@@ -817,6 +871,8 @@ export default function App() {
               <AppStack.Screen name="Invitations" component={InvitationsRoute} />
               <AppStack.Screen name="InviteByPhone" component={InviteByPhoneRoute} />
               <AppStack.Screen name="InvitationDetail" component={InvitationDetailRoute} />
+              <AppStack.Screen name="AddMember" component={AddMemberRoute} />
+              <AppStack.Screen name="ShareCode" component={ShareCodeRoute} />
             </AppStack.Navigator>
           </SessionContext.Provider>
         )}

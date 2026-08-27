@@ -32,6 +32,11 @@ export class PrismaPoolRepository implements PoolRepository {
     return toPool(row);
   }
 
+  async updateJoinCodeExpiry(id: string, expiresAt: Date): Promise<Pool> {
+    const row = await this.prisma.pool.update({ where: { id }, data: { joinCodeExpiresAt: expiresAt } });
+    return toPool(row);
+  }
+
   async listByOrganizer(organizerId: string): Promise<Pool[]> {
     const rows = await this.prisma.pool.findMany({ where: { organizerId } });
     return rows.map(toPool);
@@ -47,6 +52,7 @@ function toPool(row: {
   organizerId: string;
   createdAt: Date;
   joinCode: string;
+  joinCodeExpiresAt: Date | null;
 }): Pool {
   return { ...row, type: row.type as PoolType, state: row.state as Pool["state"] };
 }

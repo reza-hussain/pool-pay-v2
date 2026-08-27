@@ -72,6 +72,15 @@ async function makeCustomSplitPool(poolRepository: ReturnType<typeof makeApp>["p
   });
 }
 
+async function makeEqualSplitPool(poolRepository: ReturnType<typeof makeApp>["poolRepository"]) {
+  return poolRepository.create(ORGANIZER_ID, {
+    name: "Goa Trip",
+    type: "EQUAL_SPLIT",
+    perPersonAmountPaise: 100000,
+    joinCode: "666666",
+  });
+}
+
 describe("POST /pools/:poolId/invitations", () => {
   it("sends an Invitation for the Organizer's own paid Custom Split Pool", async () => {
     const { app, poolRepository, membershipRepository } = makeApp();
@@ -390,5 +399,139 @@ describe("GET /invitations/token/:token", () => {
       .set("Authorization", bearerFor(INVITEE_ID));
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /pools/:poolId/invitations — Equal Split variant (no assignedAmountPaise)", () => {
+  it("sends an Invitation with no assigned amount for the Organizer's Equal Split Pool", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeEqualSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE });
+
+    expect(res.status).toBe(201);
+    expect(res.body.invitation).toMatchObject({
+      poolId: pool.id,
+      inviteeUserId: INVITEE_ID,
+      assignedAmountPaise: null,
+      state: "PENDING",
+    });
+  });
+
+  it("400s omitting assignedAmountPaise on a Custom Split Pool", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeCustomSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("403s a non-Organizer sender", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeEqualSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(INVITEE_ID))
+      .send({ phoneNumber: INVITEE_PHONE });
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("POST /invitations/:invitationId/accept", () => {
+  it("accepts an Equal Split Invitation, creating a Membership with no Deposit involved", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeEqualSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+    const sendRes = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE });
+
+    const res = await request(app)
+      .post(`/invitations/${sendRes.body.invitation.id}/accept`)
+      .set("Authorization", bearerFor(INVITEE_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.membership).toMatchObject({
+      poolId: pool.id,
+      userId: INVITEE_ID,
+      role: "MEMBER",
+    });
+
+    const stored = await membershipRepository.find(pool.id, INVITEE_ID);
+    expect(stored).not.toBeNull();
+  });
+
+  it("404s an unknown invitation id", async () => {
+    const { app } = makeApp();
+
+    const res = await request(app)
+      .post("/invitations/does-not-exist/accept")
+      .set("Authorization", bearerFor(INVITEE_ID));
+
+    expect(res.status).toBe(404);
+  });
+
+  it("404s someone else's Invitation", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeEqualSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+    const sendRes = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE });
+
+    const res = await request(app)
+      .post(`/invitations/${sendRes.body.invitation.id}/accept`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(404);
+  });
+
+  it("400s accepting a Custom Split Invitation — it must be paid, not just accepted", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeCustomSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+    const sendRes = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE, assignedAmountPaise: 250000 });
+
+    const res = await request(app)
+      .post(`/invitations/${sendRes.body.invitation.id}/accept`)
+      .set("Authorization", bearerFor(INVITEE_ID));
+
+    expect(res.status).toBe(400);
+  });
+
+  it("400s accepting the same Invitation twice", async () => {
+    const { app, poolRepository, membershipRepository } = makeApp();
+    const pool = await makeEqualSplitPool(poolRepository);
+    await membershipRepository.create(pool.id, ORGANIZER_ID, "ORGANIZER");
+    const sendRes = await request(app)
+      .post(`/pools/${pool.id}/invitations`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ phoneNumber: INVITEE_PHONE });
+    await request(app)
+      .post(`/invitations/${sendRes.body.invitation.id}/accept`)
+      .set("Authorization", bearerFor(INVITEE_ID));
+
+    const res = await request(app)
+      .post(`/invitations/${sendRes.body.invitation.id}/accept`)
+      .set("Authorization", bearerFor(INVITEE_ID));
+
+    expect(res.status).toBe(400);
   });
 });

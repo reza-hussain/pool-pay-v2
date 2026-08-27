@@ -113,6 +113,24 @@ describe("PrismaPoolRepository", () => {
     expect(found?.state).toBe("LOCKED");
   });
 
+  it("has no join-code expiry by default, and can have one set", async () => {
+    const repo = new PrismaPoolRepository(prisma);
+    const created = await repo.create(organizerId, {
+      name: "Goa Trip",
+      type: "OPEN",
+      perPersonAmountPaise: null,
+      joinCode: "556677",
+    });
+    expect(created.joinCodeExpiresAt).toBeNull();
+
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const updated = await repo.updateJoinCodeExpiry(created.id, expiresAt);
+    expect(updated.joinCodeExpiresAt?.getTime()).toBe(expiresAt.getTime());
+
+    const found = await repo.findById(created.id);
+    expect(found?.joinCodeExpiresAt?.getTime()).toBe(expiresAt.getTime());
+  });
+
   it("lists every Pool for an organizer", async () => {
     const repo = new PrismaPoolRepository(prisma);
     await repo.create(organizerId, {

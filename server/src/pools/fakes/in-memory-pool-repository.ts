@@ -15,6 +15,7 @@ export class InMemoryPoolRepository implements PoolRepository {
       organizerId,
       createdAt: new Date(),
       joinCode: data.joinCode,
+      joinCodeExpiresAt: null,
     };
     this.pools.push(pool);
     return pool;
@@ -34,6 +35,15 @@ export class InMemoryPoolRepository implements PoolRepository {
       throw new Error(`Pool ${id} not found`);
     }
     pool.state = state;
+    return pool;
+  }
+
+  async updateJoinCodeExpiry(id: string, expiresAt: Date): Promise<Pool> {
+    const pool = this.pools.find((p) => p.id === id);
+    if (!pool) {
+      throw new Error(`Pool ${id} not found`);
+    }
+    pool.joinCodeExpiresAt = expiresAt;
     return pool;
   }
 

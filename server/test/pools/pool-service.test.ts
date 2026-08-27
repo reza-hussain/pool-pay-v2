@@ -7,6 +7,7 @@ import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repo
 import { NotificationService } from "../../src/notifications/notification-service.js";
 import { InMemoryNotificationRepository } from "../../src/notifications/fakes/in-memory-notification-repository.js";
 import {
+  InvalidJoinCodeExpiryPresetError,
   InvalidOrganizerShareAmountError,
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
@@ -468,6 +469,65 @@ describe("PoolService.lockPool", () => {
       message: "Goa Trip was locked",
     });
     expect(await notificationRepository.listByUser(ORGANIZER_ID)).toHaveLength(0);
+  });
+});
+
+describe("PoolService.updateJoinCodeExpiry", () => {
+  it("has no expiry by default", async () => {
+    const { poolService } = makePoolService();
+    const pool = await poolService.createPool(ORGANIZER_ID, { name: "Goa Trip", type: "OPEN" });
+
+    expect(pool.joinCodeExpiresAt).toBeNull();
+  });
+
+  it("sets an expiry from a preset, measured from now", async () => {
+    const { poolService } = makePoolService();
+    const pool = await poolService.createPool(ORGANIZER_ID, { name: "Goa Trip", type: "OPEN" });
+    const before = Date.now();
+
+    const updated = await poolService.updateJoinCodeExpiry(pool.id, ORGANIZER_ID, "24h");
+
+    expect(updated.joinCodeExpiresAt).not.toBeNull();
+    const expiresAtMs = (updated.joinCodeExpiresAt as Date).getTime();
+    expect(expiresAtMs).toBeGreaterThan(before + 23 * 60 * 60 * 1000);
+    expect(expiresAtMs).toBeLessThan(before + 25 * 60 * 60 * 1000);
+  });
+
+  it("updates an already-set expiry to a new preset", async () => {
+    const { poolService } = makePoolService();
+    const pool = await poolService.createPool(ORGANIZER_ID, { name: "Goa Trip", type: "OPEN" });
+    await poolService.updateJoinCodeExpiry(pool.id, ORGANIZER_ID, "24h");
+
+    const updated = await poolService.updateJoinCodeExpiry(pool.id, ORGANIZER_ID, "7d");
+
+    const expiresAtMs = (updated.joinCodeExpiresAt as Date).getTime();
+    expect(expiresAtMs).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+  });
+
+  it("rejects a non-Organizer with NotPoolOrganizerError", async () => {
+    const { poolService } = makePoolService();
+    const pool = await poolService.createPool(ORGANIZER_ID, { name: "Goa Trip", type: "OPEN" });
+
+    await expect(
+      poolService.updateJoinCodeExpiry(pool.id, "user_someone_else", "24h"),
+    ).rejects.toThrow(NotPoolOrganizerError);
+  });
+
+  it("rejects an unknown Pool with PoolNotFoundError", async () => {
+    const { poolService } = makePoolService();
+
+    await expect(
+      poolService.updateJoinCodeExpiry("pool_missing", ORGANIZER_ID, "24h"),
+    ).rejects.toThrow(PoolNotFoundError);
+  });
+
+  it("rejects an invalid preset with InvalidJoinCodeExpiryPresetError", async () => {
+    const { poolService } = makePoolService();
+    const pool = await poolService.createPool(ORGANIZER_ID, { name: "Goa Trip", type: "OPEN" });
+
+    await expect(
+      poolService.updateJoinCodeExpiry(pool.id, ORGANIZER_ID, "9d" as never),
+    ).rejects.toThrow(InvalidJoinCodeExpiryPresetError);
   });
 });
 
