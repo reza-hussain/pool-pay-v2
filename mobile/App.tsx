@@ -42,6 +42,7 @@ import { InvitationsScreen } from './src/screens/InvitationsScreen';
 import { InviteByPhoneScreen } from './src/screens/InviteByPhoneScreen';
 import { InvitationScreen } from './src/screens/InvitationScreen';
 import { AddMemberScreen } from './src/screens/AddMemberScreen';
+import { ShareCodeScreen } from './src/screens/ShareCodeScreen';
 import { HomeTabIcon, ActivityTabIcon, AlertsTabIcon, ProfileTabIcon } from './src/components/TabBarIcons';
 import { colors, fontFamily } from './src/theme/tokens';
 import type { ClosureRefund } from './src/api/closureClient';
@@ -101,6 +102,9 @@ type AppStackParamList = {
   // scaffolded for manual verification; not yet linked from any button
   // (that wiring is ticket #4).
   AddMember: { pool: Pool };
+  // Share QR/link + join-code expiry (ticket #88) — reached from AddMember's
+  // third row; same not-yet-linked-elsewhere scaffolding as AddMember itself.
+  ShareCode: { pool: Pool };
 };
 
 type AppTabParamList = {
@@ -582,7 +586,22 @@ function AddMemberRoute({
       session={session}
       pool={route.params.pool}
       onSent={() => navigation.goBack()}
+      onShare={() => navigation.navigate('ShareCode', { pool: route.params.pool })}
       onCancel={() => navigation.goBack()}
+    />
+  );
+}
+
+function ShareCodeRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'ShareCode'>) {
+  const { session } = useSessionContext();
+  return (
+    <ShareCodeScreen
+      session={session}
+      pool={route.params.pool}
+      onDone={() => navigation.goBack()}
     />
   );
 }
@@ -853,6 +872,7 @@ export default function App() {
               <AppStack.Screen name="InviteByPhone" component={InviteByPhoneRoute} />
               <AppStack.Screen name="InvitationDetail" component={InvitationDetailRoute} />
               <AppStack.Screen name="AddMember" component={AddMemberRoute} />
+              <AppStack.Screen name="ShareCode" component={ShareCodeRoute} />
             </AppStack.Navigator>
           </SessionContext.Provider>
         )}

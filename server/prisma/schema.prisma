@@ -61,6 +61,12 @@ model Pool {
   // id embedded in a deep link — no separate stored field needed for that.
   // Unused by Custom Split Pools, which join exclusively via Invitation.
   joinCode    String       @unique
+  // Null by default (no expiry) — existing Pools and Organizers who never
+  // open the Share screen (ticket #88) see no behavior change. Governs
+  // whether a join attempt via the code/link is accepted at all, checked
+  // lazily at the point of use; unrelated to a JoinRequest's own lifetime,
+  // which has no expiry (ticket #86).
+  joinCodeExpiresAt DateTime?
   memberships    Membership[]
   deposits       Deposit[]
   pendingDeposits PendingDeposit[]

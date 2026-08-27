@@ -11,6 +11,7 @@ import { InMemoryNotificationRepository } from "../../src/notifications/fakes/in
 import {
   CannotRemoveOrganizerError,
   InvalidJoinCodeError,
+  JoinCodeExpiredError,
   MemberNotFoundError,
   PoolAwaitingPaymentError,
   PoolClosedError,
@@ -130,6 +131,56 @@ describe("MembershipService.joinByCode", () => {
   });
 });
 
+// ticket #88 — the join code/link's own expiry, distinct from a
+// JoinRequest's lifetime (ticket #86), checked lazily and uniformly for
+// both joinByCode and joinByPoolId since they funnel through one join path.
+describe("MembershipService — join code expiry (ticket #88)", () => {
+  it("has no effect when unset — joining succeeds as normal", async () => {
+    const { membershipService, pool } = await makeService();
+
+    const result = await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+
+    expect(result.kind).toBe("MEMBERSHIP");
+  });
+
+  it("allows a join attempt made before the expiry passes", async () => {
+    const { membershipService, poolRepository, pool } = await makeService();
+    await poolRepository.updateJoinCodeExpiry(pool.id, new Date(Date.now() + 60 * 60 * 1000));
+
+    const result = await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+
+    expect(result.kind).toBe("MEMBERSHIP");
+  });
+
+  it("rejects joinByCode once the expiry has passed", async () => {
+    const { membershipService, poolRepository, pool } = await makeService();
+    await poolRepository.updateJoinCodeExpiry(pool.id, new Date(Date.now() - 60 * 60 * 1000));
+
+    await expect(membershipService.joinByCode(MEMBER_ID, pool.joinCode)).rejects.toThrow(
+      JoinCodeExpiredError,
+    );
+  });
+
+  it("rejects joinByPoolId the same way — one code, one expiry, regardless of entry path", async () => {
+    const { membershipService, poolRepository, pool } = await makeService();
+    await poolRepository.updateJoinCodeExpiry(pool.id, new Date(Date.now() - 60 * 60 * 1000));
+
+    await expect(membershipService.joinByPoolId(MEMBER_ID, pool.id)).rejects.toThrow(
+      JoinCodeExpiredError,
+    );
+  });
+
+  it("leaves an existing Member unaffected by the code expiring afterward", async () => {
+    const { membershipService, poolRepository, pool } = await makeService();
+    await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+
+    await poolRepository.updateJoinCodeExpiry(pool.id, new Date(Date.now() - 1000));
+
+    const result = await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+    expect(result.kind).toBe("MEMBERSHIP");
+  });
+});
+
 // Equal Split joining is approval-gated (ticket #86): MembershipService
 // routes to JoinRequestService instead of creating a Membership directly.
 // JoinRequestService's own rules (idempotent re-request, blocked after
@@ -227,6 +278,23 @@ describe("MembershipService — Equal Split joins create a JoinRequest, not a Me
     const result = await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
 
     expect(result.kind).toBe("MEMBERSHIP");
+  });
+
+  // ticket #88 — a JoinRequest, once created, has no expiry of its own and
+  // is unaffected by the join code/link expiring afterward.
+  it("leaves an already-created JoinRequest pending after its Pool's join code later expires", async () => {
+    const { membershipService, poolRepository, joinRequestRepository, pool } =
+      await makeEqualSplitService();
+
+    const result = await membershipService.joinByCode(MEMBER_ID, pool.joinCode);
+    expect(result.kind).toBe("JOIN_REQUEST");
+
+    await poolRepository.updateJoinCodeExpiry(pool.id, new Date(Date.now() - 1000));
+
+    if (result.kind === "JOIN_REQUEST") {
+      const stillPending = await joinRequestRepository.findById(result.joinRequest.id);
+      expect(stillPending?.state).toBe("PENDING");
+    }
   });
 });
 

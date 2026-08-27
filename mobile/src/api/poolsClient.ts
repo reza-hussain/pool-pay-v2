@@ -14,7 +14,11 @@ export interface Pool {
   organizerId: string;
   createdAt: string;
   joinCode: string;
+  // Null by default (no expiry) — set from the Share screen (ticket #88).
+  joinCodeExpiresAt: string | null;
 }
+
+export type JoinCodeExpiryPreset = "24h" | "3d" | "7d";
 
 export interface CreatePoolInput {
   name: string;
@@ -69,6 +73,24 @@ export async function lockPool(token: string, poolId: string): Promise<Pool> {
   const res = await fetch(`${API_URL}/pools/${poolId}/lock`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new PoolsApiError(data.error ?? `Request failed with status ${res.status}`);
+  }
+  return data.pool as Pool;
+}
+
+export async function updateJoinCodeExpiry(
+  token: string,
+  poolId: string,
+  expiryPreset: JoinCodeExpiryPreset,
+): Promise<Pool> {
+  const res = await fetch(`${API_URL}/pools/${poolId}/join-code-expiry`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ expiryPreset }),
   });
 
   const data = await res.json().catch(() => ({}));

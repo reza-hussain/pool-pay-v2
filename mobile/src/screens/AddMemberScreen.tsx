@@ -18,11 +18,13 @@ export function AddMemberScreen({
   session,
   pool,
   onSent,
+  onShare,
   onCancel,
 }: {
   session: StoredSession;
   pool: Pool;
   onSent: () => void;
+  onShare: () => void;
   onCancel: () => void;
 }) {
   const [nationalNumber, setNationalNumber] = useState("");
@@ -127,6 +129,10 @@ export function AddMemberScreen({
             <Text style={styles.outlineButtonText}>Choose from Contacts</Text>
           )}
         </Pressable>
+
+        <Pressable style={[styles.outlineButton, styles.shareRow]} onPress={onShare}>
+          <Text style={styles.outlineButtonText}>Share QR or Link</Text>
+        </Pressable>
       </View>
     </Screen>
   );
@@ -194,6 +200,9 @@ const styles = StyleSheet.create({
   outlineButtonText: {
     ...type.bodyBold,
     color: colors.ink900,
+  },
+  shareRow: {
+    marginTop: spacing.s3,
   },
   error: {
     ...type.body,

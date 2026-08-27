@@ -4,6 +4,7 @@ import type { PoolService } from "./pool-service.js";
 import type { MembershipService } from "../memberships/membership-service.js";
 import { requireAuth, type AuthenticatedRequest } from "../auth/require-auth.js";
 import {
+  InvalidJoinCodeExpiryPresetError,
   InvalidOrganizerShareAmountError,
   InvalidPerPersonAmountError,
   InvalidPoolNameError,
@@ -18,6 +19,7 @@ import {
 import {
   CannotRemoveOrganizerError,
   InvalidJoinCodeError,
+  JoinCodeExpiredError,
   MemberNotFoundError,
   PoolAwaitingPaymentError,
   PoolClosedError,
@@ -34,6 +36,10 @@ const createPoolSchema = z.object({
 
 const joinByCodeSchema = z.object({
   code: z.string().regex(/^\d{6}$/, "code must be six digits"),
+});
+
+const updateJoinCodeExpirySchema = z.object({
+  expiryPreset: z.enum(["24h", "3d", "7d"]),
 });
 
 export function createPoolsRouter(
@@ -108,6 +114,7 @@ export function createPoolsRouter(
           error instanceof InvalidJoinCodeError ||
           error instanceof PoolClosedError ||
           error instanceof PoolAwaitingPaymentError ||
+          error instanceof JoinCodeExpiredError ||
           error instanceof JoinRequestAlreadyDeclinedError
         ) {
           res.status(400).json({ error: error.message });
@@ -136,6 +143,7 @@ export function createPoolsRouter(
         if (
           error instanceof PoolClosedError ||
           error instanceof PoolAwaitingPaymentError ||
+          error instanceof JoinCodeExpiredError ||
           error instanceof JoinRequestAlreadyDeclinedError
         ) {
           res.status(400).json({ error: error.message });
@@ -156,6 +164,41 @@ export function createPoolsRouter(
       } catch (error) {
         if (error instanceof PoolNotFoundError) {
           res.status(404).json({ error: error.message });
+          return;
+        }
+        if (error instanceof NotPoolOrganizerError) {
+          res.status(403).json({ error: error.message });
+          return;
+        }
+        next(error);
+      }
+    },
+  );
+
+  router.patch(
+    "/:poolId/join-code-expiry",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      const parsed = updateJoinCodeExpirySchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "expiryPreset must be one of 24h, 3d, 7d" });
+        return;
+      }
+
+      try {
+        const pool = await poolService.updateJoinCodeExpiry(
+          req.params.poolId,
+          req.userId as string,
+          parsed.data.expiryPreset,
+        );
+        res.status(200).json({ pool });
+      } catch (error) {
+        if (error instanceof PoolNotFoundError) {
+          res.status(404).json({ error: error.message });
+          return;
+        }
+        if (error instanceof InvalidJoinCodeExpiryPresetError) {
+          res.status(400).json({ error: error.message });
           return;
         }
         if (error instanceof NotPoolOrganizerError) {

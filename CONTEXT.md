@@ -21,7 +21,7 @@ The one-time, mandatory flow a person completes before reaching Home: phone/OTP 
 _Avoid_: Signup (too narrow — Signup is only the phone/OTP step within Onboarding)
 
 **Invite Link / Pool Code**:
-The two ways a person requests to join an Equal Split Pool: an open shareable link, or a six-digit code entered manually. Holding either lets someone submit a **Join Request** — it no longer creates a Membership directly (ticket #86); the Organizer must Approve it first. Custom Split Pools do not use this mechanism; see **Invitation**.
+The two ways a person requests to join an Equal Split Pool: an open shareable link, or a six-digit code entered manually. Holding either lets someone submit a **Join Request** — it no longer creates a Membership directly (ticket #86); the Organizer must Approve it first. Custom Split Pools do not use this mechanism; see **Invitation**. The Organizer can optionally set an expiry on the code/link itself from the Share screen (ticket #88), from the same preset durations used elsewhere — null by default (no expiry). This governs only whether a join *attempt* is accepted at all; it's unrelated to a Join Request's own lifetime, which still has no expiry of its own once submitted.
 _Avoid_: Invite code (ambiguous between the two mechanisms — use the full term)
 
 **Join Request**:

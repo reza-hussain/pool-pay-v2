@@ -5,6 +5,7 @@ import type { JoinRequestService } from "../join-requests/join-request-service.j
 import {
   CannotRemoveOrganizerError,
   InvalidJoinCodeError,
+  JoinCodeExpiredError,
   MemberNotFoundError,
   PoolAwaitingPaymentError,
   PoolClosedError,
@@ -87,6 +88,15 @@ export class MembershipService {
     const existing = await this.membershipRepository.find(pool.id, userId);
     if (existing) {
       return { kind: "MEMBERSHIP", membership: existing };
+    }
+
+    // Checked lazily, at the point of use (ticket #88) — applies uniformly
+    // whether the code was typed, scanned, or clicked, since both
+    // joinByPoolId and joinByCode funnel through this one method. Someone
+    // already a Member (handled above) is unaffected by the link expiring
+    // afterward.
+    if (pool.joinCodeExpiresAt && pool.joinCodeExpiresAt.getTime() <= Date.now()) {
+      throw new JoinCodeExpiredError();
     }
 
     pool = await expireIfLapsed(

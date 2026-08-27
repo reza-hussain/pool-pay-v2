@@ -43,6 +43,17 @@ export class InvalidJoinCodeError extends Error {
   }
 }
 
+// The Organizer set an expiry on the Pool's join code/link (ticket #88) and
+// it has since passed — applies uniformly whether the code was typed,
+// scanned, or clicked, since there's one join code and one expiry. Distinct
+// from a JoinRequest's own lifetime, which has no expiry of its own.
+export class JoinCodeExpiredError extends Error {
+  constructor() {
+    super("This Pool's join code/link has expired");
+    this.name = "JoinCodeExpiredError";
+  }
+}
+
 export class PoolClosedError extends Error {
   constructor() {
     super("This Pool is closed");
