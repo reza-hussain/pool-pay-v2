@@ -35,6 +35,7 @@ model User {
   deposits       Deposit[]
   pendingDeposits PendingDeposit[]
   spends         Spend[]
+  spendAttributions SpendAttribution[]
   reimbursements Reimbursement[]
   refunds        Refund[]
   refundVotes    RefundVote[]
@@ -64,6 +65,7 @@ model Pool {
   deposits       Deposit[]
   pendingDeposits PendingDeposit[]
   spends         Spend[]
+  spendAttributions SpendAttribution[]
   reimbursements Reimbursement[]
   refunds        Refund[]
   refundVotes    RefundVote[]
@@ -154,8 +156,31 @@ model Spend {
   amountPaise Int
   feePaise    Int
   createdAt   DateTime @default(now())
+  attributions SpendAttribution[]
 
   @@index([poolId])
+}
+
+// The actual, post-insolvency-sit-out split of one Spend's cost across the
+// Members charged for it (ADR-0021): one row per Member actually charged,
+// never assumed to be a clean equal division after the fact. Drives each
+// Member's Your Remaining Balance (ADR-0022) alongside their Deposits.
+model SpendAttribution {
+  id     String @id @default(cuid())
+  spendId String
+  spend   Spend  @relation(fields: [spendId], references: [id])
+  // Denormalized from Spend.poolId so a Member's balance can be summed
+  // without joining through Spend for every query.
+  poolId String
+  pool   Pool   @relation(fields: [poolId], references: [id])
+  memberId String
+  member   User   @relation(fields: [memberId], references: [id])
+  // In paise. What this Member was actually charged for this Spend.
+  amountPaise Int
+  createdAt   DateTime @default(now())
+
+  @@index([spendId])
+  @@index([poolId, memberId])
 }
 
 model Reimbursement {

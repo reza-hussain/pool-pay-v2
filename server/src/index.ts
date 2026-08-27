@@ -17,6 +17,7 @@ import { PrismaDepositRepository } from "./deposits/prisma-deposit-repository.js
 import { PrismaPendingDepositRepository } from "./deposits/prisma-pending-deposit-repository.js";
 import { SpendService } from "./spends/spend-service.js";
 import { PrismaSpendRepository } from "./spends/prisma-spend-repository.js";
+import { PrismaSpendAttributionRepository } from "./spends/prisma-spend-attribution-repository.js";
 import { ReimbursementService } from "./reimbursements/reimbursement-service.js";
 import { PrismaReimbursementRepository } from "./reimbursements/prisma-reimbursement-repository.js";
 import { LedgerService } from "./ledger/ledger-service.js";
@@ -76,6 +77,7 @@ const invitationRepository = new PrismaInvitationRepository(prisma);
 const depositRepository = new PrismaDepositRepository(prisma);
 const pendingDepositRepository = new PrismaPendingDepositRepository(prisma);
 const spendRepository = new PrismaSpendRepository(prisma);
+const spendAttributionRepository = new PrismaSpendAttributionRepository(prisma);
 const reimbursementRepository = new PrismaReimbursementRepository(prisma);
 const refundRepository = new PrismaRefundRepository(prisma);
 const refundVoteRepository = new PrismaRefundVoteRepository(prisma);
@@ -112,8 +114,10 @@ const depositService = new DepositService({
 });
 const spendService = new SpendService({
   poolRepository,
+  membershipRepository,
   depositRepository,
   spendRepository,
+  spendAttributionRepository,
   reimbursementRepository,
   refundRepository,
   userRepository,
@@ -139,8 +143,10 @@ const ledgerService = new LedgerService({
 });
 const closureService = new ClosureService({
   poolRepository,
+  membershipRepository,
   depositRepository,
   spendRepository,
+  spendAttributionRepository,
   reimbursementRepository,
   refundRepository,
   userRepository,

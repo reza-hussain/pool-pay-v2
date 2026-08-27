@@ -9,6 +9,7 @@ import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-de
 import { InMemoryPendingDepositRepository } from "../../src/deposits/fakes/in-memory-pending-deposit-repository.js";
 import { SpendService } from "../../src/spends/spend-service.js";
 import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-repository.js";
+import { InMemorySpendAttributionRepository } from "../../src/spends/fakes/in-memory-spend-attribution-repository.js";
 import { ReimbursementService } from "../../src/reimbursements/reimbursement-service.js";
 import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/in-memory-reimbursement-repository.js";
 import { LedgerService } from "../../src/ledger/ledger-service.js";
@@ -42,6 +43,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
   const depositRepository = new InMemoryDepositRepository();
   const pendingDepositRepository = new InMemoryPendingDepositRepository();
   const spendRepository = new InMemorySpendRepository();
+  const spendAttributionRepository = new InMemorySpendAttributionRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
   const refundRepository = new InMemoryRefundRepository();
   const refundVoteRepository = new InMemoryRefundVoteRepository();
@@ -79,8 +81,10 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
   });
   const spendService = new SpendService({
     poolRepository,
+    membershipRepository,
     depositRepository,
     spendRepository,
+    spendAttributionRepository,
     reimbursementRepository,
     refundRepository,
     userRepository,
@@ -106,8 +110,10 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
   });
   const closureService = new ClosureService({
     poolRepository,
+    membershipRepository,
     depositRepository,
     spendRepository,
+    spendAttributionRepository,
     reimbursementRepository,
     refundRepository,
     userRepository,
@@ -149,6 +155,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     depositRepository,
     pendingDepositRepository,
     spendRepository,
+    spendAttributionRepository,
     reimbursementRepository,
     refundRepository,
     refundVoteRepository,

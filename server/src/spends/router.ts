@@ -5,9 +5,9 @@ import { requireAuth, type AuthenticatedRequest } from "../auth/require-auth.js"
 import { PoolClosedError, PoolNotFoundError } from "../memberships/types.js";
 import { NotPoolOrganizerError } from "../pools/types.js";
 import {
-  InsufficientPoolBalanceError,
   InvalidMerchantReferenceError,
   InvalidSpendAmountError,
+  SpendUnaffordableByAnyMemberError,
 } from "./types.js";
 
 const recordSpendSchema = z.object({
@@ -47,7 +47,7 @@ export function createSpendsRouter(spendService: SpendService, jwtSecret: string
         if (
           error instanceof InvalidSpendAmountError ||
           error instanceof InvalidMerchantReferenceError ||
-          error instanceof InsufficientPoolBalanceError ||
+          error instanceof SpendUnaffordableByAnyMemberError ||
           error instanceof PoolClosedError
         ) {
           res.status(400).json({ error: error.message });

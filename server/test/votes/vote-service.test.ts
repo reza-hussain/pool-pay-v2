@@ -8,6 +8,7 @@ import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-rep
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-deposit-repository.js";
 import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-repository.js";
+import { InMemorySpendAttributionRepository } from "../../src/spends/fakes/in-memory-spend-attribution-repository.js";
 import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/in-memory-reimbursement-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
@@ -26,6 +27,7 @@ async function makeService() {
   const membershipRepository = new InMemoryMembershipRepository();
   const depositRepository = new InMemoryDepositRepository();
   const spendRepository = new InMemorySpendRepository();
+  const spendAttributionRepository = new InMemorySpendAttributionRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
   const refundRepository = new InMemoryRefundRepository();
   const refundVoteRepository = new InMemoryRefundVoteRepository();
@@ -36,8 +38,10 @@ async function makeService() {
   });
   const closureService = new ClosureService({
     poolRepository,
+    membershipRepository,
     depositRepository,
     spendRepository,
+    spendAttributionRepository,
     reimbursementRepository,
     refundRepository,
     userRepository,
