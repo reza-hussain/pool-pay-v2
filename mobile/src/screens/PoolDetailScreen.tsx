@@ -1,13 +1,33 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { poolTypeLabel, type Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
 import { listMembers } from "../api/membersClient";
-import { usePolledLedger } from "../api/ledgerClient";
-import { EntryRow } from "./LedgerScreen";
+import {
+  getLedger,
+  getPoolBalance,
+  isMoneyIn,
+  LedgerApiError,
+  type LedgerEntry,
+} from "../api/ledgerClient";
+import { entryLabel } from "./LedgerScreen";
 import { AwaitingPaymentScreen } from "./AwaitingPaymentScreen";
+import { AvatarStack } from "../components/Avatar";
+import { ListRow } from "../components/ListRow";
+import { Pill } from "../components/Pill";
 import { Screen } from "../components/Screen";
+import { phoneSuffix } from "../lib/identity";
 import { paiseToRupeeLabel } from "../lib/money";
+import { formatTimestamp } from "../lib/time";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
 // Whether this viewer is the one the Organizer-payment gate applies to at
@@ -15,6 +35,19 @@ import { colors, radii, spacing, type } from "../theme/tokens";
 // A Pool never returns to Awaiting Payment once unlocked (CONTEXT.md), and
 // the gate only ever applies to Equal Split/Custom Split, and only to the
 // Organizer (ADR-0016/0017).
+function poolStateLabel(state: Pool["state"]): string {
+  switch (state) {
+    case "LOCKED":
+      return "Locked";
+    case "CLOSED":
+      return "Closed";
+    case "EXPIRED":
+      return "Expired";
+    case "ACTIVE":
+      return "Active";
+  }
+}
+
 function isOrganizerPaymentGated(pool: Pool, sessionUserId: string): boolean {
   return (
     pool.organizerId === sessionUserId &&
@@ -22,9 +55,77 @@ function isOrganizerPaymentGated(pool: Pool, sessionUserId: string): boolean {
   );
 }
 
-// Only the most recent entries are previewed here — "See all" hands off to
-// the full (already-built) LedgerScreen for the complete, scrollable log.
-const RECENT_ENTRIES_LIMIT = 5;
+type FilterPreset = "ALL" | "TODAY" | "WEEK" | "MONTH" | "CUSTOM";
+
+const FILTERS: { key: FilterPreset; label: string }[] = [
+  { key: "ALL", label: "All Time" },
+  { key: "TODAY", label: "Today" },
+  { key: "WEEK", label: "This Week" },
+  { key: "MONTH", label: "This Month" },
+  { key: "CUSTOM", label: "Custom" },
+];
+
+const PAGE_SIZE = 20;
+// No websocket/SSE infra exists in this codebase (see ledgerClient's
+// usePolledLedger) — same polling approach, scoped to just this screen's
+// first page (ADR-0018).
+const POLL_INTERVAL_MS = 4000;
+
+function startOfToday(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+// This Week starts Monday (ADR-0018 acceptance criteria).
+function startOfWeekMonday(): Date {
+  const today = startOfToday();
+  const diffToMonday = (today.getDay() + 6) % 7;
+  today.setDate(today.getDate() - diffToMonday);
+  return today;
+}
+
+function startOfMonth(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
+function endOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+}
+
+function parseDateInput(value: string): Date | null {
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return null;
+  }
+  const date = new Date(`${trimmed}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function resolveRange(
+  preset: FilterPreset,
+  customFrom: string,
+  customTo: string,
+): { from?: string; to?: string } {
+  switch (preset) {
+    case "ALL":
+      return {};
+    case "TODAY":
+      return { from: startOfToday().toISOString() };
+    case "WEEK":
+      return { from: startOfWeekMonday().toISOString() };
+    case "MONTH":
+      return { from: startOfMonth().toISOString() };
+    case "CUSTOM": {
+      const from = parseDateInput(customFrom);
+      const to = parseDateInput(customTo);
+      return {
+        from: from ? from.toISOString() : undefined,
+        to: to ? endOfDay(to).toISOString() : undefined,
+      };
+    }
+  }
+}
 
 export function PoolDetailScreen({
   session,
@@ -32,9 +133,13 @@ export function PoolDetailScreen({
   onCancel,
   onDeposit,
   onPayOrganizerShare,
-  onViewLedger,
   onOpenOrganizerControls,
   onVoteToRefund,
+  onViewAllMembers,
+  onAddMembers,
+  onSelectTransaction,
+  onLock,
+  onClosePool,
 }: {
   session: StoredSession;
   pool: Pool;
@@ -43,18 +148,24 @@ export function PoolDetailScreen({
   // Only relevant while this Pool is gated Awaiting Payment (see below) — the
   // Organizer's own pay-your-share action, distinct from a regular Deposit.
   onPayOrganizerShare: () => void;
-  onViewLedger: () => void;
   onOpenOrganizerControls: () => void;
   onVoteToRefund: () => void;
+  onViewAllMembers: () => void;
+  // Invite Link/Pool Code flow — only ever offered for Equal Split, same
+  // condition OrganizerControlsSheet already used for its own Add Members row.
+  onAddMembers: () => void;
+  onSelectTransaction: (entry: LedgerEntry) => void;
+  onLock: () => Promise<void>;
+  onClosePool: () => void;
 }) {
   const isOrganizer = pool.organizerId === session.user.id;
   const isGated = isOrganizerPaymentGated(pool, session.user.id);
   // Membership presence is the single source of truth for whether the
   // Organizer has paid their own share (ADR-0016/0017) — null while the
   // first fetch is still in flight, so a gateable Pool never briefly flashes
-  // its normal Dashboard before the check resolves.
+  // its normal Dashboard before the check resolves. Also backs the avatar
+  // strip once past the gate.
   const [members, setMembers] = useState<Awaited<ReturnType<typeof listMembers>> | null>(null);
-  const { entries, error: ledgerError } = usePolledLedger(session.token, pool.id);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +181,94 @@ export function PoolDetailScreen({
       cancelled = true;
     };
   }, [pool.id, session.token]);
+
+  const [balancePaise, setBalancePaise] = useState<number | null>(null);
+  const [filterPreset, setFilterPreset] = useState<FilterPreset>("ALL");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [entries, setEntries] = useState<LedgerEntry[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingFirstPage, setLoadingFirstPage] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  // Once the user has scrolled past the first page, background polling stops
+  // so it doesn't disturb their scroll position (ADR-0018) — pull-to-refresh
+  // is the way back to a fresh page one.
+  const [hasLoadedMore, setHasLoadedMore] = useState(false);
+  const [ledgerError, setLedgerError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
+
+  const fetchFirstPage = useCallback(
+    (showSpinner: boolean) => {
+      const range = resolveRange(filterPreset, customFrom, customTo);
+      if (showSpinner) setLoadingFirstPage(true);
+      return Promise.all([
+        getLedger(session.token, pool.id, {
+          ...range,
+          search: debouncedSearch || undefined,
+          limit: PAGE_SIZE,
+        }),
+        getPoolBalance(session.token, pool.id),
+      ])
+        .then(([page, balance]) => {
+          setEntries(page.entries);
+          setNextCursor(page.nextCursor);
+          setBalancePaise(balance);
+          setHasLoadedMore(false);
+          setLedgerError(null);
+        })
+        .catch((err) => {
+          setLedgerError(err instanceof LedgerApiError ? err.message : "Something went wrong");
+        })
+        .finally(() => {
+          setLoadingFirstPage(false);
+          setRefreshing(false);
+        });
+    },
+    [session.token, pool.id, filterPreset, customFrom, customTo, debouncedSearch],
+  );
+
+  useEffect(() => {
+    fetchFirstPage(true);
+  }, [fetchFirstPage]);
+
+  useEffect(() => {
+    if (hasLoadedMore) return;
+    const interval = setInterval(() => fetchFirstPage(false), POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [fetchFirstPage, hasLoadedMore]);
+
+  function loadMore() {
+    if (!nextCursor || loadingMore || loadingFirstPage) return;
+    setLoadingMore(true);
+    const range = resolveRange(filterPreset, customFrom, customTo);
+    getLedger(session.token, pool.id, {
+      ...range,
+      search: debouncedSearch || undefined,
+      limit: PAGE_SIZE,
+      cursor: nextCursor,
+    })
+      .then((page) => {
+        setEntries((prev) => [...prev, ...page.entries]);
+        setNextCursor(page.nextCursor);
+        setHasLoadedMore(true);
+      })
+      .catch((err) => {
+        setLedgerError(err instanceof LedgerApiError ? err.message : "Something went wrong");
+      })
+      .finally(() => setLoadingMore(false));
+  }
+
+  function onRefresh() {
+    setRefreshing(true);
+    fetchFirstPage(false);
+  }
 
   if (isGated) {
     if (members === null) {
@@ -93,92 +292,195 @@ export function PoolDetailScreen({
     }
   }
 
-  const memberCount = members?.length ?? null;
-  const recentEntries = entries.slice(0, RECENT_ENTRIES_LIMIT);
+  const memberInitials = (members ?? []).map((m) => phoneSuffix(m.userId).charAt(0).toUpperCase());
+  // Add Members reuses the Invite Link/Pool Code flow, which only exists for
+  // Equal Split — same gate OrganizerControlsSheet already applies.
+  const canAddMembers = isOrganizer && pool.type === "EQUAL_SPLIT";
+  // Same conditional visibility the sheet used before these moved here:
+  // Lock hides once Locked, both hide once Closed.
+  const canLock = isOrganizer && pool.state !== "LOCKED" && pool.state !== "CLOSED";
+  const canClosePool = isOrganizer && pool.state !== "CLOSED";
+
+  const header = (
+    <>
+      <View style={styles.topRow}>
+        <Pressable onPress={onCancel} hitSlop={8}>
+          <Text style={styles.back}>{"‹"}</Text>
+        </Pressable>
+        {isOrganizer ? (
+          <Pressable onPress={onOpenOrganizerControls} hitSlop={8}>
+            <Text style={styles.moreGlyph}>{"⋯"}</Text>
+          </Pressable>
+        ) : (
+          <View style={{ width: 24 }} />
+        )}
+      </View>
+
+      <View style={styles.titleRow}>
+        <Text style={styles.title}>{pool.name}</Text>
+        {pool.state !== "ACTIVE" ? (
+          <Pill label={poolStateLabel(pool.state)} variant="outline" />
+        ) : null}
+      </View>
+      <Text style={styles.subtitle}>
+        {poolTypeLabel(pool.type)}
+        {" · "}
+        {isOrganizer ? "You're the Organizer" : "Member"}
+      </Text>
+
+      <View style={styles.balanceCard}>
+        <Text style={styles.balanceLabel}>Total Balance</Text>
+        <Text style={styles.balanceAmount}>
+          {balancePaise === null ? "···" : paiseToRupeeLabel(balancePaise)}
+        </Text>
+        <View style={styles.balanceMeta}>
+          <Text style={styles.balanceMetaText}>
+            {members === null ? "···" : `${members.length} member${members.length === 1 ? "" : "s"}`}
+          </Text>
+          {pool.type === "EQUAL_SPLIT" ? (
+            <Text style={styles.balanceMetaText}>
+              {paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)} / person
+            </Text>
+          ) : null}
+        </View>
+      </View>
+
+      <View style={styles.avatarStripRow}>
+        <AvatarStack labels={memberInitials} max={5} />
+        <View style={styles.avatarStripActions}>
+          {canAddMembers ? (
+            <Pressable style={styles.addMemberButton} onPress={onAddMembers} hitSlop={8}>
+              <Text style={styles.addMemberButtonText}>+</Text>
+            </Pressable>
+          ) : null}
+          <Pressable onPress={onViewAllMembers} hitSlop={8}>
+            <Text style={styles.viewAllLink}>View all</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.actionsRow}>
+        {/* A Custom Split Member's one Deposit is already spoken for by
+            their Invitation — there's never a further Deposit to make
+            (ADR 0016), so this button doesn't apply to that Pool type. */}
+        {pool.type !== "CUSTOM_SPLIT" ? (
+          <Pressable style={styles.depositButton} onPress={onDeposit}>
+            <Text style={styles.depositButtonText}>Deposit</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {canLock || canClosePool ? (
+        <View style={styles.organizerActionsRow}>
+          {canLock ? (
+            <Pressable style={styles.lockButton} onPress={onLock}>
+              <Text style={styles.lockButtonText}>Lock Pool</Text>
+            </Pressable>
+          ) : null}
+          {canClosePool ? (
+            <Pressable style={styles.closeButton} onPress={onClosePool}>
+              <Text style={styles.closeButtonText}>Close Pool & Refund</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
+      {!isOrganizer && pool.state !== "CLOSED" ? (
+        <Pressable onPress={onVoteToRefund} hitSlop={8}>
+          <Text style={styles.voteLink}>Vote to refund</Text>
+        </Pressable>
+      ) : null}
+
+      <View style={styles.filterRow}>
+        <FlatList
+          data={FILTERS}
+          horizontal
+          keyExtractor={(f) => f.key}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRow}
+          renderItem={({ item }) => (
+            <Pressable
+              style={[styles.chip, filterPreset === item.key && styles.chipSelected]}
+              onPress={() => setFilterPreset(item.key)}
+            >
+              <Text style={[styles.chipText, filterPreset === item.key && styles.chipTextSelected]}>
+                {item.label}
+              </Text>
+            </Pressable>
+          )}
+        />
+      </View>
+
+      {filterPreset === "CUSTOM" ? (
+        <View style={styles.customRangeRow}>
+          <TextInput
+            style={styles.customRangeInput}
+            placeholder="From YYYY-MM-DD"
+            placeholderTextColor={colors.ink400}
+            value={customFrom}
+            onChangeText={setCustomFrom}
+          />
+          <TextInput
+            style={styles.customRangeInput}
+            placeholder="To YYYY-MM-DD"
+            placeholderTextColor={colors.ink400}
+            value={customTo}
+            onChangeText={setCustomTo}
+          />
+        </View>
+      ) : null}
+
+      <TextInput
+        style={styles.searchField}
+        placeholder="Search members or spends"
+        placeholderTextColor={colors.ink400}
+        value={searchInput}
+        onChangeText={setSearchInput}
+        autoCapitalize="none"
+      />
+
+      {ledgerError ? <Text style={styles.error}>{ledgerError}</Text> : null}
+
+      <Text style={styles.listHeadLabel}>Transactions</Text>
+    </>
+  );
 
   return (
     <Screen backgroundColor={colors.cream}>
       <View style={styles.container}>
-        <View style={styles.topRow}>
-          <Pressable onPress={onCancel} hitSlop={8}>
-            <Text style={styles.back}>{"‹"}</Text>
-          </Pressable>
-          {isOrganizer ? (
-            <Pressable onPress={onOpenOrganizerControls} hitSlop={8}>
-              <Text style={styles.moreGlyph}>{"⋯"}</Text>
-            </Pressable>
-          ) : (
-            <View style={{ width: 24 }} />
+        <FlatList
+          data={entries}
+          keyExtractor={(entry) => entry.id}
+          ListHeaderComponent={header}
+          contentContainerStyle={styles.listContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            loadingMore ? <ActivityIndicator style={styles.footerLoading} color={colors.ink600} /> : null
+          }
+          ListEmptyComponent={
+            loadingFirstPage ? (
+              <ActivityIndicator style={styles.loading} color={colors.ink600} />
+            ) : (
+              <Text style={styles.empty}>No activity yet</Text>
+            )
+          }
+          renderItem={({ item, index }) => (
+            <ListRow
+              title={entryLabel(item, session.user.id)}
+              subtitle={formatTimestamp(item.createdAt)}
+              divider={index < entries.length - 1}
+              onPress={() => onSelectTransaction(item)}
+              right={
+                <Text style={[styles.amount, isMoneyIn(item.type) ? styles.amountGreen : styles.amountInk]}>
+                  {isMoneyIn(item.type) ? "+" : "−"}
+                  {paiseToRupeeLabel(item.amountPaise)}
+                </Text>
+              }
+            />
           )}
-        </View>
-
-        <Text style={styles.title}>{pool.name}</Text>
-        <Text style={styles.subtitle}>
-          {poolTypeLabel(pool.type)}
-          {" · "}
-          {isOrganizer ? "You're the Organizer" : "Member"}
-          {pool.state === "LOCKED" ? " · Locked" : ""}
-          {pool.state === "CLOSED" ? " · Closed" : ""}
-          {pool.state === "EXPIRED" ? " · Expired" : ""}
-        </Text>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Members</Text>
-            <Text style={styles.statValue}>{memberCount ?? "···"}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>
-              {pool.type === "EQUAL_SPLIT" ? "Per person" : pool.type === "CUSTOM_SPLIT" ? "Split" : "Share"}
-            </Text>
-            <Text style={styles.statValue}>
-              {pool.type === "EQUAL_SPLIT"
-                ? paiseToRupeeLabel(pool.perPersonAmountPaise ?? 0)
-                : pool.type === "CUSTOM_SPLIT"
-                  ? "Custom"
-                  : "Open"}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.actionsRow}>
-          {/* A Custom Split Member's one Deposit is already spoken for by
-              their Invitation — there's never a further Deposit to make
-              (ADR 0016), so this button doesn't apply to that Pool type. */}
-          {pool.type !== "CUSTOM_SPLIT" ? (
-            <Pressable style={styles.depositButton} onPress={onDeposit}>
-              <Text style={styles.depositButtonText}>Deposit</Text>
-            </Pressable>
-          ) : null}
-          <Pressable style={styles.ledgerButton} onPress={onViewLedger}>
-            <Text style={styles.ledgerButtonText}>View Ledger</Text>
-          </Pressable>
-        </View>
-
-        {!isOrganizer && pool.state !== "CLOSED" ? (
-          <Pressable onPress={onVoteToRefund} hitSlop={8}>
-            <Text style={styles.voteLink}>Vote to refund</Text>
-          </Pressable>
-        ) : null}
-
-        <View style={styles.listHead}>
-          <Text style={styles.listHeadLabel}>Recent activity</Text>
-          <Pressable onPress={onViewLedger} hitSlop={8}>
-            <Text style={styles.listHeadAction}>See all</Text>
-          </Pressable>
-        </View>
-
-        {ledgerError ? <Text style={styles.error}>{ledgerError}</Text> : null}
-
-        {recentEntries.length === 0 ? (
-          <Text style={styles.empty}>No activity yet</Text>
-        ) : (
-          <View style={styles.list}>
-            {recentEntries.map((entry) => (
-              <EntryRow key={entry.id} entry={entry} sessionUserId={session.user.id} />
-            ))}
-          </View>
-        )}
+        />
       </View>
     </Screen>
   );
@@ -193,7 +495,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.cream,
+  },
+  listContent: {
     padding: spacing.s6,
+    paddingBottom: spacing.s8,
   },
   topRow: {
     flexDirection: "row",
@@ -211,6 +516,11 @@ const styles = StyleSheet.create({
     color: colors.ink400,
     paddingHorizontal: spacing.s1,
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.s2,
+  },
   title: {
     ...type.title,
     color: colors.ink900,
@@ -219,30 +529,62 @@ const styles = StyleSheet.create({
     ...type.caption,
     marginBottom: spacing.s5,
   },
-  statsRow: {
-    flexDirection: "row",
-    gap: spacing.s3,
-    marginBottom: spacing.s5,
+  balanceCard: {
+    backgroundColor: colors.ink900,
+    borderRadius: radii.xl,
+    padding: spacing.s5,
   },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.paper,
-    borderRadius: radii.lg,
-    padding: spacing.s4,
-  },
-  statLabel: {
+  balanceLabel: {
     ...type.label,
+    color: colors.ink200,
   },
-  statValue: {
+  balanceAmount: {
     ...type.balance,
-    fontSize: 22,
+    color: colors.cream,
+    marginTop: spacing.s2,
+  },
+  balanceMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: spacing.s4,
+  },
+  balanceMetaText: {
+    ...type.caption,
+    color: colors.ink200,
+  },
+  avatarStripRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: spacing.s4,
+  },
+  avatarStripActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.s4,
+  },
+  addMemberButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1.5,
+    borderColor: colors.lineStrong,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addMemberButtonText: {
+    ...type.bodyBold,
+    fontSize: 16,
     color: colors.ink900,
-    marginTop: spacing.s1,
+  },
+  viewAllLink: {
+    ...type.label,
+    color: colors.ink600,
   },
   actionsRow: {
     flexDirection: "row",
     gap: spacing.s3,
-    marginBottom: spacing.s4,
+    marginTop: spacing.s4,
   },
   depositButton: {
     flex: 1,
@@ -256,42 +598,107 @@ const styles = StyleSheet.create({
     ...type.bodyBold,
     color: colors.paper,
   },
-  ledgerButton: {
+  organizerActionsRow: {
+    flexDirection: "row",
+    gap: spacing.s3,
+    marginTop: spacing.s3,
+  },
+  lockButton: {
     flex: 1,
-    height: 48,
+    height: 44,
     borderWidth: 1.5,
     borderColor: colors.lineStrong,
     borderRadius: radii.md,
     alignItems: "center",
     justifyContent: "center",
   },
-  ledgerButtonText: {
+  lockButtonText: {
     ...type.bodyBold,
+    fontSize: 12.5,
     color: colors.ink900,
+  },
+  closeButton: {
+    flex: 1,
+    height: 44,
+    borderWidth: 1.5,
+    borderColor: colors.danger600,
+    borderRadius: radii.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closeButtonText: {
+    ...type.bodyBold,
+    fontSize: 12.5,
+    color: colors.danger600,
   },
   voteLink: {
     ...type.label,
     color: colors.danger600,
-    marginBottom: spacing.s5,
+    marginTop: spacing.s4,
   },
-  listHead: {
+  filterRow: {
+    marginTop: spacing.s5,
+  },
+  chipRow: {
+    gap: spacing.s2,
+  },
+  chip: {
+    borderWidth: 1.5,
+    borderColor: colors.lineStrong,
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: spacing.s4,
+  },
+  chipSelected: {
+    backgroundColor: colors.ink900,
+    borderColor: colors.ink900,
+  },
+  chipText: {
+    ...type.bodyBold,
+    fontSize: 12.5,
+    color: colors.ink900,
+  },
+  chipTextSelected: {
+    color: colors.cream,
+  },
+  customRangeRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    gap: spacing.s3,
     marginTop: spacing.s3,
-    marginBottom: spacing.s3,
   },
-  listHeadLabel: {
-    ...type.label,
+  customRangeInput: {
+    flex: 1,
+    backgroundColor: colors.fieldFill,
+    borderRadius: radii.md,
+    paddingVertical: spacing.s3,
+    paddingHorizontal: spacing.s3,
+    ...type.body,
+    color: colors.ink900,
   },
-  listHeadAction: {
-    ...type.label,
-    color: colors.ink600,
+  searchField: {
+    backgroundColor: colors.fieldFill,
+    borderRadius: radii.md,
+    paddingVertical: spacing.s3,
+    paddingHorizontal: spacing.s4,
+    marginTop: spacing.s3,
+    ...type.body,
+    color: colors.ink900,
   },
   error: {
     ...type.body,
     color: colors.danger600,
-    marginBottom: spacing.s3,
+    marginTop: spacing.s3,
+  },
+  listHeadLabel: {
+    ...type.label,
+    marginTop: spacing.s5,
+    marginBottom: spacing.s1,
+  },
+  loading: {
+    marginTop: spacing.s6,
+  },
+  footerLoading: {
+    marginVertical: spacing.s4,
   },
   empty: {
     ...type.body,
@@ -299,8 +706,14 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: spacing.s6,
   },
-  list: {
-    gap: spacing.s2,
-    paddingBottom: spacing.s4,
+  amount: {
+    ...type.bodyBold,
+    fontSize: 14,
+  },
+  amountGreen: {
+    color: colors.green600,
+  },
+  amountInk: {
+    color: colors.ink900,
   },
 });

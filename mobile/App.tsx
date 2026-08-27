@@ -35,6 +35,8 @@ import { CloseConfirmScreen } from './src/screens/CloseConfirmScreen';
 import { ClosedScreen } from './src/screens/ClosedScreen';
 import { VoteScreen } from './src/screens/VoteScreen';
 import { MembersScreen } from './src/screens/MembersScreen';
+import { UserDetailScreen } from './src/screens/UserDetailScreen';
+import { TransactionDetailScreen } from './src/screens/TransactionDetailScreen';
 import { VerifyIdentityScreen } from './src/screens/VerifyIdentityScreen';
 import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { OrganizerControlsSheet } from './src/screens/OrganizerControlsSheet';
@@ -44,6 +46,7 @@ import { InvitationScreen } from './src/screens/InvitationScreen';
 import { HomeTabIcon, ActivityTabIcon, AlertsTabIcon, ProfileTabIcon } from './src/components/TabBarIcons';
 import { colors, fontFamily } from './src/theme/tokens';
 import type { ClosureRefund } from './src/api/closureClient';
+import type { LedgerEntry } from './src/api/ledgerClient';
 import { getInvitationByToken, InvitationsApiError, type InvitationForInvitee } from './src/api/invitationsClient';
 import {
   clearSession,
@@ -92,6 +95,8 @@ type AppStackParamList = {
   Closed: { pool: Pool; refunds: ClosureRefund[] };
   Vote: { pool: Pool };
   Members: { pool: Pool };
+  UserDetail: { pool: Pool; userId: string };
+  TransactionDetail: { pool: Pool; entry: LedgerEntry };
   Analytics: undefined;
   Invitations: { pool: Pool };
   InviteByPhone: { pool: Pool };
@@ -159,7 +164,7 @@ function SignupLoginRoute() {
 }
 
 function HomeRoute({ navigation }: HomeRouteProps) {
-  const { session, isNewUser, pools, setPools } = useSessionContext();
+  const { session, isNewUser, pools } = useSessionContext();
   const [organizerControlsPool, setOrganizerControlsPool] = useState<Pool | null>(null);
 
   return (
@@ -181,11 +186,6 @@ function HomeRoute({ navigation }: HomeRouteProps) {
       {organizerControlsPool ? (
         <OrganizerControlsSheet
           pool={organizerControlsPool}
-          onLock={async () => {
-            const locked = await lockPool(session.token, organizerControlsPool.id);
-            setPools((prev) => prev.map((p) => (p.id === locked.id ? locked : p)));
-            setOrganizerControlsPool(null);
-          }}
           onTransferOut={() => {
             navigation.navigate('Spend', { pool: organizerControlsPool });
             setOrganizerControlsPool(null);
@@ -210,10 +210,6 @@ function HomeRoute({ navigation }: HomeRouteProps) {
                 }
               : undefined
           }
-          onClosePool={() => {
-            navigation.navigate('CloseConfirm', { pool: organizerControlsPool });
-            setOrganizerControlsPool(null);
-          }}
           onClose={() => setOrganizerControlsPool(null)}
         />
       ) : null}
@@ -389,18 +385,20 @@ function PoolDetailRoute({
         onCancel={() => navigation.goBack()}
         onDeposit={() => navigation.navigate('Deposit', { pool })}
         onPayOrganizerShare={() => navigation.replace('Deposit', { pool, isOrganizerShare: true })}
-        onViewLedger={() => navigation.navigate('Ledger', { pool })}
         onOpenOrganizerControls={() => setOrganizerControlsOpen(true)}
         onVoteToRefund={() => navigation.navigate('Vote', { pool })}
+        onViewAllMembers={() => navigation.navigate('Members', { pool })}
+        onAddMembers={() => navigation.navigate('Invite', { pool })}
+        onSelectTransaction={(entry) => navigation.navigate('TransactionDetail', { pool, entry })}
+        onLock={async () => {
+          const locked = await lockPool(session.token, pool.id);
+          setPools((prev) => prev.map((p) => (p.id === locked.id ? locked : p)));
+        }}
+        onClosePool={() => navigation.navigate('CloseConfirm', { pool })}
       />
       {organizerControlsOpen ? (
         <OrganizerControlsSheet
           pool={pool}
-          onLock={async () => {
-            const locked = await lockPool(session.token, pool.id);
-            setPools((prev) => prev.map((p) => (p.id === locked.id ? locked : p)));
-            setOrganizerControlsOpen(false);
-          }}
           onTransferOut={() => {
             navigation.navigate('Spend', { pool });
             setOrganizerControlsOpen(false);
@@ -425,10 +423,6 @@ function PoolDetailRoute({
                 }
               : undefined
           }
-          onClosePool={() => {
-            navigation.navigate('CloseConfirm', { pool });
-            setOrganizerControlsOpen(false);
-          }}
           onClose={() => setOrganizerControlsOpen(false)}
         />
       ) : null}
@@ -529,8 +523,48 @@ function VoteRoute({ route, navigation }: NativeStackScreenProps<AppStackParamLi
 
 function MembersRoute({ route, navigation }: NativeStackScreenProps<AppStackParamList, 'Members'>) {
   const { session } = useSessionContext();
+  const pool = route.params.pool;
   return (
-    <MembersScreen session={session} pool={route.params.pool} onCancel={() => navigation.goBack()} />
+    <MembersScreen
+      session={session}
+      pool={pool}
+      onCancel={() => navigation.goBack()}
+      onSelectUser={(userId) => navigation.navigate('UserDetail', { pool, userId })}
+    />
+  );
+}
+
+function UserDetailRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'UserDetail'>) {
+  const { session } = useSessionContext();
+  const { pool, userId } = route.params;
+  return (
+    <UserDetailScreen
+      session={session}
+      pool={pool}
+      userId={userId}
+      onBack={() => navigation.goBack()}
+      onSelectTransaction={(entry) => navigation.navigate('TransactionDetail', { pool, entry })}
+      onDeleted={() => navigation.goBack()}
+    />
+  );
+}
+
+function TransactionDetailRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'TransactionDetail'>) {
+  const { session } = useSessionContext();
+  const { pool, entry } = route.params;
+  return (
+    <TransactionDetailScreen
+      session={session}
+      entry={entry}
+      onBack={() => navigation.goBack()}
+      onSelectUser={(userId) => navigation.navigate('UserDetail', { pool, userId })}
+    />
   );
 }
 
@@ -813,6 +847,8 @@ export default function App() {
               />
               <AppStack.Screen name="Vote" component={VoteRoute} />
               <AppStack.Screen name="Members" component={MembersRoute} />
+              <AppStack.Screen name="UserDetail" component={UserDetailRoute} />
+              <AppStack.Screen name="TransactionDetail" component={TransactionDetailRoute} />
               <AppStack.Screen name="Analytics" component={AnalyticsRoute} />
               <AppStack.Screen name="Invitations" component={InvitationsRoute} />
               <AppStack.Screen name="InviteByPhone" component={InviteByPhoneRoute} />

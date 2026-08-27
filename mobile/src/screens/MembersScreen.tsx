@@ -8,25 +8,28 @@ import {
   MembersApiError,
   type Membership,
 } from "../api/membersClient";
+import { Avatar } from "../components/Avatar";
+import { ListRow } from "../components/ListRow";
+import { Pill } from "../components/Pill";
 import { Screen } from "../components/Screen";
+import { phoneSuffix } from "../lib/identity";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
-// No Member profile (name/phone) exists yet — same shortened-userId label
-// used on the Reimburse/Closed screens.
 function memberLabel(membership: Membership, sessionUserId: string): string {
-  const short = membership.userId.slice(-4);
   const you = membership.userId === sessionUserId ? " (you)" : "";
-  return `Member ···${short}${you}`;
+  return `Member ···${phoneSuffix(membership.userId)}${you}`;
 }
 
 export function MembersScreen({
   session,
   pool,
   onCancel,
+  onSelectUser,
 }: {
   session: StoredSession;
   pool: Pool;
   onCancel: () => void;
+  onSelectUser: (userId: string) => void;
 }) {
   const [members, setMembers] = useState<Membership[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,29 +92,33 @@ export function MembersScreen({
           <FlatList
             data={members}
             keyExtractor={(m) => m.id}
-            contentContainerStyle={styles.list}
-            renderItem={({ item }) => (
-              <View style={styles.row}>
-                <View style={styles.rowText}>
-                  <Text style={styles.rowTitle}>{memberLabel(item, session.user.id)}</Text>
-                  <Text style={styles.rowSubtitle}>
-                    {item.role === "ORGANIZER" ? "Organizer" : "Member"}
-                  </Text>
-                </View>
-                {isOrganizer && item.role !== "ORGANIZER" ? (
-                  <Pressable
-                    style={styles.removeButton}
-                    onPress={() => confirmRemove(item)}
-                    disabled={removingId === item.userId}
-                  >
-                    {removingId === item.userId ? (
-                      <ActivityIndicator color={colors.danger600} />
-                    ) : (
-                      <Text style={styles.removeButtonText}>Remove</Text>
-                    )}
-                  </Pressable>
-                ) : null}
-              </View>
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item, index }) => (
+              <ListRow
+                leading={<Avatar label={phoneSuffix(item.userId).charAt(0).toUpperCase()} />}
+                title={memberLabel(item, session.user.id)}
+                subtitle={item.role === "ORGANIZER" ? undefined : "Member"}
+                divider={index < members.length - 1}
+                onPress={() => onSelectUser(item.userId)}
+                right={
+                  item.role === "ORGANIZER" ? (
+                    <Pill label="Organizer" variant="dark" />
+                  ) : isOrganizer ? (
+                    <Pressable
+                      style={styles.removeButton}
+                      onPress={() => confirmRemove(item)}
+                      disabled={removingId === item.userId}
+                    >
+                      {removingId === item.userId ? (
+                        <ActivityIndicator color={colors.danger600} />
+                      ) : (
+                        <Text style={styles.removeButtonText}>Remove</Text>
+                      )}
+                    </Pressable>
+                  ) : undefined
+                }
+              />
             )}
           />
         )}
@@ -153,28 +160,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.s3,
   },
   list: {
-    gap: spacing.s2,
-    paddingBottom: spacing.s8,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.paper,
-    borderRadius: radii.lg,
-    padding: spacing.s3,
-  },
-  rowText: {
     flex: 1,
   },
-  rowTitle: {
-    ...type.bodyBold,
-    fontSize: 13.5,
-    color: colors.ink900,
-  },
-  rowSubtitle: {
-    ...type.caption,
-    marginTop: 2,
+  listContent: {
+    paddingBottom: spacing.s8,
   },
   removeButton: {
     height: 34,

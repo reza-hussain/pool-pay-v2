@@ -139,4 +139,177 @@ describe("GET /pools/:poolId/ledger", () => {
 
     expect(res.status).toBe(401);
   });
+
+  it("includes a nextCursor field in the response", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/ledger`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("nextCursor");
+  });
+
+  it("accepts a `types` query param and reflects it in the results", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/ledger`)
+      .query({ types: "SPEND" })
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.entries).toEqual([]);
+  });
+
+  it("accepts a `counterparty` query param and reflects it in the results", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/ledger`)
+      .query({ counterparty: MEMBER_ID })
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.entries).toHaveLength(1);
+    expect(res.body.entries[0]).toMatchObject({ type: "DEPOSIT", counterparty: MEMBER_ID });
+  });
+
+  it("accepts a `search` query param and reflects it in the results", async () => {
+    const { app, pool } = await makeApp();
+    const suffix = MEMBER_ID.slice(-4);
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/ledger`)
+      .query({ search: suffix })
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.entries).toHaveLength(1);
+    expect(res.body.entries[0]).toMatchObject({ type: "DEPOSIT", counterparty: MEMBER_ID });
+  });
+
+  it("accepts a `from` query param and reflects it in the results", async () => {
+    const { app, pool } = await makeApp();
+    const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/ledger`)
+      .query({ from: future })
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.entries).toEqual([]);
+  });
+
+  it("accepts a `to` query param and reflects it in the results", async () => {
+    const { app, pool } = await makeApp();
+    const past = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/ledger`)
+      .query({ to: past })
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.entries).toEqual([]);
+  });
+
+  it("accepts `limit` and `cursor` query params and paginates the results", async () => {
+    const { app, pool } = await makeApp();
+
+    const firstPage = await request(app)
+      .get(`/pools/${pool.id}/ledger`)
+      .query({ limit: 1 })
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(firstPage.status).toBe(200);
+    expect(firstPage.body.entries).toHaveLength(1);
+    expect(firstPage.body.nextCursor).not.toBeNull();
+
+    const secondPage = await request(app)
+      .get(`/pools/${pool.id}/ledger`)
+      .query({ limit: 1, cursor: firstPage.body.nextCursor })
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(secondPage.status).toBe(200);
+    expect(secondPage.body.entries).toHaveLength(1);
+    expect(secondPage.body.entries[0].id).not.toBe(firstPage.body.entries[0].id);
+  });
+
+  it("returns 403 for a non-Member even when query params are supplied", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/ledger`)
+      .query({ search: "anything" })
+      .set("Authorization", bearerFor("user_stranger"));
+
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 404 for an unknown pool even when query params are supplied", async () => {
+    const { app } = await makeApp();
+
+    const res = await request(app)
+      .get("/pools/pool_missing/ledger")
+      .query({ search: "anything" })
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /pools/:poolId/balance", () => {
+  it("returns the Pool's current balance for a Member", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/balance`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(200);
+    // Organizer's own share (ADR-0017) + this Member's Deposit, no Spends yet.
+    expect(res.body).toEqual({ balancePaise: 200000 });
+  });
+
+  it("returns the balance for the Organizer too", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/balance`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ balancePaise: 200000 });
+  });
+
+  it("returns 403 for a non-Member", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/balance`)
+      .set("Authorization", bearerFor("user_stranger"));
+
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 404 for an unknown pool", async () => {
+    const { app } = await makeApp();
+
+    const res = await request(app)
+      .get("/pools/pool_missing/balance")
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 401 without a bearer token", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app).get(`/pools/${pool.id}/balance`);
+
+    expect(res.status).toBe(401);
+  });
 });
