@@ -1,6 +1,6 @@
 # Automatic equal-split spend attribution, with insolvency sit-out and iterative overflow
 
-Depends on [ADR-0018](0018-per-member-spend-authority-and-approval-threshold.md) (per-Member spend authority). When any Member records a spend, its cost is split **equally among the Pool's currently active Members** and debited from each Member's own remaining balance ([ADR-0020](0020-per-member-balance-refund-formula.md)) **immediately** — at the moment the spend is recorded, not deferred to Closure. The Member who recorded it is not treated specially; their own balance is debited the same equal share as everyone else's.
+Depends on [ADR-0020](0020-per-member-spend-authority-and-approval-threshold.md) (per-Member spend authority). When any Member records a spend, its cost is split **equally among the Pool's currently active Members** and debited from each Member's own remaining balance ([ADR-0022](0022-per-member-balance-refund-formula.md)) **immediately** — at the moment the spend is recorded, not deferred to Closure. The Member who recorded it is not treated specially; their own balance is debited the same equal share as everyone else's.
 
 We rejected letting the recorder personally front the full amount for later reimbursement, or having the group manually pick who a spend applies to per-transaction — both are unnecessary coordination overhead for the ordinary case (a shared expense that obviously applies to everyone currently on the trip). Automatic equal-split-among-active-Members handles that case without asking anyone anything.
 

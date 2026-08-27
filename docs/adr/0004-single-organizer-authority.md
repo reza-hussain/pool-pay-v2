@@ -1,6 +1,6 @@
 # Single-Organizer spending authority, no multisig/approval workflow
 
-> **Superseded by [ADR-0018](0018-per-member-spend-authority-and-approval-threshold.md):** every Member now has spend authority, capped by an amount-based majority-approval threshold rather than concentrated in the Organizer alone.
+> **Superseded by [ADR-0020](0020-per-member-spend-authority-and-approval-threshold.md):** every Member now has spend authority, capped by an amount-based majority-approval threshold rather than concentrated in the Organizer alone.
 
 We considered several governance models for who can spend a Pool's money: single-organizer control, multisig-style approval thresholds, reimbursement-only with vote-approved claims, or a per-Pool configurable mode. We chose **single-Organizer control** for v1 — the Member who created the Pool has sole authority to spend or transfer money out of it, with no approval workflow from other Members.
 

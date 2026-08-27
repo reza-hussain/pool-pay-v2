@@ -9,11 +9,11 @@ A shared fund that a group of Members deposit money into and spend from together
 _Avoid_: Mini-bank, pot, fund, jar
 
 **Organizer**:
-The Member who created a Pool. Holds sole authority over the Pool's *lifecycle* — inviting Members, removing a Member, Locking the Pool, and Closing it — but not over spending, which every Member has independently (see **Spend**, ADR-0018). Exactly one per Pool at a time; the role can be handed to another Member via **Organizer Transfer**. Pool creation itself is never blocked on payment — the Organizer lands on the Pool's Dashboard immediately — but for every Pool type, the Organizer must pay their own share before they can invite anyone else; until then the Dashboard is in the locked Awaiting Payment state (see **Awaiting Payment**). This keeps "Organizer" and "paid Member" the same invariant for everyone, including themselves (ADR-0016, ADR-0017).
+The Member who created a Pool. Holds sole authority over the Pool's *lifecycle* — inviting Members, removing a Member, Locking the Pool, and Closing it — but not over spending, which every Member has independently (see **Spend**, ADR-0020). Exactly one per Pool at a time; the role can be handed to another Member via **Organizer Transfer**. Pool creation itself is never blocked on payment — the Organizer lands on the Pool's Dashboard immediately — but for every Pool type, the Organizer must pay their own share before they can invite anyone else; until then the Dashboard is in the locked Awaiting Payment state (see **Awaiting Payment**). This keeps "Organizer" and "paid Member" the same invariant for everyone, including themselves (ADR-0016, ADR-0017).
 _Avoid_: Admin, owner (of the Pool itself — the Pool is not owned, it's organized)
 
 **Organizer Transfer**:
-The act of the current Organizer unilaterally handing the Organizer role to another Member, with no vote required. Exists so a Pool's lifecycle authority (invite, remove, Lock, Close) survives the Organizer leaving, now that spend authority no longer depends on the Organizer (ADR-0021).
+The act of the current Organizer unilaterally handing the Organizer role to another Member, with no vote required. Exists so a Pool's lifecycle authority (invite, remove, Lock, Close) survives the Organizer leaving, now that spend authority no longer depends on the Organizer (ADR-0023).
 _Avoid_: Handoff, succession
 
 **Member**:
@@ -21,19 +21,19 @@ A person who has joined a Pool and can contribute to it, spend from it (see **Sp
 _Avoid_: User (too generic — "Member" is scoped to a specific Pool)
 
 **Spend**:
-Money paid out of a Pool to a merchant or recipient, recorded by any Member. Its cost is split equally across the Pool's currently active Members and debited from each of their **Your Remaining Balance**s immediately, regardless of who recorded it (ADR-0018, ADR-0019). A Spend larger than the recorder's own Your Remaining Balance requires **Spend Approval** before it executes. Distinct from a Reimbursement, a separate existing concept unaffected by this change.
+Money paid out of a Pool to a merchant or recipient, recorded by any Member. Its cost is split equally across the Pool's currently active Members and debited from each of their **Your Remaining Balance**s immediately, regardless of who recorded it (ADR-0020, ADR-0021). A Spend larger than the recorder's own Your Remaining Balance requires **Spend Approval** before it executes. Distinct from a Reimbursement, a separate existing concept unaffected by this change.
 _Avoid_: Expense (used loosely elsewhere — prefer Spend), Transaction
 
 **Spend Approval**:
-The majority sign-off required before a Spend larger than the recorder's own Your Remaining Balance is allowed to execute — more than half of the Pool's currently active Members must approve. A Spend within the recorder's own balance needs no approval. Mandatory for every Pool, with no opt-out (ADR-0018).
+The majority sign-off required before a Spend larger than the recorder's own Your Remaining Balance is allowed to execute — more than half of the Pool's currently active Members must approve. A Spend within the recorder's own balance needs no approval. Mandatory for every Pool, with no opt-out (ADR-0020).
 _Avoid_: Multisig, Approval workflow (both evoke the general pattern ADR-0004 originally rejected; this is a narrower, amount-triggered check)
 
 **Your Remaining Balance**:
-A Member's own running balance within a Pool: their total Deposits minus their attributed share of every Spend recorded while they were active. Replaces pro-rata as the basis for every refund — ordinary Closure, a Member's Departure, and emergency vote-Closure alike all pay out this number (ADR-0020).
+A Member's own running balance within a Pool: their total Deposits minus their attributed share of every Spend recorded while they were active. Replaces pro-rata as the basis for every refund — ordinary Closure, a Member's Departure, and emergency vote-Closure alike all pay out this number (ADR-0022).
 _Avoid_: Piggy bank (an explanatory analogy only, not the term), Pro-rata share, Ledger balance
 
 **Departure**:
-A Member leaving a Pool before Closure, whether by removing themselves ("self-leave") or being removed by the Organizer. Both are refunded identically — the Member's Your Remaining Balance at the moment they leave — so who initiates a Departure no longer affects the outcome (ADR-0020). The Organizer (or the group) can manually adjust the computed refund for a specific Departure, as a normal step on every Departure rather than only when disputed.
+A Member leaving a Pool before Closure, whether by removing themselves ("self-leave") or being removed by the Organizer. Both are refunded identically — the Member's Your Remaining Balance at the moment they leave — so who initiates a Departure no longer affects the outcome (ADR-0022). The Organizer (or the group) can manually adjust the computed refund for a specific Departure, as a normal step on every Departure rather than only when disputed.
 _Avoid_: Removal (too narrow — implies only Organizer-initiated), Leave, Exit
 
 **Onboarding**:
