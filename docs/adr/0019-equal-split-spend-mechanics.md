@@ -1,0 +1,11 @@
+# Automatic equal-split spend attribution, with insolvency sit-out and iterative overflow
+
+Depends on [ADR-0018](0018-per-member-spend-authority-and-approval-threshold.md) (per-Member spend authority). When any Member records a spend, its cost is split **equally among the Pool's currently active Members** and debited from each Member's own remaining balance ([ADR-0020](0020-per-member-balance-refund-formula.md)) **immediately** — at the moment the spend is recorded, not deferred to Closure. The Member who recorded it is not treated specially; their own balance is debited the same equal share as everyone else's.
+
+We rejected letting the recorder personally front the full amount for later reimbursement, or having the group manually pick who a spend applies to per-transaction — both are unnecessary coordination overhead for the ordinary case (a shared expense that obviously applies to everyone currently on the trip). Automatic equal-split-among-active-Members handles that case without asking anyone anything.
+
+**Insolvency during a split ("sitting out"):** if a Member's remaining balance can't cover their full equal share of a new spend, they contribute nothing to that spend — their balance is left untouched — rather than paying what they can. The spend's cost is then split entirely among the Members who *can* afford their full equal share. We rejected charging the insolvent Member what they have left and spreading the shortfall among everyone else, in favor of this simpler "sit out entirely, solvent Members absorb it" rule.
+
+**Cascading:** excluding one insolvent Member can push a spend's cost high enough that a previously-solvent Member also can't afford their new, larger share. The split recomputes and re-excludes iteratively — shrinking the paying group — until everyone left in it can actually afford their share.
+
+**Total insolvency:** if that recomputation shrinks all the way down and even the last remaining Member(s) still can't cover the total, the spend is blocked outright, same as today's insufficient-Pool-balance check. We rejected letting a Member's balance go negative — that implies chasing someone for money owed out of pocket, a materially different feature this design doesn't support.

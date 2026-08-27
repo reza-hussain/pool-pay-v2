@@ -1,5 +1,7 @@
 # Manual Pool closure with pro-rata refund of leftover balance
 
+> **Note:** the refund formula described below (pro-rata by total contribution) is superseded by [ADR-0020](0020-per-member-balance-refund-formula.md) — refunds are now each Member's own remaining balance. The no-auto-expiry Closure-trigger rule in this file is unaffected and still stands. The "Member removed before Closure" paragraph below is also superseded — see ADR-0020 for why instant, per-Member refund on departure is now the rule.
+
 Pools have no automatic expiry — a Pool closes only when the Organizer explicitly closes it, regardless of Pool type (Equal Split or Custom Split) or any trip/event date. Auto-closing on a date was rejected: trip dates slip, and Pools used for ongoing purposes (e.g. apartment expenses, funded through repeat Equal Split Deposits — see ADR-0016) have no natural end date, so tying real-money closure to a calendar date is risky.
 
 On closure, any leftover balance is refunded **pro-rata** to Members based on their total contributions to the Pool (not split evenly across current Members), paid out via UPI to each Member's linked VPA. This was chosen over an even split or a "must spend to zero" requirement because it's the fairest and most auditable rule, and avoids disputes ("I put in more than you, why do we get the same refund?").
