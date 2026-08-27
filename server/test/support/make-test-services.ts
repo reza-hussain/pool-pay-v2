@@ -4,6 +4,8 @@ import { MembershipService } from "../../src/memberships/membership-service.js";
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { InMemoryInvitationRepository } from "../../src/invitations/fakes/in-memory-invitation-repository.js";
 import { InvitationService } from "../../src/invitations/invitation-service.js";
+import { InMemoryJoinRequestRepository } from "../../src/join-requests/fakes/in-memory-join-request-repository.js";
+import { JoinRequestService } from "../../src/join-requests/join-request-service.js";
 import { DepositService } from "../../src/deposits/deposit-service.js";
 import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-deposit-repository.js";
 import { InMemoryPendingDepositRepository } from "../../src/deposits/fakes/in-memory-pending-deposit-repository.js";
@@ -39,6 +41,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
   const userRepository = options?.userRepository ?? new InMemoryUserRepository();
   const membershipRepository = new InMemoryMembershipRepository();
   const invitationRepository = new InMemoryInvitationRepository();
+  const joinRequestRepository = new InMemoryJoinRequestRepository();
   const depositRepository = new InMemoryDepositRepository();
   const pendingDepositRepository = new InMemoryPendingDepositRepository();
   const spendRepository = new InMemorySpendRepository();
@@ -56,7 +59,19 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     notificationService,
     invitationRepository,
   });
-  const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
+  const joinRequestService = new JoinRequestService({
+    joinRequestRepository,
+    membershipRepository,
+    poolRepository,
+    userRepository,
+    notificationService,
+  });
+  const membershipService = new MembershipService({
+    poolRepository,
+    membershipRepository,
+    invitationRepository,
+    joinRequestService,
+  });
   const invitationService = new InvitationService({
     invitationRepository,
     poolRepository,
@@ -133,6 +148,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     poolService,
     membershipService,
     invitationService,
+    joinRequestService,
     depositService,
     spendService,
     reimbursementService,
@@ -145,6 +161,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     poolRepository,
     membershipRepository,
     invitationRepository,
+    joinRequestRepository,
     userRepository,
     depositRepository,
     pendingDepositRepository,

@@ -1,6 +1,7 @@
 import { NotPoolOrganizerError, type Pool, type PoolRepository } from "../pools/types.js";
 import { expireIfLapsed } from "../pools/pool-expiry.js";
 import type { InvitationRepository } from "../invitations/types.js";
+import type { JoinRequestService } from "../join-requests/join-request-service.js";
 import {
   CannotRemoveOrganizerError,
   InvalidJoinCodeError,
@@ -8,6 +9,7 @@ import {
   PoolAwaitingPaymentError,
   PoolClosedError,
   PoolNotFoundError,
+  type JoinResult,
   type Membership,
   type MembershipRepository,
 } from "./types.js";
@@ -16,20 +18,23 @@ export interface MembershipServiceOptions {
   poolRepository: PoolRepository;
   membershipRepository: MembershipRepository;
   invitationRepository: InvitationRepository;
+  joinRequestService: JoinRequestService;
 }
 
 export class MembershipService {
   private readonly poolRepository: PoolRepository;
   private readonly membershipRepository: MembershipRepository;
   private readonly invitationRepository: InvitationRepository;
+  private readonly joinRequestService: JoinRequestService;
 
   constructor(options: MembershipServiceOptions) {
     this.poolRepository = options.poolRepository;
     this.membershipRepository = options.membershipRepository;
     this.invitationRepository = options.invitationRepository;
+    this.joinRequestService = options.joinRequestService;
   }
 
-  async joinByPoolId(userId: string, poolId: string): Promise<Membership> {
+  async joinByPoolId(userId: string, poolId: string): Promise<JoinResult> {
     const pool = await this.poolRepository.findById(poolId);
     if (!pool) {
       throw new PoolNotFoundError();
@@ -37,7 +42,7 @@ export class MembershipService {
     return this.join(userId, pool);
   }
 
-  async joinByCode(userId: string, joinCode: string): Promise<Membership> {
+  async joinByCode(userId: string, joinCode: string): Promise<JoinResult> {
     const pool = await this.poolRepository.findByJoinCode(joinCode);
     if (!pool) {
       throw new InvalidJoinCodeError();
@@ -72,7 +77,7 @@ export class MembershipService {
     await this.membershipRepository.remove(poolId, memberId);
   }
 
-  private async join(userId: string, pool: Pool): Promise<Membership> {
+  private async join(userId: string, pool: Pool): Promise<JoinResult> {
     if (pool.state === "CLOSED") {
       throw new PoolClosedError();
     }
@@ -81,7 +86,7 @@ export class MembershipService {
 
     const existing = await this.membershipRepository.find(pool.id, userId);
     if (existing) {
-      return existing;
+      return { kind: "MEMBERSHIP", membership: existing };
     }
 
     pool = await expireIfLapsed(
@@ -101,6 +106,17 @@ export class MembershipService {
       throw new PoolAwaitingPaymentError();
     }
 
-    return this.membershipRepository.create(pool.id, userId, "MEMBER");
+    // Equal Split joining is approval-gated (ticket #86): a Pool Code/Invite
+    // Link no longer creates a Membership directly, it creates a JoinRequest
+    // for the Organizer to Approve/Decline. Custom Split never reaches here
+    // (it joins exclusively via Invitation) and OPEN keeps the old
+    // direct-join behavior — both are unaffected by this change.
+    if (pool.type === "EQUAL_SPLIT") {
+      const joinRequest = await this.joinRequestService.requestToJoin(pool, userId);
+      return { kind: "JOIN_REQUEST", joinRequest };
+    }
+
+    const membership = await this.membershipRepository.create(pool.id, userId, "MEMBER");
+    return { kind: "MEMBERSHIP", membership };
   }
 }

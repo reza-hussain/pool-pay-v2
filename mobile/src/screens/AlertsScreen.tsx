@@ -10,6 +10,7 @@ import {
   type NotificationType,
 } from "../api/notificationsClient";
 import { listMyInvitations, type InvitationForInvitee } from "../api/invitationsClient";
+import { listPools, type Pool } from "../api/poolsClient";
 import { formatTimestamp } from "../lib/time";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
@@ -52,6 +53,8 @@ export function AlertsScreen({
   session,
   onUnreadCountChange,
   onOpenInvitation,
+  onOpenJoinRequests,
+  onOpenApprovedPool,
 }: {
   session: StoredSession;
   onUnreadCountChange: (count: number) => void;
@@ -59,6 +62,12 @@ export function AlertsScreen({
   // its live Invitation — resolution happens here (not in the caller) since
   // the notification only carries a poolId, not an invitation id.
   onOpenInvitation: (invitationForInvitee: InvitationForInvitee) => void;
+  // Tapping a JOIN_REQUEST_RECEIVED notification (the Organizer's own) —
+  // navigates to All Members' Pending requests section for that Pool.
+  onOpenJoinRequests: (pool: Pool) => void;
+  // Tapping a JOIN_REQUEST_APPROVED notification (the requester's own) —
+  // navigates into the Pool they were just approved into.
+  onOpenApprovedPool: (pool: Pool) => void;
 }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -90,19 +99,47 @@ export function AlertsScreen({
   }
 
   async function handleNotificationPress(notification: Notification) {
-    if (notification.type !== "INVITATION_RECEIVED") return;
-    try {
-      const invitations = await listMyInvitations(session.token);
-      const match = invitations.find((i) => i.invitation.poolId === notification.poolId);
-      if (match) {
-        onOpenInvitation(match);
-      } else {
-        // Already paid/voided/expired since the notification fired.
-        setError("This invitation is no longer available.");
+    if (notification.type === "INVITATION_RECEIVED") {
+      try {
+        const invitations = await listMyInvitations(session.token);
+        const match = invitations.find((i) => i.invitation.poolId === notification.poolId);
+        if (match) {
+          onOpenInvitation(match);
+        } else {
+          // Already paid/voided/expired since the notification fired.
+          setError("This invitation is no longer available.");
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong");
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      return;
     }
+
+    if (notification.type === "JOIN_REQUEST_RECEIVED" || notification.type === "JOIN_REQUEST_APPROVED") {
+      try {
+        const pools = await listPools(session.token);
+        const pool = pools.find((p) => p.id === notification.poolId);
+        if (!pool) {
+          setError("This Pool is no longer available.");
+          return;
+        }
+        if (notification.type === "JOIN_REQUEST_RECEIVED") {
+          onOpenJoinRequests(pool);
+        } else {
+          onOpenApprovedPool(pool);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong");
+      }
+    }
+  }
+
+  function isTappable(notification: Notification): boolean {
+    return (
+      notification.type === "INVITATION_RECEIVED" ||
+      notification.type === "JOIN_REQUEST_RECEIVED" ||
+      notification.type === "JOIN_REQUEST_APPROVED"
+    );
   }
 
   return (
@@ -134,7 +171,7 @@ export function AlertsScreen({
                       key={notification.id}
                       notification={notification}
                       onPress={
-                        notification.type === "INVITATION_RECEIVED"
+                        isTappable(notification)
                           ? () => handleNotificationPress(notification)
                           : undefined
                       }
@@ -152,7 +189,7 @@ export function AlertsScreen({
                       key={notification.id}
                       notification={notification}
                       onPress={
-                        notification.type === "INVITATION_RECEIVED"
+                        isTappable(notification)
                           ? () => handleNotificationPress(notification)
                           : undefined
                       }

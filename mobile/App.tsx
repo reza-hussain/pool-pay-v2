@@ -238,8 +238,8 @@ function ProfileRoute() {
   );
 }
 
-// AlertsRoute lives inside AppTab but navigates to an AppStack sibling
-// (InvitationDetail) when an INVITATION_RECEIVED notification is tapped —
+// AlertsRoute lives inside AppTab but navigates to AppStack siblings
+// (InvitationDetail, Members, PoolDetail) when a notification is tapped —
 // same composite-props reasoning as HomeRouteProps above.
 type AlertsRouteProps = CompositeScreenProps<
   BottomTabScreenProps<AppTabParamList, 'Alerts'>,
@@ -255,6 +255,8 @@ function AlertsRoute({ navigation }: AlertsRouteProps) {
       onOpenInvitation={(invitationForInvitee) =>
         navigation.navigate('InvitationDetail', { invitationForInvitee })
       }
+      onOpenJoinRequests={(pool) => navigation.navigate('Members', { pool })}
+      onOpenApprovedPool={(pool) => navigation.navigate('PoolDetail', { pool })}
     />
   );
 }
@@ -727,7 +729,19 @@ export default function App() {
       const poolId = parseJoinPoolId(url);
       if (poolId) {
         joinByPoolId(session.token, poolId)
-          .then(() => navigationRef.current?.navigate('Home'))
+          .then((result) => {
+            navigationRef.current?.navigate('Home');
+            // Equal Split joining is approval-gated (ticket #86) — a Join
+            // Request needs its own confirmation here since, unlike
+            // JoinPoolScreen's Pool Code flow, this link auto-joins with no
+            // screen of its own to show a "request sent" state on.
+            if (result.kind === 'JOIN_REQUEST') {
+              Alert.alert(
+                'Request sent',
+                "Waiting for the Organizer to approve your request to join. You'll be notified once they do.",
+              );
+            }
+          })
           .catch(() => {
             // Swallow: an invalid/expired join link shouldn't crash the app.
           });

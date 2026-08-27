@@ -1,3 +1,5 @@
+import type { JoinRequest } from "../join-requests/types.js";
+
 export type MembershipRole = "ORGANIZER" | "MEMBER";
 
 export interface Membership {
@@ -8,6 +10,13 @@ export interface Membership {
   joinedAt: Date;
   removedAt: Date | null;
 }
+
+// What joining via Pool Code/Invite Link resolves to (ticket #86): an
+// immediate Membership for every Pool type except Equal Split, which now
+// creates a JoinRequest awaiting the Organizer's approval instead.
+export type JoinResult =
+  | { kind: "MEMBERSHIP"; membership: Membership }
+  | { kind: "JOIN_REQUEST"; joinRequest: JoinRequest };
 
 export interface MembershipRepository {
   // Reactivates (clears removedAt on) an existing row for this poolId+userId

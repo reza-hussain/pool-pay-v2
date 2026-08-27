@@ -11,6 +11,7 @@ import { FakeIdentityProvider } from "../../src/auth/fakes/fake-identity-provide
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 import type { PaymentProvider } from "../../src/payments/types.js";
 import { makeTestServices } from "../support/make-test-services.js";
+import { joinAndApprove } from "../support/join-and-approve.js";
 
 const JWT_SECRET = "test-secret";
 const ORGANIZER_ID = "user_organizer";
@@ -53,6 +54,7 @@ async function makeApp(webhookPaymentProvider?: PaymentProvider) {
     notificationService,
     activityService,
     paymentProvider,
+    joinRequestService,
   } = makeTestServices({ userRepository });
   const app = createApp({
     authService,
@@ -67,6 +69,7 @@ async function makeApp(webhookPaymentProvider?: PaymentProvider) {
     analyticsService,
     notificationService,
     activityService,
+    joinRequestService,
     jwtSecret: JWT_SECRET,
     paymentProvider: webhookPaymentProvider ?? paymentProvider,
   });
@@ -88,7 +91,7 @@ async function makeApp(webhookPaymentProvider?: PaymentProvider) {
     .set("Authorization", bearerFor(ORGANIZER_ID))
     .send({ depositIntentId: organizerIntentRes.body.intent.id, amountPaise: 100000 });
 
-  await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+  await joinAndApprove(app, pool.id, ORGANIZER_ID, MEMBER_ID, bearerFor);
 
   return { app, pool, paymentProvider, depositService };
 }

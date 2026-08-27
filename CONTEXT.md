@@ -21,8 +21,12 @@ The one-time, mandatory flow a person completes before reaching Home: phone/OTP 
 _Avoid_: Signup (too narrow — Signup is only the phone/OTP step within Onboarding)
 
 **Invite Link / Pool Code**:
-The two ways a person joins an Equal Split Pool as a Member: an open shareable link, or a six-digit code entered manually. Anyone holding either can join — no Organizer approval step — since every Member owes the same known amount, so there's nothing to assign per-person. Custom Split Pools do not use this mechanism; see **Invitation**.
+The two ways a person requests to join an Equal Split Pool: an open shareable link, or a six-digit code entered manually. Holding either lets someone submit a **Join Request** — it no longer creates a Membership directly (ticket #86); the Organizer must Approve it first. Custom Split Pools do not use this mechanism; see **Invitation**.
 _Avoid_: Invite code (ambiguous between the two mechanisms — use the full term)
+
+**Join Request**:
+An Equal Split Pool join attempt via Invite Link or Pool Code, awaiting the Organizer's decision. States: `PENDING` (the only actionable one — never expires on its own, however long it sits), `APPROVED` (created a Membership), `REJECTED` (no Membership; re-requesting via the same Invite Link/Pool Code is blocked). Modeled as its own entity, not a status on Membership, since a pending or rejected request never becomes one. Distinct from **Invitation**, which is Custom Split's per-person, per-amount mechanism sent by the Organizer rather than self-served by the joiner.
+_Avoid_: Invite request (collides with Invite Link/Pool Code, the mechanism this is requesting through)
 
 **Equal Split Pool**:
 A Pool where the Organizer sets a fixed per-person contribution amount, and every Member is expected to contribute exactly that share. Unlike Custom Split, a Member isn't limited to one Deposit — repeat Deposits over time are how an Equal Split Pool now covers ongoing/recurring use cases (e.g. apartment/roommate expenses), the role the retired Open Pool used to serve.
