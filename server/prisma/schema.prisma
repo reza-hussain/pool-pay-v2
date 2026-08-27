@@ -204,9 +204,9 @@ model Refund {
   id     String @id @default(cuid())
   poolId String
   pool   Pool   @relation(fields: [poolId], references: [id])
-  // The Member being refunded, paid pro-rata against their total contributions
-  // (see closePool) — not the Organizer, who initiates Closure but isn't
-  // treated specially in the payout itself.
+  // The Member being refunded, paid their own remaining balance (see
+  // closePool, ADR-0022) — not the Organizer, who initiates Closure but
+  // isn't treated specially in the payout itself.
   memberId String
   member   User   @relation(fields: [memberId], references: [id])
   vpa      String
