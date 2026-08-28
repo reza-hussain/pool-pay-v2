@@ -10,6 +10,9 @@ import { InMemoryPendingDepositRepository } from "../../src/deposits/fakes/in-me
 import { SpendService } from "../../src/spends/spend-service.js";
 import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-repository.js";
 import { InMemorySpendAttributionRepository } from "../../src/spends/fakes/in-memory-spend-attribution-repository.js";
+import { SpendApprovalService } from "../../src/spend-approvals/spend-approval-service.js";
+import { InMemoryPendingSpendRepository } from "../../src/spend-approvals/fakes/in-memory-pending-spend-repository.js";
+import { InMemorySpendApprovalRepository } from "../../src/spend-approvals/fakes/in-memory-spend-approval-repository.js";
 import { ReimbursementService } from "../../src/reimbursements/reimbursement-service.js";
 import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/in-memory-reimbursement-repository.js";
 import { LedgerService } from "../../src/ledger/ledger-service.js";
@@ -44,6 +47,8 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
   const pendingDepositRepository = new InMemoryPendingDepositRepository();
   const spendRepository = new InMemorySpendRepository();
   const spendAttributionRepository = new InMemorySpendAttributionRepository();
+  const pendingSpendRepository = new InMemoryPendingSpendRepository();
+  const spendApprovalRepository = new InMemorySpendApprovalRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
   const refundRepository = new InMemoryRefundRepository();
   const refundVoteRepository = new InMemoryRefundVoteRepository();
@@ -85,10 +90,19 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     depositRepository,
     spendRepository,
     spendAttributionRepository,
+    pendingSpendRepository,
+    spendApprovalRepository,
     reimbursementRepository,
     refundRepository,
     userRepository,
     paymentProvider,
+  });
+  const spendApprovalService = new SpendApprovalService({
+    poolRepository,
+    membershipRepository,
+    pendingSpendRepository,
+    spendApprovalRepository,
+    spendService,
   });
   const reimbursementService = new ReimbursementService({
     poolRepository,
@@ -141,6 +155,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     invitationService,
     depositService,
     spendService,
+    spendApprovalService,
     reimbursementService,
     ledgerService,
     closureService,
@@ -156,6 +171,8 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     pendingDepositRepository,
     spendRepository,
     spendAttributionRepository,
+    pendingSpendRepository,
+    spendApprovalRepository,
     reimbursementRepository,
     refundRepository,
     refundVoteRepository,

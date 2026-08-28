@@ -1,17 +1,21 @@
 import type { DepositRepository } from "../deposits/types.js";
-import { getMemberBalances } from "../ledger/member-balance.js";
+import { getMemberBalance, getMemberBalances } from "../ledger/member-balance.js";
 import type { MembershipRepository } from "../memberships/types.js";
 import { PoolClosedError, PoolNotFoundError } from "../memberships/types.js";
 import { getPoolBalance } from "../pools/pool-balance.js";
-import { NotPoolOrganizerError, type PoolRepository } from "../pools/types.js";
+import type { PoolRepository } from "../pools/types.js";
 import type { PaymentProvider } from "../payments/types.js";
 import type { ReimbursementRepository } from "../reimbursements/types.js";
 import type { RefundRepository } from "../closure/types.js";
 import type { UserRepository } from "../auth/types.js";
+import { maybeExecutePendingSpend } from "../spend-approvals/tally.js";
+import type { PendingSpendRepository, SpendApprovalRepository } from "../spend-approvals/types.js";
 import {
   InvalidMerchantReferenceError,
   InvalidSpendAmountError,
+  NotAPoolMemberError,
   SpendUnaffordableByAnyMemberError,
+  type RecordSpendResult,
   type Spend,
   type SpendAttributionRepository,
   type SpendRepository,
@@ -19,7 +23,8 @@ import {
 
 // Pool Pay's own monetization (ADR 0010), not a payment-rail cost — deliberately
 // not configurable via the PaymentProvider interface. Waived entirely for a
-// subscribed Organizer (ticket #13, ADR 0011).
+// subscribed recorder (ticket #13/#104, ADR 0011) — follows whichever Member
+// actually records the Spend, not the Pool's Organizer.
 const FEE_RATE = 0.01;
 
 export interface SpendServiceOptions {
@@ -28,6 +33,8 @@ export interface SpendServiceOptions {
   depositRepository: DepositRepository;
   spendRepository: SpendRepository;
   spendAttributionRepository: SpendAttributionRepository;
+  pendingSpendRepository: PendingSpendRepository;
+  spendApprovalRepository: SpendApprovalRepository;
   reimbursementRepository: ReimbursementRepository;
   refundRepository: RefundRepository;
   userRepository: UserRepository;
@@ -40,6 +47,8 @@ export class SpendService {
   private readonly depositRepository: DepositRepository;
   private readonly spendRepository: SpendRepository;
   private readonly spendAttributionRepository: SpendAttributionRepository;
+  private readonly pendingSpendRepository: PendingSpendRepository;
+  private readonly spendApprovalRepository: SpendApprovalRepository;
   private readonly reimbursementRepository: ReimbursementRepository;
   private readonly refundRepository: RefundRepository;
   private readonly userRepository: UserRepository;
@@ -51,18 +60,28 @@ export class SpendService {
     this.depositRepository = options.depositRepository;
     this.spendRepository = options.spendRepository;
     this.spendAttributionRepository = options.spendAttributionRepository;
+    this.pendingSpendRepository = options.pendingSpendRepository;
+    this.spendApprovalRepository = options.spendApprovalRepository;
     this.reimbursementRepository = options.reimbursementRepository;
     this.refundRepository = options.refundRepository;
     this.userRepository = options.userRepository;
     this.paymentProvider = options.paymentProvider;
   }
 
+  // Two-tier spend authority (ADR-0020, ticket #104): any active Member can
+  // record a Spend. One at or below what they have left in their own
+  // remaining balance (ADR-0022) fires immediately, exactly like Phase 1's
+  // Organizer-only recordSpend did. One larger than their own balance is
+  // held as a PendingSpend instead, with the recorder's own proposal
+  // counting as their implicit first SpendApproval — which, for a small
+  // enough Pool, can itself already be a majority (see
+  // spend-approvals/tally.ts's maybeExecutePendingSpend).
   async recordSpend(
     poolId: string,
     userId: string,
     merchantRef: string,
     amountPaise: number,
-  ): Promise<Spend> {
+  ): Promise<RecordSpendResult> {
     if (!Number.isInteger(amountPaise) || amountPaise <= 0) {
       throw new InvalidSpendAmountError();
     }
@@ -74,21 +93,68 @@ export class SpendService {
     if (!pool) {
       throw new PoolNotFoundError();
     }
-    if (pool.organizerId !== userId) {
-      throw new NotPoolOrganizerError();
-    }
     if (pool.state === "CLOSED") {
       throw new PoolClosedError();
     }
 
-    const organizer = await this.userRepository.findById(userId);
-    const feePaise = organizer?.isSubscribed ? 0 : Math.round(amountPaise * FEE_RATE);
+    const membership = await this.membershipRepository.find(poolId, userId);
+    if (!membership) {
+      throw new NotAPoolMemberError();
+    }
+
+    const recorder = await this.userRepository.findById(userId);
+    const feePaise = recorder?.isSubscribed ? 0 : Math.round(amountPaise * FEE_RATE);
     const totalCostPaise = amountPaise + feePaise;
 
-    const shares = await this.computeEqualSplitShares(poolId, totalCostPaise);
+    const recorderBalance = await getMemberBalance(
+      { depositRepository: this.depositRepository, spendAttributionRepository: this.spendAttributionRepository },
+      poolId,
+      userId,
+    );
+
+    if (totalCostPaise <= recorderBalance) {
+      const spend = await this.executeSpend(poolId, userId, merchantRef, amountPaise, feePaise);
+      return { spend, pendingSpend: null };
+    }
+
+    const pendingSpend = await this.pendingSpendRepository.create(
+      poolId,
+      userId,
+      merchantRef,
+      amountPaise,
+      feePaise,
+    );
+    await this.spendApprovalRepository.create(pendingSpend.id, poolId, userId);
+
+    const { pendingSpend: updated, executedSpend } = await maybeExecutePendingSpend(
+      { membershipRepository: this.membershipRepository, spendApprovalRepository: this.spendApprovalRepository, pendingSpendRepository: this.pendingSpendRepository },
+      (executePoolId, recorderId, spendMerchantRef, spendAmountPaise, spendFeePaise) =>
+        this.executeSpend(executePoolId, recorderId, spendMerchantRef, spendAmountPaise, spendFeePaise),
+      pendingSpend,
+    );
+
+    if (executedSpend) {
+      return { spend: executedSpend, pendingSpend: null };
+    }
+    return { spend: null, pendingSpend: updated };
+  }
+
+  // Actually moves the money: the equal-split-with-insolvency-sit-out
+  // attribution (ADR-0021), computed fresh against current membership and
+  // balances every time it's called — whether that's an immediate Spend
+  // from recordSpend, or a PendingSpend finally clearing majority
+  // (SpendApprovalService.approve), potentially long after it was proposed.
+  async executeSpend(
+    poolId: string,
+    recorderId: string,
+    merchantRef: string,
+    amountPaise: number,
+    feePaise: number,
+  ): Promise<Spend> {
+    const shares = await this.computeEqualSplitShares(poolId, amountPaise + feePaise);
 
     await this.paymentProvider.initiateSpend(poolId, merchantRef, amountPaise);
-    const spend = await this.spendRepository.create(poolId, userId, merchantRef, amountPaise, feePaise);
+    const spend = await this.spendRepository.create(poolId, recorderId, merchantRef, amountPaise, feePaise);
     await this.spendAttributionRepository.createForSpend(
       spend.id,
       poolId,

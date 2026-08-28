@@ -41,6 +41,8 @@ model User {
   refundVotes    RefundVote[]
   notifications  Notification[]
   invitations    Invitation[]
+  pendingSpends  PendingSpend[]
+  spendApprovals SpendApproval[]
 }
 
 model Pool {
@@ -71,6 +73,8 @@ model Pool {
   refundVotes    RefundVote[]
   notifications  Notification[]
   invitations    Invitation[]
+  pendingSpends  PendingSpend[]
+  spendApprovals SpendApproval[]
 
   @@index([organizerId])
 }
@@ -157,6 +161,10 @@ model Spend {
   feePaise    Int
   createdAt   DateTime @default(now())
   attributions SpendAttribution[]
+  // Set only when this Spend is the eventual result of a PendingSpend that
+  // reached majority approval (ADR-0020/ticket #104) — null for a Spend that
+  // executed immediately.
+  pendingSpend PendingSpend?
 
   @@index([poolId])
 }
@@ -181,6 +189,58 @@ model SpendAttribution {
 
   @@index([spendId])
   @@index([poolId, memberId])
+}
+
+// A Spend proposed by a Member whose own remaining balance can't cover it
+// alone (ADR-0020, ticket #104) — held for majority sign-off from the
+// Pool's currently active Members before the transfer actually executes.
+// The recorder's own proposal counts as their implicit first SpendApproval
+// (see SpendApprovalRepository/SpendService).
+model PendingSpend {
+  id     String @id @default(cuid())
+  poolId String
+  pool   Pool   @relation(fields: [poolId], references: [id])
+  recorderId String
+  recorder   User   @relation(fields: [recorderId], references: [id])
+  merchantRef String
+  // In paise. Fixed at proposal time — the fee-waiver check (ADR-0010/0011)
+  // runs once, against the recorder's subscription status when they
+  // proposed it, not re-evaluated at execution.
+  amountPaise Int
+  feePaise    Int
+  // "PENDING" | "EXECUTED" — no rejection/veto state (out of scope, see
+  // ticket #104).
+  state       String   @default("PENDING")
+  // Set once majority is reached and this PendingSpend's Spend +
+  // SpendAttribution rows are created (computed fresh at execution time,
+  // not proposal time — see SpendApprovalService).
+  resultingSpendId String? @unique
+  resultingSpend   Spend?  @relation(fields: [resultingSpendId], references: [id])
+  createdAt   DateTime @default(now())
+  approvals   SpendApproval[]
+
+  @@index([poolId])
+}
+
+// One Member's sign-off on a PendingSpend (ADR-0020) — modeled on RefundVote
+// (votes/), but scoped per-PendingSpend rather than per-Pool.
+model SpendApproval {
+  id     String @id @default(cuid())
+  pendingSpendId String
+  pendingSpend   PendingSpend @relation(fields: [pendingSpendId], references: [id])
+  // Denormalized from PendingSpend.poolId so a Pool's approvals can be
+  // queried without joining through PendingSpend.
+  poolId String
+  pool   Pool   @relation(fields: [poolId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  // One approval per Member per PendingSpend (ADR-0020) — approving again is
+  // a no-op, not an additional approval.
+  @@unique([pendingSpendId, userId])
+  @@index([pendingSpendId])
+  @@index([poolId])
 }
 
 model Reimbursement {

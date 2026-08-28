@@ -10,6 +10,8 @@ import { createDepositWebhookRouter } from "./deposits/webhook-router.js";
 import type { PaymentProvider } from "./payments/types.js";
 import type { SpendService } from "./spends/spend-service.js";
 import { createSpendsRouter } from "./spends/router.js";
+import type { SpendApprovalService } from "./spend-approvals/spend-approval-service.js";
+import { createSpendApprovalsRouter } from "./spend-approvals/router.js";
 import type { ReimbursementService } from "./reimbursements/reimbursement-service.js";
 import { createReimbursementsRouter } from "./reimbursements/router.js";
 import type { LedgerService } from "./ledger/ledger-service.js";
@@ -33,6 +35,7 @@ export interface AppDependencies {
   membershipService: MembershipService;
   depositService: DepositService;
   spendService: SpendService;
+  spendApprovalService: SpendApprovalService;
   reimbursementService: ReimbursementService;
   ledgerService: LedgerService;
   closureService: ClosureService;
@@ -55,6 +58,7 @@ export function createApp({
   membershipService,
   depositService,
   spendService,
+  spendApprovalService,
   reimbursementService,
   ledgerService,
   closureService,
@@ -82,6 +86,7 @@ export function createApp({
   app.use("/pools", createPoolsRouter(poolService, membershipService, jwtSecret));
   app.use("/pools", createDepositsRouter(depositService, jwtSecret));
   app.use("/pools", createSpendsRouter(spendService, jwtSecret));
+  app.use("/pools", createSpendApprovalsRouter(spendApprovalService, jwtSecret));
   app.use("/pools", createReimbursementsRouter(reimbursementService, jwtSecret));
   app.use("/pools", createLedgerRouter(ledgerService, jwtSecret));
   app.use("/pools", createClosureRouter(closureService, jwtSecret));
