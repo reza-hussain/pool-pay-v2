@@ -72,11 +72,15 @@ async function makeApp() {
     .set("Authorization", bearerFor(ORGANIZER_ID))
     .send({ depositIntentId: intentRes.body.intent.id, amountPaise: 100000 });
 
-  return { app, pool };
+  return { app, pool, userRepository };
 }
 
 function bearerFor(userId: string) {
   return `Bearer ${jwt.sign({ sub: userId }, JWT_SECRET)}`;
+}
+
+function seedUpi(userRepository: InMemoryUserRepository, userId: string) {
+  userRepository.seedVerifiedUser(userId, undefined, { upiId: `${userId}@upi` });
 }
 
 describe("GET /pools", () => {
@@ -241,11 +245,28 @@ describe("GET /pools/:poolId/members", () => {
       poolRepository,
       membershipRepository,
       invitationRepository,
+      depositRepository,
+      spendRepository,
+      spendAttributionRepository,
+      reimbursementRepository,
+      refundRepository,
+      paymentProvider,
     } = makeTestServices({ userRepository });
     membershipRepository.listByPool = async () => {
       throw new Error("database is on fire");
     };
-    const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
+    const membershipService = new MembershipService({
+      poolRepository,
+      membershipRepository,
+      invitationRepository,
+      depositRepository,
+      spendRepository,
+      spendAttributionRepository,
+      reimbursementRepository,
+      refundRepository,
+      userRepository,
+      paymentProvider,
+    });
     const app = createApp({
       authService,
       poolService,
@@ -365,6 +386,149 @@ describe("DELETE /pools/:poolId/members/:memberId", () => {
     const { app, pool } = await makeApp();
     const res = await request(app).delete(`/pools/${pool.id}/members/${MEMBER_ID}`);
     expect(res.status).toBe(401);
+  });
+});
+
+describe("GET /pools/:poolId/members/:memberId/departure/preview", () => {
+  it("returns the computed default refund with no side effects", async () => {
+    const { app, pool, userRepository } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+    seedUpi(userRepository, MEMBER_ID);
+    const intentRes = await request(app)
+      .get(`/pools/${pool.id}/deposit-intent`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+    await request(app)
+      .post(`/pools/${pool.id}/deposits`)
+      .set("Authorization", bearerFor(MEMBER_ID))
+      .send({ depositIntentId: intentRes.body.intent.id, amountPaise: 50000 });
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/members/${MEMBER_ID}/departure/preview`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.amountPaise).toBe(50000);
+
+    const membersRes = await request(app)
+      .get(`/pools/${pool.id}/members`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(membersRes.body.members.map((m: { userId: string }) => m.userId)).toContain(MEMBER_ID);
+  });
+
+  it("returns 403 for a non-Organizer caller", async () => {
+    const { app, pool } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/members/${MEMBER_ID}/departure/preview`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 400 for previewing the Organizer themselves", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/members/${ORGANIZER_ID}/departure/preview`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /pools/:poolId/leave", () => {
+  it("lets a Member leave, paying out their remaining balance", async () => {
+    const { app, pool, userRepository } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+    seedUpi(userRepository, MEMBER_ID);
+    const intentRes = await request(app)
+      .get(`/pools/${pool.id}/deposit-intent`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+    await request(app)
+      .post(`/pools/${pool.id}/deposits`)
+      .set("Authorization", bearerFor(MEMBER_ID))
+      .send({ depositIntentId: intentRes.body.intent.id, amountPaise: 20000 });
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/leave`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.refund).toMatchObject({ memberId: MEMBER_ID, amountPaise: 20000 });
+
+    const membersRes = await request(app)
+      .get(`/pools/${pool.id}/members`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(membersRes.body.members.map((m: { userId: string }) => m.userId)).not.toContain(
+      MEMBER_ID,
+    );
+  });
+
+  it("blocks the Organizer from leaving", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/leave`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 401 without a bearer token", async () => {
+    const { app, pool } = await makeApp();
+    const res = await request(app).post(`/pools/${pool.id}/leave`);
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("POST /pools/:poolId/organizer (Organizer Transfer)", () => {
+  it("transfers the Organizer role to another active Member", async () => {
+    const { app, pool } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/organizer`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ newOrganizerUserId: MEMBER_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.pool.organizerId).toBe(MEMBER_ID);
+
+    // The former Organizer is now an ordinary Member — Locking is
+    // lifecycle authority, and should now belong to the new Organizer only.
+    const lockRes = await request(app)
+      .post(`/pools/${pool.id}/lock`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(lockRes.status).toBe(403);
+  });
+
+  it("returns 403 for a non-Organizer caller", async () => {
+    const { app, pool } = await makeApp();
+    await request(app).post(`/pools/${pool.id}/join`).set("Authorization", bearerFor(MEMBER_ID));
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/organizer`)
+      .set("Authorization", bearerFor(MEMBER_ID))
+      .send({ newOrganizerUserId: MEMBER_ID });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 400 when the target is already the Organizer", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/organizer`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ newOrganizerUserId: ORGANIZER_ID });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 for a target who isn't an active Member", async () => {
+    const { app, pool } = await makeApp();
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/organizer`)
+      .set("Authorization", bearerFor(ORGANIZER_ID))
+      .send({ newOrganizerUserId: "user_stranger" });
+    expect(res.status).toBe(404);
   });
 });
 

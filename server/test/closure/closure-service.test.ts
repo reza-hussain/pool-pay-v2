@@ -402,13 +402,34 @@ describe("ClosureService.previewClosure", () => {
   });
 });
 
-describe("ClosureService + a removed Member (ticket #11)", () => {
-  it("still refunds a removed Member's prior contributions", async () => {
-    const { closureService, poolRepository, depositRepository, userRepository, pool } =
-      await makeService();
+describe("ClosureService + a removed Member (ticket #11 / ADR-0022 Departure)", () => {
+  it("does not re-pay a removed Member's balance at Closure once Departure already paid it out", async () => {
+    const {
+      closureService,
+      poolRepository,
+      depositRepository,
+      spendRepository,
+      spendAttributionRepository,
+      reimbursementRepository,
+      refundRepository,
+      userRepository,
+      paymentProvider,
+      pool,
+    } = await makeService();
     const membershipRepository = new InMemoryMembershipRepository();
     const invitationRepository = new InMemoryInvitationRepository();
-    const membershipService = new MembershipService({ poolRepository, membershipRepository, invitationRepository });
+    const membershipService = new MembershipService({
+      poolRepository,
+      membershipRepository,
+      invitationRepository,
+      depositRepository,
+      spendRepository,
+      spendAttributionRepository,
+      reimbursementRepository,
+      refundRepository,
+      userRepository,
+      paymentProvider,
+    });
     // OPEN Pool here is created directly via poolRepository, bypassing
     // PoolService.createPool — seed the Organizer's Membership to match what
     // that would have done, since joining now requires it (ADR-0017).
@@ -420,13 +441,21 @@ describe("ClosureService + a removed Member (ticket #11)", () => {
     await depositRepository.create(pool.id, MEMBER_A, 40000);
     await depositRepository.create(pool.id, MEMBER_B, 60000);
 
+    // Departure (ADR-0022/0023) now pays MEMBER_A's remaining balance out
+    // immediately rather than waiting for Closure, unlike ticket #11's
+    // original no-payout removal.
     await membershipService.removeMember(pool.id, ORGANIZER_ID, MEMBER_A);
     expect(await membershipRepository.find(pool.id, MEMBER_A)).toBeNull();
+    expect(await refundRepository.sumByPool(pool.id)).toBe(40000);
 
     const result = await closureService.closePool(pool.id, ORGANIZER_ID);
 
+    // MEMBER_A already received their full remaining balance at Departure —
+    // Closure must not pay it out again, or the double payment would
+    // silently come out of MEMBER_B's own share instead
+    // (computeRefundBreakdown nets out prior Refunds for exactly this).
     const byMember = Object.fromEntries(result.refunds.map((r) => [r.memberId, r.amountPaise]));
-    expect(byMember[MEMBER_A]).toBe(40000);
+    expect(byMember[MEMBER_A]).toBeUndefined();
     expect(byMember[MEMBER_B]).toBe(60000);
   });
 });

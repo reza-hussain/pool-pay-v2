@@ -36,6 +36,14 @@ export class PrismaMembershipRepository implements MembershipRepository {
       data: { removedAt: new Date() },
     });
   }
+
+  async updateRole(poolId: string, userId: string, role: MembershipRole): Promise<Membership> {
+    const row = await this.prisma.membership.update({
+      where: { poolId_userId: { poolId, userId } },
+      data: { role },
+    });
+    return toMembership(row);
+  }
 }
 
 function toMembership(row: {

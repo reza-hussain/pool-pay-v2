@@ -42,6 +42,10 @@ export interface PoolRepository {
   findById(id: string): Promise<Pool | null>;
   findByJoinCode(joinCode: string): Promise<Pool | null>;
   updateState(id: string, state: PoolState): Promise<Pool>;
+  // Organizer Transfer (ADR-0023) — the Membership side of the swap
+  // (MembershipRepository.updateRole) is a separate call; this only flips
+  // the Pool's own organizerId field.
+  updateOrganizer(id: string, newOrganizerId: string): Promise<Pool>;
   listByOrganizer(organizerId: string): Promise<Pool[]>;
 }
 

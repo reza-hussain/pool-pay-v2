@@ -18,6 +18,10 @@ export interface MembershipRepository {
   listByPool(poolId: string): Promise<Membership[]>;
   listByUser(userId: string): Promise<Membership[]>;
   remove(poolId: string, userId: string): Promise<void>;
+  // Organizer Transfer (ADR-0023) flips both the outgoing and incoming
+  // Organizer's role in two calls to this — no combined "swap" method, since
+  // each side is an independent row update.
+  updateRole(poolId: string, userId: string, role: MembershipRole): Promise<Membership>;
 }
 
 export class PoolNotFoundError extends Error {
@@ -52,6 +56,14 @@ export class CannotRemoveOrganizerError extends Error {
   constructor() {
     super("The Organizer can't remove themselves from the Pool");
     this.name = "CannotRemoveOrganizerError";
+  }
+}
+
+// Organizer Transfer (ADR-0023) target validation.
+export class TargetAlreadyOrganizerError extends Error {
+  constructor() {
+    super("This Member is already the Organizer");
+    this.name = "TargetAlreadyOrganizerError";
   }
 }
 
