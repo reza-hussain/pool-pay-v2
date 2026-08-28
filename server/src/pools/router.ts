@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { z } from "zod";
 import type { PoolService } from "./pool-service.js";
 import type { MembershipService } from "../memberships/membership-service.js";
@@ -22,7 +22,9 @@ import {
   PoolAwaitingPaymentError,
   PoolClosedError,
   PoolNotFoundError,
+  TargetAlreadyOrganizerError,
 } from "../memberships/types.js";
+import { MemberHasNoRegisteredUpiIdError } from "../reimbursements/types.js";
 
 const createPoolSchema = z.object({
   name: z.string(),
@@ -33,6 +35,16 @@ const createPoolSchema = z.object({
 
 const joinByCodeSchema = z.object({
   code: z.string().regex(/^\d{6}$/, "code must be six digits"),
+});
+
+// Organizer review-and-adjust step (ADR-0022): omit to pay the computed
+// default, or supply the Organizer's manually adjusted refund amount.
+const removeMemberSchema = z.object({
+  adjustedAmountPaise: z.number().int().min(0).optional(),
+});
+
+const transferOrganizerSchema = z.object({
+  newOrganizerUserId: z.string(),
 });
 
 export function createPoolsRouter(
@@ -173,34 +185,110 @@ export function createPoolsRouter(
     }
   });
 
+  // Organizer review-and-adjust step (ADR-0022): the computed default refund
+  // for a Departure, shown before removeMember confirms it. No side effects.
+  router.get(
+    "/:poolId/members/:memberId/departure/preview",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      try {
+        const preview = await membershipService.previewDeparture(
+          req.params.poolId,
+          req.userId as string,
+          req.params.memberId,
+        );
+        res.status(200).json(preview);
+      } catch (error) {
+        handleMembershipError(error, res, next);
+      }
+    },
+  );
+
   router.delete(
     "/:poolId/members/:memberId",
     requireAuth(jwtSecret),
     async (req: AuthenticatedRequest, res, next) => {
+      const parsed = removeMemberSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: "adjustedAmountPaise must be a non-negative integer" });
+        return;
+      }
+
       try {
         await membershipService.removeMember(
           req.params.poolId,
           req.userId as string,
           req.params.memberId,
+          parsed.data.adjustedAmountPaise,
         );
         res.status(204).send();
       } catch (error) {
-        if (error instanceof PoolNotFoundError || error instanceof MemberNotFoundError) {
-          res.status(404).json({ error: error.message });
-          return;
-        }
-        if (error instanceof PoolClosedError || error instanceof CannotRemoveOrganizerError) {
-          res.status(400).json({ error: error.message });
-          return;
-        }
-        if (error instanceof NotPoolOrganizerError) {
-          res.status(403).json({ error: error.message });
-          return;
-        }
-        next(error);
+        handleMembershipError(error, res, next);
+      }
+    },
+  );
+
+  // Self-leave (ADR-0022/0023): any active, non-Organizer Member can remove
+  // themselves — always paid the computed default, no adjustment.
+  router.post(
+    "/:poolId/leave",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      try {
+        const refund = await membershipService.leaveSelf(req.params.poolId, req.userId as string);
+        res.status(200).json({ refund });
+      } catch (error) {
+        handleMembershipError(error, res, next);
+      }
+    },
+  );
+
+  // Organizer Transfer (ADR-0023): unilateral, no vote required.
+  router.post(
+    "/:poolId/organizer",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      const parsed = transferOrganizerSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "newOrganizerUserId is required" });
+        return;
+      }
+
+      try {
+        const updatedPool = await membershipService.transferOrganizer(
+          req.params.poolId,
+          req.userId as string,
+          parsed.data.newOrganizerUserId,
+        );
+        res.status(200).json({ pool: updatedPool });
+      } catch (error) {
+        handleMembershipError(error, res, next);
       }
     },
   );
 
   return router;
+}
+
+// Shared by every Departure (preview/remove/leave) and Organizer Transfer
+// route above — all draw from the same MembershipService error taxonomy.
+function handleMembershipError(error: unknown, res: Response, next: (err: unknown) => void) {
+  if (error instanceof PoolNotFoundError || error instanceof MemberNotFoundError) {
+    res.status(404).json({ error: error.message });
+    return;
+  }
+  if (
+    error instanceof PoolClosedError ||
+    error instanceof CannotRemoveOrganizerError ||
+    error instanceof MemberHasNoRegisteredUpiIdError ||
+    error instanceof TargetAlreadyOrganizerError
+  ) {
+    res.status(400).json({ error: error.message });
+    return;
+  }
+  if (error instanceof NotPoolOrganizerError) {
+    res.status(403).json({ error: error.message });
+    return;
+  }
+  next(error);
 }

@@ -33,7 +33,7 @@ A Member's own running balance within a Pool: their total Deposits minus their a
 _Avoid_: Piggy bank (an explanatory analogy only, not the term), Pro-rata share, Ledger balance
 
 **Departure**:
-A Member leaving a Pool before Closure, whether by removing themselves ("self-leave") or being removed by the Organizer. Both are refunded identically — the Member's Your Remaining Balance at the moment they leave — so who initiates a Departure no longer affects the outcome (ADR-0022). The Organizer (or the group) can manually adjust the computed refund for a specific Departure, as a normal step on every Departure rather than only when disputed.
+A Member leaving a Pool before Closure, whether by removing themselves ("self-leave") or being removed by the Organizer. Both pay out the same number by default — the Member's Your Remaining Balance at the moment they leave (ADR-0022) — but only Organizer-initiated removal goes through a review-and-possibly-adjust step first, as a normal part of every such removal rather than only when disputed; the Organizer can adjust the computed refund up or down there, but not on their own self-leave, and self-leave itself is never adjustable by anyone, including "the group" — a departing Member adjusting their own payout would be a conflict of interest.
 _Avoid_: Removal (too narrow — implies only Organizer-initiated), Leave, Exit
 
 **Onboarding**:

@@ -94,6 +94,18 @@ describe("PrismaMembershipRepository", () => {
     await expect(repo.find(poolId, memberId)).resolves.toMatchObject({ id: original.id });
   });
 
+  it("updates a Membership's role (Organizer Transfer, ADR-0023)", async () => {
+    const repo = new PrismaMembershipRepository(prisma);
+    await repo.create(poolId, organizerId, "ORGANIZER");
+    await repo.create(poolId, memberId, "MEMBER");
+
+    const updated = await repo.updateRole(poolId, memberId, "ORGANIZER");
+    expect(updated.role).toBe("ORGANIZER");
+
+    const found = await repo.find(poolId, memberId);
+    expect(found?.role).toBe("ORGANIZER");
+  });
+
   it("lists every Pool a user belongs to, excluding removed Memberships", async () => {
     const repo = new PrismaMembershipRepository(prisma);
     const otherPool = await prisma.pool.create({

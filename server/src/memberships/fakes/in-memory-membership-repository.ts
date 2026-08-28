@@ -46,4 +46,13 @@ export class InMemoryMembershipRepository implements MembershipRepository {
       membership.removedAt = new Date();
     }
   }
+
+  async updateRole(poolId: string, userId: string, role: MembershipRole): Promise<Membership> {
+    const membership = this.memberships.find((m) => m.poolId === poolId && m.userId === userId);
+    if (!membership) {
+      throw new Error(`Membership not found for pool ${poolId} and user ${userId}`);
+    }
+    membership.role = role;
+    return membership;
+  }
 }

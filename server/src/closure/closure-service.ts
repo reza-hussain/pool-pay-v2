@@ -167,7 +167,7 @@ export class ClosureService {
   // proportion when there's a shortfall — and is a no-op (exact balances,
   // no rounding) whenever there isn't one.
   private async computeRefundBreakdown(poolId: string): Promise<RefundBreakdownEntry[]> {
-    const [actualCashPaise, balances, deposits] = await Promise.all([
+    const [actualCashPaise, balances, deposits, priorRefunds] = await Promise.all([
       getPoolBalance(
         {
           depositRepository: this.depositRepository,
@@ -185,6 +185,7 @@ export class ClosureService {
         poolId,
       ),
       this.depositRepository.listByPool(poolId),
+      this.refundRepository.listByPool(poolId),
     ]);
 
     const totalContributedByMember = new Map<string, number>();
@@ -193,6 +194,16 @@ export class ClosureService {
         deposit.userId,
         (totalContributedByMember.get(deposit.userId) ?? 0) + deposit.amountPaise,
       );
+    }
+
+    // A Member who already Departed (self-leave or Organizer removal, ADR-
+    // 0022/0023) was already paid their remaining balance at that moment,
+    // recorded as a Refund the same as any Closure payout — netting it out
+    // here keeps balances in sync with actualCashPaise (which already
+    // subtracts every prior Refund via getPoolBalance) so a Departure's
+    // early payout is never counted twice: once at Departure, again here.
+    for (const refund of priorRefunds) {
+      balances.set(refund.memberId, (balances.get(refund.memberId) ?? 0) - refund.amountPaise);
     }
 
     return computeRefunds(balances, actualCashPaise).map((payout) => ({

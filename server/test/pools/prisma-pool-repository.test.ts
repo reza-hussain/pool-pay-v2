@@ -113,6 +113,23 @@ describe("PrismaPoolRepository", () => {
     expect(found?.state).toBe("LOCKED");
   });
 
+  it("updates a Pool's organizer (Organizer Transfer, ADR-0023)", async () => {
+    const repo = new PrismaPoolRepository(prisma);
+    const created = await repo.create(organizerId, {
+      name: "Goa Trip",
+      type: "OPEN",
+      perPersonAmountPaise: null,
+      joinCode: "888888",
+    });
+    const newOrganizer = await prisma.user.create({ data: { phoneNumber: "+919876511111" } });
+
+    const updated = await repo.updateOrganizer(created.id, newOrganizer.id);
+    expect(updated.organizerId).toBe(newOrganizer.id);
+
+    const found = await repo.findById(created.id);
+    expect(found?.organizerId).toBe(newOrganizer.id);
+  });
+
   it("lists every Pool for an organizer", async () => {
     const repo = new PrismaPoolRepository(prisma);
     await repo.create(organizerId, {
