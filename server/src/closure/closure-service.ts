@@ -1,8 +1,10 @@
 import { PoolNotFoundError } from "../memberships/types.js";
+import type { MembershipRepository } from "../memberships/types.js";
 import { getPoolBalance } from "../pools/pool-balance.js";
+import { getMemberBalances } from "../ledger/member-balance.js";
 import { NotPoolOrganizerError, type Pool, type PoolRepository } from "../pools/types.js";
 import type { DepositRepository } from "../deposits/types.js";
-import type { SpendRepository } from "../spends/types.js";
+import type { SpendAttributionRepository, SpendRepository } from "../spends/types.js";
 import type { ReimbursementRepository } from "../reimbursements/types.js";
 import type { PaymentProvider } from "../payments/types.js";
 import type { UserRepository } from "../auth/types.js";
@@ -13,6 +15,8 @@ import { PoolAlreadyClosedError, type Refund, type RefundRepository } from "./ty
 
 export interface RefundBreakdownEntry {
   memberId: string;
+  // Total Deposits, kept for display alongside the payout — no longer what
+  // amountPaise is computed from (see computeRefundBreakdown, ADR-0022).
   contributedPaise: number;
   amountPaise: number;
 }
@@ -34,8 +38,10 @@ export interface ClosureResult {
 
 export interface ClosureServiceOptions {
   poolRepository: PoolRepository;
+  membershipRepository: MembershipRepository;
   depositRepository: DepositRepository;
   spendRepository: SpendRepository;
+  spendAttributionRepository: SpendAttributionRepository;
   reimbursementRepository: ReimbursementRepository;
   refundRepository: RefundRepository;
   userRepository: UserRepository;
@@ -45,8 +51,10 @@ export interface ClosureServiceOptions {
 
 export class ClosureService {
   private readonly poolRepository: PoolRepository;
+  private readonly membershipRepository: MembershipRepository;
   private readonly depositRepository: DepositRepository;
   private readonly spendRepository: SpendRepository;
+  private readonly spendAttributionRepository: SpendAttributionRepository;
   private readonly reimbursementRepository: ReimbursementRepository;
   private readonly refundRepository: RefundRepository;
   private readonly userRepository: UserRepository;
@@ -55,8 +63,10 @@ export class ClosureService {
 
   constructor(options: ClosureServiceOptions) {
     this.poolRepository = options.poolRepository;
+    this.membershipRepository = options.membershipRepository;
     this.depositRepository = options.depositRepository;
     this.spendRepository = options.spendRepository;
+    this.spendAttributionRepository = options.spendAttributionRepository;
     this.reimbursementRepository = options.reimbursementRepository;
     this.refundRepository = options.refundRepository;
     this.userRepository = options.userRepository;
@@ -146,8 +156,18 @@ export class ClosureService {
     return pool;
   }
 
+  // Refunds are each Member's own remaining balance (ADR-0022) — Deposits
+  // minus their attributed Spend share — not a pro-rata share of the Pool's
+  // leftover. The only reason those balances could ever add up to more than
+  // the Pool's actual custodied cash is Reimbursements (a separate,
+  // pre-existing, cash-reducing mechanism this ticket doesn't otherwise
+  // touch): computeRefunds' proportional largest-remainder split, reused
+  // here with each Member's balance as its weight, both caps the payout at
+  // that actual cash and scales every Member down by the identical
+  // proportion when there's a shortfall — and is a no-op (exact balances,
+  // no rounding) whenever there isn't one.
   private async computeRefundBreakdown(poolId: string): Promise<RefundBreakdownEntry[]> {
-    const [remainingBalancePaise, deposits] = await Promise.all([
+    const [actualCashPaise, balances, deposits] = await Promise.all([
       getPoolBalance(
         {
           depositRepository: this.depositRepository,
@@ -157,22 +177,41 @@ export class ClosureService {
         },
         poolId,
       ),
+      getMemberBalances(
+        {
+          depositRepository: this.depositRepository,
+          spendAttributionRepository: this.spendAttributionRepository,
+        },
+        poolId,
+      ),
       this.depositRepository.listByPool(poolId),
     ]);
 
-    const contributions = new Map<string, number>();
+    const totalContributedByMember = new Map<string, number>();
     for (const deposit of deposits) {
-      contributions.set(deposit.userId, (contributions.get(deposit.userId) ?? 0) + deposit.amountPaise);
+      totalContributedByMember.set(
+        deposit.userId,
+        (totalContributedByMember.get(deposit.userId) ?? 0) + deposit.amountPaise,
+      );
     }
 
-    return computeRefunds(contributions, remainingBalancePaise);
+    return computeRefunds(balances, actualCashPaise).map((payout) => ({
+      memberId: payout.memberId,
+      contributedPaise: totalContributedByMember.get(payout.memberId) ?? 0,
+      amountPaise: payout.amountPaise,
+    }));
   }
 }
 
-// Largest-remainder method: floor each Member's exact pro-rata share, then
-// hand out the paise lost to rounding one at a time, to the largest
-// fractional remainders first — so refunds always sum to exactly the
-// remaining balance regardless of how unevenly contributions split.
+// Largest-remainder method: floor each Member's exact proportional share of
+// remainingBalancePaise (weighted by `contributions`), then hand out the
+// paise lost to rounding one at a time, to the largest fractional
+// remainders first — so refunds always sum to exactly remainingBalancePaise
+// regardless of how unevenly the weights split. computeRefundBreakdown
+// weights this by each Member's own remaining balance (ADR-0022) rather
+// than their total Deposit contribution, which is what caps the payout at
+// the Pool's actual cash and scales every Member down by the same
+// proportion on a Reimbursement-driven shortfall, for free.
 export function computeRefunds(
   contributions: Map<string, number>,
   remainingBalancePaise: number,

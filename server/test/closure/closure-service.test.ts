@@ -7,6 +7,7 @@ import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-rep
 import { NotPoolOrganizerError } from "../../src/pools/types.js";
 import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-deposit-repository.js";
 import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-repository.js";
+import { InMemorySpendAttributionRepository } from "../../src/spends/fakes/in-memory-spend-attribution-repository.js";
 import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/in-memory-reimbursement-repository.js";
 import { FakePaymentProvider } from "../../src/payments/fakes/fake-payment-provider.js";
 import { PoolNotFoundError } from "../../src/memberships/types.js";
@@ -24,8 +25,10 @@ const STRANGER_ID = "user_stranger";
 
 async function makeService() {
   const poolRepository = new InMemoryPoolRepository();
+  const membershipRepository = new InMemoryMembershipRepository();
   const depositRepository = new InMemoryDepositRepository();
   const spendRepository = new InMemorySpendRepository();
+  const spendAttributionRepository = new InMemorySpendAttributionRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
   const refundRepository = new InMemoryRefundRepository();
   const userRepository = new InMemoryUserRepository();
@@ -34,8 +37,10 @@ async function makeService() {
   const notificationService = new NotificationService({ notificationRepository });
   const closureService = new ClosureService({
     poolRepository,
+    membershipRepository,
     depositRepository,
     spendRepository,
+    spendAttributionRepository,
     reimbursementRepository,
     refundRepository,
     userRepository,
@@ -53,8 +58,10 @@ async function makeService() {
   return {
     closureService,
     poolRepository,
+    membershipRepository,
     depositRepository,
     spendRepository,
+    spendAttributionRepository,
     reimbursementRepository,
     refundRepository,
     userRepository,
@@ -72,8 +79,28 @@ function seedUpi(userRepository: InMemoryUserRepository, memberId: string) {
   userRepository.seedVerifiedUser(memberId, undefined, { upiId: `${memberId}@upi` });
 }
 
+// Seeds a Spend the way SpendService.recordSpend would have — the Spend row
+// (which is what actual custodied cash, getPoolBalance, is computed from)
+// alongside the SpendAttribution rows for whoever was actually charged
+// (which is what each Member's own remaining balance, ADR-0022, is computed
+// from). Closure's tests construct these fakes directly rather than going
+// through SpendService, so this keeps the two in sync the way a real Spend
+// always is.
+async function seedSpend(
+  repos: { spendRepository: InMemorySpendRepository; spendAttributionRepository: InMemorySpendAttributionRepository },
+  poolId: string,
+  actorUserId: string,
+  amountPaise: number,
+  feePaise: number,
+  shares: Array<{ memberId: string; amountPaise: number }>,
+) {
+  const spend = await repos.spendRepository.create(poolId, actorUserId, "merchant@upi", amountPaise, feePaise);
+  await repos.spendAttributionRepository.createForSpend(spend.id, poolId, shares);
+  return spend;
+}
+
 describe("ClosureService.closePool", () => {
-  it("refunds each Member pro-rata against their total contributions", async () => {
+  it("refunds each Member their own remaining balance (here, equal to their Deposits — no Spends yet)", async () => {
     const { closureService, depositRepository, userRepository, pool } = await makeService();
     seedUpi(userRepository, MEMBER_A);
     seedUpi(userRepository, MEMBER_B);
@@ -88,12 +115,12 @@ describe("ClosureService.closePool", () => {
     expect(byMember[MEMBER_B]).toBe(40000);
   });
 
-  it("accounts for Spends and Reimbursements already taken out", async () => {
+  it("refunds a Member who deposited less but spent nothing more than one who deposited more but spent heavily (ADR-0022)", async () => {
     const {
       closureService,
       depositRepository,
       spendRepository,
-      reimbursementRepository,
+      spendAttributionRepository,
       userRepository,
       pool,
     } = await makeService();
@@ -101,16 +128,42 @@ describe("ClosureService.closePool", () => {
     seedUpi(userRepository, MEMBER_B);
     await depositRepository.create(pool.id, MEMBER_A, 60000);
     await depositRepository.create(pool.id, MEMBER_B, 40000);
-    await spendRepository.create(pool.id, ORGANIZER_ID, "merchant@upi", 20000, 200);
-    await reimbursementRepository.create(pool.id, MEMBER_A, "a@upi", 9800);
-    // Remaining balance: 100000 - 20000 - 200 - 9800 = 70000.
+    // The whole Spend is attributed to MEMBER_A alone (they recorded it and
+    // it was solely for their own benefit) — MEMBER_B's balance is
+    // untouched, even though the old pro-rata formula would have charged
+    // both of them a share of it regardless.
+    await seedSpend({ spendRepository, spendAttributionRepository }, pool.id, ORGANIZER_ID, 20000, 200, [
+      { memberId: MEMBER_A, amountPaise: 20200 },
+    ]);
 
     const result = await closureService.closePool(pool.id, ORGANIZER_ID);
 
-    expect(result.refundTotalPaise).toBe(70000);
+    expect(result.refundTotalPaise).toBe(79800);
     const byMember = Object.fromEntries(result.refunds.map((r) => [r.memberId, r.amountPaise]));
-    expect(byMember[MEMBER_A]).toBe(42000); // 60% of 70000
-    expect(byMember[MEMBER_B]).toBe(28000); // 40% of 70000
+    expect(byMember[MEMBER_A]).toBe(60000 - 20200); // 39800
+    expect(byMember[MEMBER_B]).toBe(40000); // untouched — more than MEMBER_A despite depositing less
+  });
+
+  it("scales every Member's payout down by the same proportion when Reimbursements leave less cash than the formula owes (ADR-0022)", async () => {
+    const { closureService, depositRepository, reimbursementRepository, userRepository, pool } =
+      await makeService();
+    seedUpi(userRepository, MEMBER_A);
+    seedUpi(userRepository, MEMBER_B);
+    await depositRepository.create(pool.id, MEMBER_A, 60000);
+    await depositRepository.create(pool.id, MEMBER_B, 40000);
+    // Reimbursements (a separate, pre-existing mechanism, CONTEXT.md) reduce
+    // actual cash without touching either Member's own attributed balance —
+    // the only way the formula's total can now exceed what's actually left.
+    await reimbursementRepository.create(pool.id, MEMBER_A, "a@upi", 20000);
+    // Balances (unaffected by the Reimbursement) sum to 100000, but actual
+    // cash is only 80000 — an 0.8x shortfall, applied identically to both.
+
+    const result = await closureService.closePool(pool.id, ORGANIZER_ID);
+
+    expect(result.refundTotalPaise).toBe(80000);
+    const byMember = Object.fromEntries(result.refunds.map((r) => [r.memberId, r.amountPaise]));
+    expect(byMember[MEMBER_A]).toBe(48000); // 60000 * 0.8
+    expect(byMember[MEMBER_B]).toBe(32000); // 40000 * 0.8
   });
 
   it("sets the Pool's state to CLOSED", async () => {
@@ -260,7 +313,7 @@ describe("ClosureService refund notifications", () => {
 });
 
 describe("ClosureService.closePoolViaVote", () => {
-  it("closes the Pool and refunds pro-rata without an Organizer check", async () => {
+  it("closes the Pool and refunds each Member's own remaining balance, without an Organizer check", async () => {
     const { closureService, depositRepository, userRepository, pool } = await makeService();
     seedUpi(userRepository, MEMBER_A);
     seedUpi(userRepository, MEMBER_B);
@@ -274,15 +327,41 @@ describe("ClosureService.closePoolViaVote", () => {
   });
 
   it("does not claw back money already Spent or Reimbursed", async () => {
-    const { closureService, depositRepository, spendRepository, userRepository, pool } =
+    const { closureService, depositRepository, spendRepository, spendAttributionRepository, userRepository, pool } =
       await makeService();
     seedUpi(userRepository, MEMBER_A);
     await depositRepository.create(pool.id, MEMBER_A, 100000);
-    await spendRepository.create(pool.id, ORGANIZER_ID, "merchant@upi", 40000, 400);
+    await seedSpend({ spendRepository, spendAttributionRepository }, pool.id, ORGANIZER_ID, 40000, 400, [
+      { memberId: MEMBER_A, amountPaise: 40400 },
+    ]);
 
     const result = await closureService.closePoolViaVote(pool.id);
 
     expect(result.refundTotalPaise).toBe(100000 - 40000 - 400);
+  });
+
+  it("uses the identical per-Member-balance formula as closePool (ADR-0022)", async () => {
+    const {
+      closureService,
+      depositRepository,
+      spendRepository,
+      spendAttributionRepository,
+      userRepository,
+      pool,
+    } = await makeService();
+    seedUpi(userRepository, MEMBER_A);
+    seedUpi(userRepository, MEMBER_B);
+    await depositRepository.create(pool.id, MEMBER_A, 60000);
+    await depositRepository.create(pool.id, MEMBER_B, 40000);
+    await seedSpend({ spendRepository, spendAttributionRepository }, pool.id, ORGANIZER_ID, 20000, 200, [
+      { memberId: MEMBER_A, amountPaise: 20200 },
+    ]);
+
+    const result = await closureService.closePoolViaVote(pool.id);
+
+    const byMember = Object.fromEntries(result.refunds.map((r) => [r.memberId, r.amountPaise]));
+    expect(byMember[MEMBER_A]).toBe(60000 - 20200);
+    expect(byMember[MEMBER_B]).toBe(40000);
   });
 
   it("rejects Closure of an already-Closed Pool", async () => {
@@ -324,7 +403,7 @@ describe("ClosureService.previewClosure", () => {
 });
 
 describe("ClosureService + a removed Member (ticket #11)", () => {
-  it("still refunds a removed Member's prior contributions pro-rata", async () => {
+  it("still refunds a removed Member's prior contributions", async () => {
     const { closureService, poolRepository, depositRepository, userRepository, pool } =
       await makeService();
     const membershipRepository = new InMemoryMembershipRepository();
