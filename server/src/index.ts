@@ -163,6 +163,7 @@ const ledgerService = new LedgerService({
   membershipRepository,
   depositRepository,
   spendRepository,
+  spendAttributionRepository,
   reimbursementRepository,
   refundRepository,
 });

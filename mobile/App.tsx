@@ -36,6 +36,10 @@ import { ClosedScreen } from './src/screens/ClosedScreen';
 import { VoteScreen } from './src/screens/VoteScreen';
 import { MembersScreen } from './src/screens/MembersScreen';
 import { UserDetailScreen } from './src/screens/UserDetailScreen';
+import { LeaveConfirmScreen } from './src/screens/LeaveConfirmScreen';
+import { RemoveMemberScreen } from './src/screens/RemoveMemberScreen';
+import { TransferOrganizerScreen } from './src/screens/TransferOrganizerScreen';
+import { SpendApprovalsScreen } from './src/screens/SpendApprovalsScreen';
 import { TransactionDetailScreen } from './src/screens/TransactionDetailScreen';
 import { VerifyIdentityScreen } from './src/screens/VerifyIdentityScreen';
 import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
@@ -96,6 +100,10 @@ type AppStackParamList = {
   Vote: { pool: Pool };
   Members: { pool: Pool };
   UserDetail: { pool: Pool; userId: string };
+  LeaveConfirm: { pool: Pool };
+  RemoveMember: { pool: Pool; memberId: string };
+  TransferOrganizer: { pool: Pool };
+  SpendApprovals: { pool: Pool };
   TransactionDetail: { pool: Pool; entry: LedgerEntry };
   Analytics: undefined;
   Invitations: { pool: Pool };
@@ -210,6 +218,10 @@ function HomeRoute({ navigation }: HomeRouteProps) {
                 }
               : undefined
           }
+          onTransferOrganizer={() => {
+            navigation.navigate('TransferOrganizer', { pool: organizerControlsPool });
+            setOrganizerControlsPool(null);
+          }}
           onClose={() => setOrganizerControlsPool(null)}
         />
       ) : null}
@@ -395,6 +407,8 @@ function PoolDetailRoute({
           setPools((prev) => prev.map((p) => (p.id === locked.id ? locked : p)));
         }}
         onClosePool={() => navigation.navigate('CloseConfirm', { pool })}
+        onSpend={() => navigation.navigate('Spend', { pool })}
+        onPendingSpends={() => navigation.navigate('SpendApprovals', { pool })}
       />
       {organizerControlsOpen ? (
         <OrganizerControlsSheet
@@ -423,6 +437,10 @@ function PoolDetailRoute({
                 }
               : undefined
           }
+          onTransferOrganizer={() => {
+            navigation.navigate('TransferOrganizer', { pool });
+            setOrganizerControlsOpen(false);
+          }}
           onClose={() => setOrganizerControlsOpen(false)}
         />
       ) : null}
@@ -530,6 +548,8 @@ function MembersRoute({ route, navigation }: NativeStackScreenProps<AppStackPara
       pool={pool}
       onCancel={() => navigation.goBack()}
       onSelectUser={(userId) => navigation.navigate('UserDetail', { pool, userId })}
+      onRemoveMember={(memberId) => navigation.navigate('RemoveMember', { pool, memberId })}
+      onLeavePool={() => navigation.navigate('LeaveConfirm', { pool })}
     />
   );
 }
@@ -547,7 +567,84 @@ function UserDetailRoute({
       userId={userId}
       onBack={() => navigation.goBack()}
       onSelectTransaction={(entry) => navigation.navigate('TransactionDetail', { pool, entry })}
-      onDeleted={() => navigation.goBack()}
+      onRemoveMember={() => navigation.navigate('RemoveMember', { pool, memberId: userId })}
+    />
+  );
+}
+
+function LeaveConfirmRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'LeaveConfirm'>) {
+  const { session, setPools } = useSessionContext();
+  const pool = route.params.pool;
+  return (
+    <LeaveConfirmScreen
+      session={session}
+      pool={pool}
+      onCancel={() => navigation.goBack()}
+      onLeft={() => {
+        setPools((prev) => prev.filter((p) => p.id !== pool.id));
+        navigation.navigate('Home');
+      }}
+    />
+  );
+}
+
+function RemoveMemberRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'RemoveMember'>) {
+  const { session } = useSessionContext();
+  const { pool, memberId } = route.params;
+  return (
+    <RemoveMemberScreen
+      session={session}
+      pool={pool}
+      memberId={memberId}
+      onCancel={() => navigation.goBack()}
+      // navigate (not goBack) pops all the way to the existing Members screen
+      // in the stack — collapsing both the MembersScreen->RemoveMember and
+      // MembersScreen->UserDetail->RemoveMember entry points to the same
+      // landing spot, since the removed user's own UserDetail screen would
+      // otherwise be left showing a Member that no longer exists.
+      onRemoved={() => navigation.navigate('Members', { pool })}
+    />
+  );
+}
+
+function TransferOrganizerRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'TransferOrganizer'>) {
+  const { session, setPools } = useSessionContext();
+  const pool = route.params.pool;
+  return (
+    <TransferOrganizerScreen
+      session={session}
+      pool={pool}
+      onCancel={() => navigation.goBack()}
+      onTransferred={(updatedPool) => {
+        setPools((prev) => prev.map((p) => (p.id === updatedPool.id ? updatedPool : p)));
+        // navigate (not replace) pops to an existing PoolDetail in the stack
+        // (and refreshes its params) when this was opened from there, or
+        // pushes a fresh one when opened from Home's controls sheet instead.
+        navigation.navigate('PoolDetail', { pool: updatedPool });
+      }}
+    />
+  );
+}
+
+function SpendApprovalsRoute({
+  route,
+  navigation,
+}: NativeStackScreenProps<AppStackParamList, 'SpendApprovals'>) {
+  const { session } = useSessionContext();
+  return (
+    <SpendApprovalsScreen
+      session={session}
+      pool={route.params.pool}
+      onCancel={() => navigation.goBack()}
     />
   );
 }
@@ -848,6 +945,10 @@ export default function App() {
               <AppStack.Screen name="Vote" component={VoteRoute} />
               <AppStack.Screen name="Members" component={MembersRoute} />
               <AppStack.Screen name="UserDetail" component={UserDetailRoute} />
+              <AppStack.Screen name="LeaveConfirm" component={LeaveConfirmRoute} />
+              <AppStack.Screen name="RemoveMember" component={RemoveMemberRoute} />
+              <AppStack.Screen name="TransferOrganizer" component={TransferOrganizerRoute} />
+              <AppStack.Screen name="SpendApprovals" component={SpendApprovalsRoute} />
               <AppStack.Screen name="TransactionDetail" component={TransactionDetailRoute} />
               <AppStack.Screen name="Analytics" component={AnalyticsRoute} />
               <AppStack.Screen name="Invitations" component={InvitationsRoute} />

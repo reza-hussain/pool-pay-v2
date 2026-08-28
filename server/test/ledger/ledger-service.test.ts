@@ -5,6 +5,7 @@ import { InMemoryPoolRepository } from "../../src/pools/fakes/in-memory-pool-rep
 import { InMemoryMembershipRepository } from "../../src/memberships/fakes/in-memory-membership-repository.js";
 import { InMemoryDepositRepository } from "../../src/deposits/fakes/in-memory-deposit-repository.js";
 import { InMemorySpendRepository } from "../../src/spends/fakes/in-memory-spend-repository.js";
+import { InMemorySpendAttributionRepository } from "../../src/spends/fakes/in-memory-spend-attribution-repository.js";
 import { InMemoryReimbursementRepository } from "../../src/reimbursements/fakes/in-memory-reimbursement-repository.js";
 import { InMemoryRefundRepository } from "../../src/closure/fakes/in-memory-refund-repository.js";
 import { PoolNotFoundError } from "../../src/memberships/types.js";
@@ -18,6 +19,7 @@ async function makeService() {
   const membershipRepository = new InMemoryMembershipRepository();
   const depositRepository = new InMemoryDepositRepository();
   const spendRepository = new InMemorySpendRepository();
+  const spendAttributionRepository = new InMemorySpendAttributionRepository();
   const reimbursementRepository = new InMemoryReimbursementRepository();
   const refundRepository = new InMemoryRefundRepository();
   const ledgerService = new LedgerService({
@@ -25,6 +27,7 @@ async function makeService() {
     membershipRepository,
     depositRepository,
     spendRepository,
+    spendAttributionRepository,
     reimbursementRepository,
     refundRepository,
   });
@@ -43,6 +46,7 @@ async function makeService() {
     poolRepository,
     depositRepository,
     spendRepository,
+    spendAttributionRepository,
     reimbursementRepository,
     refundRepository,
     pool,
@@ -382,6 +386,44 @@ describe("LedgerService.getPoolBalance", () => {
   it("rejects an unknown Pool", async () => {
     const { ledgerService } = await makeService();
     await expect(ledgerService.getPoolBalance("does-not-exist", MEMBER_ID)).rejects.toThrow(
+      PoolNotFoundError,
+    );
+  });
+});
+
+describe("LedgerService.getMemberBalance", () => {
+  it("nets the caller's own Deposits against their attributed Spend share", async () => {
+    const { ledgerService, depositRepository, spendAttributionRepository, pool } = await makeService();
+
+    await depositRepository.create(pool.id, MEMBER_ID, 10000);
+    await spendAttributionRepository.createForSpend("spend_1", pool.id, [
+      { memberId: MEMBER_ID, amountPaise: 4000 },
+    ]);
+
+    await expect(ledgerService.getMemberBalance(pool.id, MEMBER_ID)).resolves.toBe(6000);
+  });
+
+  it("is not floored at zero — an overspent Member sees the true negative balance", async () => {
+    const { ledgerService, depositRepository, spendAttributionRepository, pool } = await makeService();
+
+    await depositRepository.create(pool.id, MEMBER_ID, 1000);
+    await spendAttributionRepository.createForSpend("spend_1", pool.id, [
+      { memberId: MEMBER_ID, amountPaise: 5000 },
+    ]);
+
+    await expect(ledgerService.getMemberBalance(pool.id, MEMBER_ID)).resolves.toBe(-4000);
+  });
+
+  it("rejects a non-Member", async () => {
+    const { ledgerService, pool } = await makeService();
+    await expect(ledgerService.getMemberBalance(pool.id, STRANGER_ID)).rejects.toThrow(
+      NotAPoolMemberError,
+    );
+  });
+
+  it("rejects an unknown Pool", async () => {
+    const { ledgerService } = await makeService();
+    await expect(ledgerService.getMemberBalance("does-not-exist", MEMBER_ID)).rejects.toThrow(
       PoolNotFoundError,
     );
   });

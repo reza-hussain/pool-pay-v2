@@ -130,6 +130,7 @@ export function makeTestServices(options?: { userRepository?: UserRepository }) 
     membershipRepository,
     depositRepository,
     spendRepository,
+    spendAttributionRepository,
     reimbursementRepository,
     refundRepository,
   });

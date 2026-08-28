@@ -1,13 +1,9 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
-import {
-  listMembers,
-  removeMember,
-  MembersApiError,
-  type Membership,
-} from "../api/membersClient";
+import { listMembers, MembersApiError, type Membership } from "../api/membersClient";
 import { Avatar } from "../components/Avatar";
 import { ListRow } from "../components/ListRow";
 import { Pill } from "../components/Pill";
@@ -25,52 +21,31 @@ export function MembersScreen({
   pool,
   onCancel,
   onSelectUser,
+  onRemoveMember,
+  onLeavePool,
 }: {
   session: StoredSession;
   pool: Pool;
   onCancel: () => void;
   onSelectUser: (userId: string) => void;
+  onRemoveMember: (memberId: string) => void;
+  onLeavePool: () => void;
 }) {
   const [members, setMembers] = useState<Membership[]>([]);
   const [loading, setLoading] = useState(true);
-  const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isOrganizer = pool.organizerId === session.user.id;
 
-  function fetchMembers() {
-    listMembers(session.token, pool.id)
-      .then(setMembers)
-      .catch((err) => setError(err instanceof MembersApiError ? err.message : "Something went wrong"))
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(fetchMembers, [pool.id, session.token]);
-
-  function confirmRemove(membership: Membership) {
-    Alert.alert(
-      "Remove this Member?",
-      `They'll no longer be able to deposit into or view ${pool.name}. Their prior deposits are still refunded pro-rata when the Pool closes.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            setError(null);
-            setRemovingId(membership.userId);
-            try {
-              await removeMember(session.token, pool.id, membership.userId);
-              setMembers((prev) => prev.filter((m) => m.userId !== membership.userId));
-            } catch (err) {
-              setError(err instanceof MembersApiError ? err.message : "Something went wrong");
-            } finally {
-              setRemovingId(null);
-            }
-          },
-        },
-      ],
-    );
-  }
+  // Re-fetches on every focus (not just mount) so returning from
+  // RemoveMemberScreen shows the updated list without a manual refresh.
+  useFocusEffect(
+    useCallback(() => {
+      listMembers(session.token, pool.id)
+        .then(setMembers)
+        .catch((err) => setError(err instanceof MembersApiError ? err.message : "Something went wrong"))
+        .finally(() => setLoading(false));
+    }, [pool.id, session.token]),
+  );
 
   return (
     <Screen backgroundColor={colors.cream}>
@@ -107,14 +82,9 @@ export function MembersScreen({
                   ) : isOrganizer ? (
                     <Pressable
                       style={styles.removeButton}
-                      onPress={() => confirmRemove(item)}
-                      disabled={removingId === item.userId}
+                      onPress={() => onRemoveMember(item.userId)}
                     >
-                      {removingId === item.userId ? (
-                        <ActivityIndicator color={colors.danger600} />
-                      ) : (
-                        <Text style={styles.removeButtonText}>Remove</Text>
-                      )}
+                      <Text style={styles.removeButtonText}>Remove</Text>
                     </Pressable>
                   ) : undefined
                 }
@@ -122,6 +92,12 @@ export function MembersScreen({
             )}
           />
         )}
+
+        {!isOrganizer && pool.state !== "CLOSED" ? (
+          <Pressable style={styles.leaveButton} onPress={onLeavePool}>
+            <Text style={styles.leaveButtonText}>Leave Pool</Text>
+          </Pressable>
+        ) : null}
       </View>
     </Screen>
   );
@@ -176,6 +152,19 @@ const styles = StyleSheet.create({
   },
   removeButtonText: {
     ...type.label,
+    color: colors.danger600,
+  },
+  leaveButton: {
+    height: 48,
+    borderWidth: 1.5,
+    borderColor: colors.danger600,
+    borderRadius: radii.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: spacing.s4,
+  },
+  leaveButtonText: {
+    ...type.bodyBold,
     color: colors.danger600,
   },
 });

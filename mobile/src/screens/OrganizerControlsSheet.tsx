@@ -11,6 +11,7 @@ export function OrganizerControlsSheet({
   onAddMembers,
   onManageMembers,
   onManageInvitations,
+  onTransferOrganizer,
   onClose,
 }: {
   pool: Pool;
@@ -23,6 +24,9 @@ export function OrganizerControlsSheet({
   // Custom Split Pool only (ticket #60) — undefined for every other type,
   // which hides the row rather than wiring it to a no-op.
   onManageInvitations?: () => void;
+  // Organizer Transfer (ADR-0023) — unilateral hand-off to another active
+  // Member, distinct from onTransferOut (which pays a merchant).
+  onTransferOrganizer: () => void;
   onClose: () => void;
 }) {
   return (
@@ -75,6 +79,13 @@ export function OrganizerControlsSheet({
                 </View>
               </Pressable>
             ) : null}
+
+            <Pressable style={styles.row} onPress={onTransferOrganizer}>
+              <View style={styles.rowText}>
+                <Text style={styles.rowTitle}>Transfer Organizer</Text>
+                <Text style={styles.rowDescription}>Hand off lifecycle control to a Member</Text>
+              </View>
+            </Pressable>
           </>
         )}
 

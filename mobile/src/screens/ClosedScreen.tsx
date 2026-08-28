@@ -35,7 +35,7 @@ export function ClosedScreen({
       </View>
       <Text style={styles.title}>Pool closed</Text>
       <Text style={styles.subtitle}>
-        {pool.name} · {paiseToRupeeLabel(refundTotalPaise)} refunded pro-rata
+        {pool.name} · {paiseToRupeeLabel(refundTotalPaise)} refunded
       </Text>
 
       <FlatList

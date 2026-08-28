@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
-import { removeMember, MembersApiError } from "../api/membersClient";
 import { getLedger, isMoneyIn, LedgerApiError, type LedgerEntry } from "../api/ledgerClient";
 import { entryLabel } from "./LedgerScreen";
 import { Avatar } from "../components/Avatar";
@@ -24,18 +23,17 @@ export function UserDetailScreen({
   userId,
   onBack,
   onSelectTransaction,
-  onDeleted,
+  onRemoveMember,
 }: {
   session: StoredSession;
   pool: Pool;
   userId: string;
   onBack: () => void;
   onSelectTransaction: (entry: LedgerEntry) => void;
-  onDeleted: () => void;
+  onRemoveMember: () => void;
 }) {
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const suffix = phoneSuffix(userId);
@@ -51,31 +49,6 @@ export function UserDetailScreen({
       .catch((err) => setError(err instanceof LedgerApiError ? err.message : "Something went wrong"))
       .finally(() => setLoading(false));
   }, [pool.id, session.token, userId]);
-
-  function confirmDelete() {
-    Alert.alert(
-      "Remove this Member?",
-      `They'll no longer be able to deposit into or view ${pool.name}. Their prior deposits are still refunded pro-rata when the Pool closes.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            setError(null);
-            setDeleting(true);
-            try {
-              await removeMember(session.token, pool.id, userId);
-              onDeleted();
-            } catch (err) {
-              setError(err instanceof MembersApiError ? err.message : "Something went wrong");
-              setDeleting(false);
-            }
-          },
-        },
-      ],
-    );
-  }
 
   return (
     <Screen backgroundColor={colors.cream}>
@@ -130,12 +103,8 @@ export function UserDetailScreen({
         )}
 
         {canDelete ? (
-          <Pressable style={styles.dangerButton} onPress={confirmDelete} disabled={deleting}>
-            {deleting ? (
-              <ActivityIndicator color={colors.paper} />
-            ) : (
-              <Text style={styles.dangerButtonText}>Remove Member</Text>
-            )}
+          <Pressable style={styles.dangerButton} onPress={() => onRemoveMember()}>
+            <Text style={styles.dangerButtonText}>Remove Member</Text>
           </Pressable>
         ) : null}
       </View>
