@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { describe, expect, it } from "vitest";
 import request from "supertest";
+import type { Express } from "express";
 import { createApp } from "../../src/app.js";
 import { AuthService } from "../../src/auth/auth-service.js";
 import { InMemoryUserRepository } from "../../src/auth/fakes/in-memory-user-repository.js";
@@ -62,8 +63,6 @@ async function makeApp() {
     .send({ name: "Goa Trip", type: "EQUAL_SPLIT", perPersonAmountPaise: 100000 });
   const pool = createRes.body.pool as { id: string };
 
-  // Pay the Organizer's own share so the Pool is unlocked for Add Members
-  // (ADR-0017).
   const organizerIntentRes = await request(app)
     .get(`/pools/${pool.id}/deposit-intent`)
     .set("Authorization", bearerFor(ORGANIZER_ID));
@@ -88,98 +87,113 @@ function bearerFor(userId: string) {
   return `Bearer ${jwt.sign({ sub: userId }, JWT_SECRET)}`;
 }
 
-describe("POST /pools/:poolId/spends", () => {
-  it("records a Spend immediately for the Organizer and reports the updated balance", async () => {
+// Bigger than either active Member's own 100000 balance, so recording it
+// always lands on the pending path.
+const BIG_SPEND_AMOUNT = 150000;
+
+async function proposePendingSpend(app: Express, poolId: string) {
+  const res = await request(app)
+    .post(`/pools/${poolId}/spends`)
+    .set("Authorization", bearerFor(ORGANIZER_ID))
+    .send({ merchantRef: "merchant@upi", amountPaise: BIG_SPEND_AMOUNT });
+  return res.body.pendingSpend as { id: string };
+}
+
+describe("GET /pools/:poolId/pending-spends", () => {
+  it("lists a Pool's pending Spends", async () => {
     const { app, pool } = await makeApp();
+    const pendingSpend = await proposePendingSpend(app, pool.id);
 
     const res = await request(app)
-      .post(`/pools/${pool.id}/spends`)
-      .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ merchantRef: "merchant@upi", amountPaise: 50000 });
+      .get(`/pools/${pool.id}/pending-spends`)
+      .set("Authorization", bearerFor(MEMBER_ID));
 
-    expect(res.status).toBe(201);
-    expect(res.body.spend).toMatchObject({
-      poolId: pool.id,
-      userId: ORGANIZER_ID,
-      merchantRef: "merchant@upi",
-      amountPaise: 50000,
-      feePaise: 500,
-    });
-    // 200000 base: the Organizer's own share (ADR-0017) plus the Member's.
-    expect(res.body.poolBalancePaise).toBe(200000 - 50000 - 500);
-  });
-
-  it("records a Spend immediately for a non-Organizer Member within their own balance (ticket #104)", async () => {
-    const { app, pool } = await makeApp();
-
-    const res = await request(app)
-      .post(`/pools/${pool.id}/spends`)
-      .set("Authorization", bearerFor(MEMBER_ID))
-      .send({ merchantRef: "merchant@upi", amountPaise: 50000 });
-
-    expect(res.status).toBe(201);
-    expect(res.body.spend).toMatchObject({ userId: MEMBER_ID, amountPaise: 50000 });
-  });
-
-  it("returns 202 with a PendingSpend when the cost exceeds the recorder's own balance", async () => {
-    const { app, pool } = await makeApp();
-    // MEMBER_ID's own balance is 100000; this exceeds it (plus fee).
-    const res = await request(app)
-      .post(`/pools/${pool.id}/spends`)
-      .set("Authorization", bearerFor(MEMBER_ID))
-      .send({ merchantRef: "merchant@upi", amountPaise: 150000 });
-
-    expect(res.status).toBe(202);
-    expect(res.body.spend).toBeUndefined();
-    expect(res.body.pendingSpend).toMatchObject({
-      poolId: pool.id,
-      recorderId: MEMBER_ID,
-      amountPaise: 150000,
-      state: "PENDING",
-    });
+    expect(res.status).toBe(200);
+    expect(res.body.pendingSpends).toHaveLength(1);
+    expect(res.body.pendingSpends[0].pendingSpend.id).toBe(pendingSpend.id);
   });
 
   it("returns 403 for a non-Member", async () => {
     const { app, pool } = await makeApp();
     const res = await request(app)
-      .post(`/pools/${pool.id}/spends`)
-      .set("Authorization", bearerFor(STRANGER_ID))
-      .send({ merchantRef: "merchant@upi", amountPaise: 50000 });
+      .get(`/pools/${pool.id}/pending-spends`)
+      .set("Authorization", bearerFor(STRANGER_ID));
     expect(res.status).toBe(403);
-  });
-
-  it("returns 400 for a non-positive amount", async () => {
-    const { app, pool } = await makeApp();
-    const res = await request(app)
-      .post(`/pools/${pool.id}/spends`)
-      .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ merchantRef: "merchant@upi", amountPaise: 0 });
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 400 for a missing merchant reference", async () => {
-    const { app, pool } = await makeApp();
-    const res = await request(app)
-      .post(`/pools/${pool.id}/spends`)
-      .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ amountPaise: 1000 });
-    expect(res.status).toBe(400);
   });
 
   it("returns 404 for an unknown pool", async () => {
     const { app } = await makeApp();
     const res = await request(app)
-      .post("/pools/pool_missing/spends")
-      .set("Authorization", bearerFor(ORGANIZER_ID))
-      .send({ merchantRef: "merchant@upi", amountPaise: 1000 });
+      .get("/pools/pool_missing/pending-spends")
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /pools/:poolId/pending-spends/:pendingSpendId", () => {
+  it("reports the tally and whether the caller has approved", async () => {
+    const { app, pool } = await makeApp();
+    const pendingSpend = await proposePendingSpend(app, pool.id);
+
+    const res = await request(app)
+      .get(`/pools/${pool.id}/pending-spends/${pendingSpend.id}`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ eligibleApproverCount: 2, approvalsCount: 1, hasApproved: false });
+  });
+
+  it("returns 404 for an unknown PendingSpend", async () => {
+    const { app, pool } = await makeApp();
+    const res = await request(app)
+      .get(`/pools/${pool.id}/pending-spends/does-not-exist`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /pools/:poolId/pending-spends/:pendingSpendId/approvals", () => {
+  it("records an approval and executes once majority is reached", async () => {
+    const { app, pool } = await makeApp();
+    const pendingSpend = await proposePendingSpend(app, pool.id);
+
+    // 2 active Members total (ORGANIZER + MEMBER_ID); the recorder's own
+    // implicit approval is already 1 of 2 — not yet a majority (1*2=2, not
+    // >2) — MEMBER_ID's approval clears it (2*2=4>2).
+    const res = await request(app)
+      .post(`/pools/${pool.id}/pending-spends/${pendingSpend.id}/approvals`)
+      .set("Authorization", bearerFor(MEMBER_ID));
+
+    expect(res.status).toBe(201);
+    expect(res.body.executedSpend).toMatchObject({ amountPaise: BIG_SPEND_AMOUNT });
+    expect(res.body.status.pendingSpend.state).toBe("EXECUTED");
+  });
+
+  it("returns 403 for a non-Member", async () => {
+    const { app, pool } = await makeApp();
+    const pendingSpend = await proposePendingSpend(app, pool.id);
+
+    const res = await request(app)
+      .post(`/pools/${pool.id}/pending-spends/${pendingSpend.id}/approvals`)
+      .set("Authorization", bearerFor(STRANGER_ID));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 404 for an unknown PendingSpend", async () => {
+    const { app, pool } = await makeApp();
+    const res = await request(app)
+      .post(`/pools/${pool.id}/pending-spends/does-not-exist/approvals`)
+      .set("Authorization", bearerFor(ORGANIZER_ID));
     expect(res.status).toBe(404);
   });
 
   it("returns 401 without a bearer token", async () => {
     const { app, pool } = await makeApp();
-    const res = await request(app)
-      .post(`/pools/${pool.id}/spends`)
-      .send({ merchantRef: "merchant@upi", amountPaise: 1000 });
+    const pendingSpend = await proposePendingSpend(app, pool.id);
+
+    const res = await request(app).post(
+      `/pools/${pool.id}/pending-spends/${pendingSpend.id}/approvals`,
+    );
     expect(res.status).toBe(401);
   });
 });

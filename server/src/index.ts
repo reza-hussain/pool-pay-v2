@@ -18,6 +18,9 @@ import { PrismaPendingDepositRepository } from "./deposits/prisma-pending-deposi
 import { SpendService } from "./spends/spend-service.js";
 import { PrismaSpendRepository } from "./spends/prisma-spend-repository.js";
 import { PrismaSpendAttributionRepository } from "./spends/prisma-spend-attribution-repository.js";
+import { SpendApprovalService } from "./spend-approvals/spend-approval-service.js";
+import { PrismaPendingSpendRepository } from "./spend-approvals/prisma-pending-spend-repository.js";
+import { PrismaSpendApprovalRepository } from "./spend-approvals/prisma-spend-approval-repository.js";
 import { ReimbursementService } from "./reimbursements/reimbursement-service.js";
 import { PrismaReimbursementRepository } from "./reimbursements/prisma-reimbursement-repository.js";
 import { LedgerService } from "./ledger/ledger-service.js";
@@ -78,6 +81,8 @@ const depositRepository = new PrismaDepositRepository(prisma);
 const pendingDepositRepository = new PrismaPendingDepositRepository(prisma);
 const spendRepository = new PrismaSpendRepository(prisma);
 const spendAttributionRepository = new PrismaSpendAttributionRepository(prisma);
+const pendingSpendRepository = new PrismaPendingSpendRepository(prisma);
+const spendApprovalRepository = new PrismaSpendApprovalRepository(prisma);
 const reimbursementRepository = new PrismaReimbursementRepository(prisma);
 const refundRepository = new PrismaRefundRepository(prisma);
 const refundVoteRepository = new PrismaRefundVoteRepository(prisma);
@@ -118,10 +123,19 @@ const spendService = new SpendService({
   depositRepository,
   spendRepository,
   spendAttributionRepository,
+  pendingSpendRepository,
+  spendApprovalRepository,
   reimbursementRepository,
   refundRepository,
   userRepository,
   paymentProvider,
+});
+const spendApprovalService = new SpendApprovalService({
+  poolRepository,
+  membershipRepository,
+  pendingSpendRepository,
+  spendApprovalRepository,
+  spendService,
 });
 const reimbursementService = new ReimbursementService({
   poolRepository,
@@ -174,6 +188,7 @@ const app = createApp({
   membershipService,
   depositService,
   spendService,
+  spendApprovalService,
   reimbursementService,
   ledgerService,
   closureService,

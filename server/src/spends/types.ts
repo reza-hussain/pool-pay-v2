@@ -1,3 +1,5 @@
+import type { PendingSpend } from "../spend-approvals/types.js";
+
 export interface Spend {
   id: string;
   poolId: string;
@@ -6,6 +8,15 @@ export interface Spend {
   amountPaise: number;
   feePaise: number;
   createdAt: Date;
+}
+
+// SpendService.recordSpend's two-tier gate (ADR-0020): a Spend within the
+// recorder's own remaining balance executes immediately (`spend` set); a
+// larger one is held for majority approval instead (`pendingSpend` set).
+// Exactly one of the two is ever non-null.
+export interface RecordSpendResult {
+  spend: Spend | null;
+  pendingSpend: PendingSpend | null;
 }
 
 export interface SpendRepository {
@@ -61,6 +72,13 @@ export class InvalidMerchantReferenceError extends Error {
   constructor() {
     super("Merchant reference is required");
     this.name = "InvalidMerchantReferenceError";
+  }
+}
+
+export class NotAPoolMemberError extends Error {
+  constructor() {
+    super("You must be a Member of this Pool to record a Spend");
+    this.name = "NotAPoolMemberError";
   }
 }
 
