@@ -3,7 +3,8 @@ import type { MembershipRepository } from "../memberships/types.js";
 import { PoolNotFoundError } from "../memberships/types.js";
 import type { PoolRepository } from "../pools/types.js";
 import { getPoolBalance } from "../pools/pool-balance.js";
-import type { SpendRepository } from "../spends/types.js";
+import type { SpendAttributionRepository, SpendRepository } from "../spends/types.js";
+import { getMemberBalance } from "./member-balance.js";
 import type { ReimbursementRepository } from "../reimbursements/types.js";
 import type { RefundRepository } from "../closure/types.js";
 import {
@@ -18,6 +19,7 @@ export interface LedgerServiceOptions {
   membershipRepository: MembershipRepository;
   depositRepository: DepositRepository;
   spendRepository: SpendRepository;
+  spendAttributionRepository: SpendAttributionRepository;
   reimbursementRepository: ReimbursementRepository;
   refundRepository: RefundRepository;
 }
@@ -39,6 +41,7 @@ export class LedgerService {
   private readonly membershipRepository: MembershipRepository;
   private readonly depositRepository: DepositRepository;
   private readonly spendRepository: SpendRepository;
+  private readonly spendAttributionRepository: SpendAttributionRepository;
   private readonly reimbursementRepository: ReimbursementRepository;
   private readonly refundRepository: RefundRepository;
 
@@ -47,6 +50,7 @@ export class LedgerService {
     this.membershipRepository = options.membershipRepository;
     this.depositRepository = options.depositRepository;
     this.spendRepository = options.spendRepository;
+    this.spendAttributionRepository = options.spendAttributionRepository;
     this.reimbursementRepository = options.reimbursementRepository;
     this.refundRepository = options.refundRepository;
   }
@@ -150,6 +154,31 @@ export class LedgerService {
         refundRepository: this.refundRepository,
       },
       poolId,
+    );
+  }
+
+  // "Your Remaining Balance" (ADR-0022) for the calling Member themselves —
+  // raw, not floored at zero like Departure's payout (membership-service.ts):
+  // an overspent Member should see the true negative number here, the same
+  // way a bank balance can go negative, rather than have it silently hidden.
+  async getMemberBalance(poolId: string, userId: string): Promise<number> {
+    const pool = await this.poolRepository.findById(poolId);
+    if (!pool) {
+      throw new PoolNotFoundError();
+    }
+
+    const membership = await this.membershipRepository.find(poolId, userId);
+    if (!membership) {
+      throw new NotAPoolMemberError();
+    }
+
+    return getMemberBalance(
+      {
+        depositRepository: this.depositRepository,
+        spendAttributionRepository: this.spendAttributionRepository,
+      },
+      poolId,
+      userId,
     );
   }
 }

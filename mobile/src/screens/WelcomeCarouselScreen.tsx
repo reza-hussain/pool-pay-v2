@@ -49,7 +49,7 @@ const SLIDES: Slide[] = [
   },
   {
     headline: "Full transparency, always",
-    body: "Every deposit and spend is visible to the group. Leftover balances are automatically refunded pro-rata when a Pool closes.",
+    body: "Every deposit and spend is visible to the group. Leftover balances are automatically refunded when a Pool closes.",
     illustration: (width) => (
       <View style={styles.illustration}>
         <View style={styles.receiptCard}>

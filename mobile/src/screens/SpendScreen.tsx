@@ -3,6 +3,7 @@ import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "ex
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
+import { getMyBalance } from "../api/membersClient";
 import { recordSpend, SpendsApiError, type RecordSpendResult } from "../api/spendsClient";
 import { parseUpiPaymentQr } from "../lib/upiQr";
 import { paiseToRupeeLabel, rupeesToPaise } from "../lib/money";
@@ -29,6 +30,10 @@ export function SpendScreen({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RecordSpendResult | null>(null);
+  // "Your Remaining Balance" (ADR-0022) after this Spend — fetched
+  // separately since recordSpend's response only carries the Pool-wide
+  // balance, not the recorder's own.
+  const [myBalancePaise, setMyBalancePaise] = useState<number | null>(null);
   // Guards against onBarcodeScanned firing repeatedly for the same code
   // while the camera keeps decoding the same frame.
   const alreadyScanned = useRef(false);
@@ -70,6 +75,12 @@ export function SpendScreen({
     try {
       const res = await recordSpend(session.token, pool.id, merchantRef, rupeesToPaise(amountRupees));
       setResult(res);
+      getMyBalance(session.token, pool.id)
+        .then(setMyBalancePaise)
+        .catch(() => {
+          // Best-effort — the success/pending state below already renders
+          // fine without this, just omitting the "Your Remaining Balance" row.
+        });
     } catch (err) {
       setError(err instanceof SpendsApiError ? err.message : "Something went wrong");
     } finally {
@@ -77,27 +88,71 @@ export function SpendScreen({
     }
   }
 
-  if (result) {
+  if (result?.spend) {
+    const spend = result.spend;
     return (
       <View style={styles.successContainer}>
         <View style={styles.checkRing}>
           <Text style={styles.checkGlyph}>✓</Text>
         </View>
-        <Text style={styles.successAmount}>
-          {paiseToRupeeLabel(result.spend.amountPaise)} paid
-        </Text>
-        <Text style={styles.successSubtitle}>to {result.spend.merchantRef}</Text>
+        <Text style={styles.successAmount}>{paiseToRupeeLabel(spend.amountPaise)} paid</Text>
+        <Text style={styles.successSubtitle}>to {spend.merchantRef}</Text>
 
         <View style={styles.kvCard}>
           <View style={styles.kvRow}>
             <Text style={styles.kvKey}>Fee</Text>
-            <Text style={styles.kvValue}>{paiseToRupeeLabel(result.spend.feePaise)}</Text>
+            <Text style={styles.kvValue}>{paiseToRupeeLabel(spend.feePaise)}</Text>
           </View>
           <View style={styles.kvRow}>
             <Text style={styles.kvKey}>New Pool balance</Text>
             <Text style={styles.kvValue}>{paiseToRupeeLabel(result.poolBalancePaise)}</Text>
           </View>
+          {myBalancePaise !== null ? (
+            <View style={styles.kvRow}>
+              <Text style={styles.kvKey}>Your Remaining Balance</Text>
+              <Text style={styles.kvValue}>{paiseToRupeeLabel(myBalancePaise)}</Text>
+            </View>
+          ) : null}
         </View>
+
+        <Pressable style={styles.doneButton} onPress={onDone}>
+          <Text style={styles.doneButtonText}>Done</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // Two-tier spend authority (ADR-0020): larger than the recorder's own
+  // remaining balance, so it's held for majority Spend Approval instead of
+  // executing immediately — no money has moved yet.
+  if (result?.pendingSpend) {
+    const pendingSpend = result.pendingSpend;
+    return (
+      <View style={styles.successContainer}>
+        <View style={styles.pendingRing}>
+          <Text style={styles.pendingGlyph}>⏳</Text>
+        </View>
+        <Text style={styles.successAmount}>
+          {paiseToRupeeLabel(pendingSpend.amountPaise)} awaiting approval
+        </Text>
+        <Text style={styles.successSubtitle}>to {pendingSpend.merchantRef}</Text>
+
+        <View style={styles.kvCard}>
+          <View style={styles.kvRow}>
+            <Text style={styles.kvKey}>Fee</Text>
+            <Text style={styles.kvValue}>{paiseToRupeeLabel(pendingSpend.feePaise)}</Text>
+          </View>
+          {myBalancePaise !== null ? (
+            <View style={styles.kvRow}>
+              <Text style={styles.kvKey}>Your Remaining Balance</Text>
+              <Text style={styles.kvValue}>{paiseToRupeeLabel(myBalancePaise)}</Text>
+            </View>
+          ) : null}
+        </View>
+        <Text style={styles.pendingNotice}>
+          This is more than your own remaining balance, so more than half of the Pool's active
+          Members need to approve it before it executes.
+        </Text>
 
         <Pressable style={styles.doneButton} onPress={onDone}>
           <Text style={styles.doneButtonText}>Done</Text>
@@ -365,6 +420,25 @@ const styles = StyleSheet.create({
   checkGlyph: {
     fontSize: 34,
     color: colors.paper,
+  },
+  pendingRing: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: colors.ink100,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.s6,
+  },
+  pendingGlyph: {
+    fontSize: 34,
+    color: colors.ink600,
+  },
+  pendingNotice: {
+    ...type.caption,
+    textAlign: "center",
+    marginTop: spacing.s4,
+    maxWidth: 280,
   },
   successAmount: {
     ...type.hero,

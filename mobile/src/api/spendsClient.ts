@@ -12,8 +12,27 @@ export interface Spend {
   createdAt: string;
 }
 
+// Two-tier spend authority (ADR-0020): a Spend larger than the recorder's
+// own remaining balance is held here instead of executing immediately, and
+// waits for majority Spend Approval — see spendApprovalsClient.ts.
+export interface PendingSpend {
+  id: string;
+  poolId: string;
+  recorderId: string;
+  merchantRef: string;
+  amountPaise: number;
+  feePaise: number;
+  state: "PENDING" | "EXECUTED";
+  resultingSpendId: string | null;
+  createdAt: string;
+}
+
+// Exactly one of `spend`/`pendingSpend` is set — `spend` when the recorder's
+// own balance covered it and the transfer fired immediately, `pendingSpend`
+// when it's held for majority approval instead (ADR-0020).
 export interface RecordSpendResult {
-  spend: Spend;
+  spend: Spend | null;
+  pendingSpend: PendingSpend | null;
   poolBalancePaise: number;
 }
 

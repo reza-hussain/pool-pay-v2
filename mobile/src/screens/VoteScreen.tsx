@@ -10,13 +10,11 @@ import {
   type VoteStatus,
 } from "../api/votesClient";
 import { Screen } from "../components/Screen";
+import { simpleMajority } from "../lib/majority";
 import { colors, radii, spacing, type } from "../theme/tokens";
 
-// Votes needed for a simple majority of non-Organizer Members (ADR 0009) —
-// more than half, so 3 eligible voters need 2, 4 need 3, etc.
-function votesNeeded(eligibleVoterCount: number): number {
-  return Math.floor(eligibleVoterCount / 2) + 1;
-}
+// Votes needed for a simple majority of non-Organizer Members (ADR 0009).
+const votesNeeded = simpleMajority;
 
 export function VoteScreen({
   session,

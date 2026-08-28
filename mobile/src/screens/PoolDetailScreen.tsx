@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { poolTypeLabel, type Pool } from "../api/poolsClient";
 import type { StoredSession } from "../api/session";
-import { listMembers } from "../api/membersClient";
+import { getMyBalance, listMembers } from "../api/membersClient";
 import {
   getLedger,
   getPoolBalance,
@@ -140,6 +140,8 @@ export function PoolDetailScreen({
   onSelectTransaction,
   onLock,
   onClosePool,
+  onSpend,
+  onPendingSpends,
 }: {
   session: StoredSession;
   pool: Pool;
@@ -157,6 +159,11 @@ export function PoolDetailScreen({
   onSelectTransaction: (entry: LedgerEntry) => void;
   onLock: () => Promise<void>;
   onClosePool: () => void;
+  // Two-tier spend authority (ADR-0020): any active Member can record a
+  // Spend, not just the Organizer — outline, not pumpkin, since Deposit
+  // already holds this screen's one pumpkin (money-moving) action.
+  onSpend: () => void;
+  onPendingSpends: () => void;
 }) {
   const isOrganizer = pool.organizerId === session.user.id;
   const isGated = isOrganizerPaymentGated(pool, session.user.id);
@@ -183,6 +190,11 @@ export function PoolDetailScreen({
   }, [pool.id, session.token]);
 
   const [balancePaise, setBalancePaise] = useState<number | null>(null);
+  // "Your Remaining Balance" (ADR-0022) — distinct from the Pool-wide
+  // balancePaise above. Shown raw, not floored — an overspent Member should
+  // see the true negative number here (LedgerService.getMemberBalance);
+  // only an actual Departure payout floors at zero.
+  const [myBalancePaise, setMyBalancePaise] = useState<number | null>(null);
   const [filterPreset, setFilterPreset] = useState<FilterPreset>("ALL");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -215,11 +227,13 @@ export function PoolDetailScreen({
           limit: PAGE_SIZE,
         }),
         getPoolBalance(session.token, pool.id),
+        getMyBalance(session.token, pool.id),
       ])
-        .then(([page, balance]) => {
+        .then(([page, balance, myBalance]) => {
           setEntries(page.entries);
           setNextCursor(page.nextCursor);
           setBalancePaise(balance);
+          setMyBalancePaise(myBalance);
           setHasLoadedMore(false);
           setLedgerError(null);
         })
@@ -343,6 +357,15 @@ export function PoolDetailScreen({
             </Text>
           ) : null}
         </View>
+
+        {/* Your Remaining Balance (ADR-0022) — a Member's own stake, distinct
+            from the Pool-wide Total Balance above. */}
+        <View style={styles.yourBalanceRow}>
+          <Text style={styles.yourBalanceLabel}>Your Remaining Balance</Text>
+          <Text style={styles.yourBalanceAmount}>
+            {myBalancePaise === null ? "···" : paiseToRupeeLabel(myBalancePaise)}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.avatarStripRow}>
@@ -368,6 +391,11 @@ export function PoolDetailScreen({
             <Text style={styles.depositButtonText}>Deposit</Text>
           </Pressable>
         ) : null}
+        {pool.state !== "CLOSED" ? (
+          <Pressable style={styles.spendButton} onPress={onSpend}>
+            <Text style={styles.spendButtonText}>Spend</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {canLock || canClosePool ? (
@@ -385,10 +413,20 @@ export function PoolDetailScreen({
         </View>
       ) : null}
 
-      {!isOrganizer && pool.state !== "CLOSED" ? (
-        <Pressable onPress={onVoteToRefund} hitSlop={8}>
-          <Text style={styles.voteLink}>Vote to refund</Text>
-        </Pressable>
+      {pool.state !== "CLOSED" ? (
+        <View style={styles.linksRow}>
+          {!isOrganizer ? (
+            <Pressable onPress={onVoteToRefund} hitSlop={8}>
+              <Text style={styles.voteLink}>Vote to refund</Text>
+            </Pressable>
+          ) : null}
+          {/* Spend authority isn't tied to the Organizer role (ADR-0023), so
+              every active Member — Organizer included — can see and approve
+              pending Spends. */}
+          <Pressable onPress={onPendingSpends} hitSlop={8}>
+            <Text style={styles.pendingSpendsLink}>Pending Spends</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       <View style={styles.filterRow}>
@@ -552,6 +590,21 @@ const styles = StyleSheet.create({
     ...type.caption,
     color: colors.ink200,
   },
+  yourBalanceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: spacing.s4,
+  },
+  yourBalanceLabel: {
+    ...type.label,
+    color: colors.ink200,
+  },
+  yourBalanceAmount: {
+    ...type.bodyBold,
+    fontSize: 15,
+    color: colors.cream,
+  },
   avatarStripRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -598,6 +651,19 @@ const styles = StyleSheet.create({
     ...type.bodyBold,
     color: colors.paper,
   },
+  spendButton: {
+    flex: 1,
+    height: 48,
+    borderWidth: 1.5,
+    borderColor: colors.lineStrong,
+    borderRadius: radii.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  spendButtonText: {
+    ...type.bodyBold,
+    color: colors.ink900,
+  },
   organizerActionsRow: {
     flexDirection: "row",
     gap: spacing.s3,
@@ -631,10 +697,18 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: colors.danger600,
   },
+  linksRow: {
+    flexDirection: "row",
+    gap: spacing.s5,
+    marginTop: spacing.s4,
+  },
   voteLink: {
     ...type.label,
     color: colors.danger600,
-    marginTop: spacing.s4,
+  },
+  pendingSpendsLink: {
+    ...type.label,
+    color: colors.ink600,
   },
   filterRow: {
     marginTop: spacing.s5,

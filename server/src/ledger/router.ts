@@ -101,5 +101,29 @@ export function createLedgerRouter(ledgerService: LedgerService, jwtSecret: stri
     }
   });
 
+  // "Your Remaining Balance" (ADR-0022) for the caller themselves — backs
+  // the mobile balance-display audit (ticket #106) and the self-leave
+  // confirm sheet's preview.
+  router.get(
+    "/:poolId/members/me/balance",
+    requireAuth(jwtSecret),
+    async (req: AuthenticatedRequest, res, next) => {
+      try {
+        const balancePaise = await ledgerService.getMemberBalance(req.params.poolId, req.userId as string);
+        res.status(200).json({ balancePaise });
+      } catch (error) {
+        if (error instanceof PoolNotFoundError) {
+          res.status(404).json({ error: error.message });
+          return;
+        }
+        if (error instanceof NotAPoolMemberError) {
+          res.status(403).json({ error: error.message });
+          return;
+        }
+        next(error);
+      }
+    },
+  );
+
   return router;
 }

@@ -70,8 +70,8 @@ export function CloseConfirmScreen({
         </View>
         <Text style={styles.title}>Close {pool.name}?</Text>
         <Text style={styles.subtitle}>
-          This ends the Pool for everyone and can't be undone. The remaining balance is refunded
-          in proportion to deposits.
+          This ends the Pool for everyone and can't be undone. Each Member is refunded their own
+          remaining balance.
         </Text>
       </View>
 
